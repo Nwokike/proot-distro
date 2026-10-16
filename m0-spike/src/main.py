@@ -167,6 +167,18 @@ def rootfs_path(name: str, dirs: dict) -> Path:
     return dirs["xdg_data"] / "proot-distro" / "containers" / name / "rootfs"
 
 
+def _container_shm(rootfs: Path) -> Path:
+    """Per-container shm dir exactly as proot-distro creates it
+    (`containers/<name>/shm`, mode 1777) and binds to /dev/shm — required by
+    the --sysvipc path we enable (root-caused 2026-10-16; we previously passed
+    --sysvipc without any shm dir/bind)."""
+    shm = rootfs.parent / "shm"
+    with contextlib.suppress(OSError):
+        shm.mkdir(parents=True, exist_ok=True)
+        os.chmod(shm, 0o1777)
+    return shm
+
+
 def guest_argv(native: Path, rootfs: Path, script: str) -> list[str]:
     return [
         str(native / "libproot.so"),
@@ -180,6 +192,10 @@ def guest_argv(native: Path, rootfs: Path, script: str) -> list[str]:
         "/proc",
         "-b",
         "/sys",
+        # proot-distro's non-minimal binds (verified diff, root-cause research):
+        f"--bind={_container_shm(rootfs)}:/dev/shm",
+        "--bind=/dev/urandom:/dev/random",
+        "--bind=/proc/self/fd:/dev/fd",
         "-w",
         "/",
         "/bin/sh",
@@ -232,6 +248,13 @@ def guest_env(rootfs: Path | None = None) -> dict:
             "HOME": "/root",
             "USER": "root",
             "TERM": os.environ.get("TERM") or "xterm-256color",
+            # proot's f2fs workaround (canon.c: substitute_binding_stat ->
+            # should_skip_file_access_due_to_f2fs_bug) SYNTHESIZES -ENOENT when
+            # its readdir probe misses a just-created entry — which is exactly
+            # dpkg's .dpkg-new + link2symlink sequence on f2fs app storage.
+            # Root-caused 2026-10-16 ("error setting ownership of .dpkg-new:
+            # No such file or directory"); disabling trusts the kernel.
+            "PROOT_F2FS_WORKAROUND": "0",
         }
     )
     if rootfs is not None:
@@ -433,6 +456,34 @@ def main(page: ft.Page):
             "interpreter — the CLI-subprocess route is NOT viable; use in-process APIs + direct proot spawn."
         )
 
+    def d0_diag() -> str:
+        """Diagnostics for the dpkg chown-ENOENT case (run after a failed apt)."""
+        r = rootfs_path("debian", dirs)
+        out = ["host-side <rootfs>/.l2s entries (last 10):"]
+        l2s = r / ".l2s"
+        out.append(
+            "\n".join(sorted(p.name for p in l2s.iterdir())[-10:]) if l2s.is_dir() else "  (no .l2s dir)"
+        )
+        out.append("host-side perl leftovers:")
+        out.append("\n".join(sorted(p.name for p in (r / "usr/bin").glob("perl*")) if native else []))
+        out.append("guest-side evidence:")
+        if native:
+            out.append(
+                _run(
+                    guest_argv(
+                        native,
+                        r,
+                        "ls -la /usr/bin/perl* 2>&1; "
+                        "readlink /usr/bin/perl 2>&1; "
+                        "readlink /usr/bin/perl5.36.0.dpkg-new 2>&1; "
+                        "ls -la /var/lib/dpkg/status* 2>&1",
+                    ),
+                    60,
+                    env=guest_env(r),
+                )
+            )
+        return "\n".join(out)
+
     # G5 wiring (needs page; created before use) ────────────────────────────
     # NOTE: plain `Terminal` (a @control) — MobileTerminal composes
     # `@ft.component` children (ExtraKeysBar) and raises outside an active
@@ -479,7 +530,11 @@ def main(page: ft.Page):
         session = ProotSession(
             [
                 str(native / "libproot.so"), "-0", *proot_extensions(), "-r", str(r),
-                "-b", "/dev", "-b", "/proc", "-b", "/sys", "-w", "/",
+                "-b", "/dev", "-b", "/proc", "-b", "/sys",
+                f"--bind={_container_shm(r)}:/dev/shm",
+                "--bind=/dev/urandom:/dev/random",
+                "--bind=/proc/self/fd:/dev/fd",
+                "-w", "/",
                 "/bin/sh", "-i",
             ],
             deliver,
@@ -566,6 +621,7 @@ def main(page: ft.Page):
             gate_button("G3 one-shot alpine", lambda: _run(guest_argv(native, rootfs_path("alpine", dirs), "id; uname -a; cat /etc/os-release"), 120, env=guest_env(rootfs_path("alpine", dirs))) if native else "no native dir"),
             gate_button("G4 install debian", lambda: _install("debian:bookworm", "debian")),
             gate_button("G4 apt cowsay", lambda: _run(guest_argv(native, rootfs_path("debian", dirs), "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends cowsay && /usr/games/cowsay M0-OK"), 900, env=guest_env(rootfs_path("debian", dirs))) if native else "no native dir"),
+            gate_button("D0 diag", d0_diag),
         ], wrap=True),
         ft.Divider(),
         ft.Text("G5 — interactive session (flet-terminal)", weight=ft.FontWeight.BOLD),

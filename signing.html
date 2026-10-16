@@ -1,0 +1,1151 @@
+
+
+
+
+
+
+
+
+
+<!doctype html>
+<html 
+      lang="en"
+      dir="ltr">
+  <head>
+    <meta name="google-signin-client-id" content="721724668570-nbkv1cfusk7kk4eni4pjvepaus73b13t.apps.googleusercontent.com"><meta name="google-signin-scope"
+          content="profile email https://www.googleapis.com/auth/developerprofiles https://www.googleapis.com/auth/developerprofiles.award https://www.googleapis.com/auth/devprofiles.full_control.firstparty"><meta property="og:site_name" content="Android Developers">
+    <meta property="og:type" content="website"><meta name="theme-color" content="#34a853"><meta charset="utf-8">
+    <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+
+    <link rel="manifest" href="/_pwa/android/manifest.json"
+          crossorigin="use-credentials">
+    <link rel="preconnect" href="//www.gstatic.com" crossorigin>
+    <link rel="preconnect" href="//fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="//www.google-analytics.com" crossorigin><link rel="stylesheet" href="//fonts.googleapis.com/css?family=Google+Sans:400,500,600,700|Google+Sans+Text:400,400italic,500,500italic,600,600italic,700,700italic|Roboto+Mono:400,500,700&display=swap">
+      <link rel="stylesheet"
+            href="//fonts.googleapis.com/css2?family=Material+Icons&family=Material+Symbols+Outlined&display=block"><link rel="stylesheet" href="https://www.gstatic.com/devrel-devsite/prod/v9ce9cb5b22b62a465ff52c45061a0a6a2d86a80b685e9aa8a182b203fdfbf420/android/css/app.css">
+      
+        <link rel="stylesheet" href="https://www.gstatic.com/devrel-devsite/prod/v9ce9cb5b22b62a465ff52c45061a0a6a2d86a80b685e9aa8a182b203fdfbf420/android/css/dark-theme.css" disabled>
+      <link rel="shortcut icon" href="https://www.gstatic.com/devrel-devsite/prod/v9ce9cb5b22b62a465ff52c45061a0a6a2d86a80b685e9aa8a182b203fdfbf420/android/images/favicon.svg">
+    <link rel="apple-touch-icon" href="https://www.gstatic.com/devrel-devsite/prod/v9ce9cb5b22b62a465ff52c45061a0a6a2d86a80b685e9aa8a182b203fdfbf420/android/images/touchicon-180.png"><link rel="canonical" href="https://developer.android.com/studio/publish/app-signing"><link rel="search" type="application/opensearchdescription+xml"
+            title="Android Developers" href="https://developer.android.com/s/opensearch.xml">
+      <link rel="alternate" hreflang="en"
+          href="https://developer.android.com/studio/publish/app-signing" /><link rel="alternate" hreflang="x-default" href="https://developer.android.com/studio/publish/app-signing" /><link rel="alternate" hreflang="ar"
+          href="https://developer.android.com/studio/publish/app-signing?hl=ar" /><link rel="alternate" hreflang="bn"
+          href="https://developer.android.com/studio/publish/app-signing?hl=bn" /><link rel="alternate" hreflang="zh-Hans"
+          href="https://developer.android.com/studio/publish/app-signing?hl=zh-cn" /><link rel="alternate" hreflang="zh-Hant"
+          href="https://developer.android.com/studio/publish/app-signing?hl=zh-tw" /><link rel="alternate" hreflang="fa"
+          href="https://developer.android.com/studio/publish/app-signing?hl=fa" /><link rel="alternate" hreflang="fr"
+          href="https://developer.android.com/studio/publish/app-signing?hl=fr" /><link rel="alternate" hreflang="de"
+          href="https://developer.android.com/studio/publish/app-signing?hl=de" /><link rel="alternate" hreflang="he"
+          href="https://developer.android.com/studio/publish/app-signing?hl=he" /><link rel="alternate" hreflang="hi"
+          href="https://developer.android.com/studio/publish/app-signing?hl=hi" /><link rel="alternate" hreflang="id"
+          href="https://developer.android.com/studio/publish/app-signing?hl=id" /><link rel="alternate" hreflang="it"
+          href="https://developer.android.com/studio/publish/app-signing?hl=it" /><link rel="alternate" hreflang="ja"
+          href="https://developer.android.com/studio/publish/app-signing?hl=ja" /><link rel="alternate" hreflang="ko"
+          href="https://developer.android.com/studio/publish/app-signing?hl=ko" /><link rel="alternate" hreflang="pl"
+          href="https://developer.android.com/studio/publish/app-signing?hl=pl" /><link rel="alternate" hreflang="pt-BR"
+          href="https://developer.android.com/studio/publish/app-signing?hl=pt-br" /><link rel="alternate" hreflang="ru"
+          href="https://developer.android.com/studio/publish/app-signing?hl=ru" /><link rel="alternate" hreflang="es-419"
+          href="https://developer.android.com/studio/publish/app-signing?hl=es-419" /><link rel="alternate" hreflang="th"
+          href="https://developer.android.com/studio/publish/app-signing?hl=th" /><link rel="alternate" hreflang="tr"
+          href="https://developer.android.com/studio/publish/app-signing?hl=tr" /><link rel="alternate" hreflang="vi"
+          href="https://developer.android.com/studio/publish/app-signing?hl=vi" /><title>Sign your app &nbsp;|&nbsp; Android Studio &nbsp;|&nbsp; Android Developers</title>
+
+<meta property="og:title" content="Sign your app &nbsp;|&nbsp; Android Studio &nbsp;|&nbsp; Android Developers"><meta name="description" content="Learn important concepts related to app signing and security, how to sign your app for release to Google Play using Android Studio, and how to opt in to Play App Signing.">
+  <meta property="og:description" content="Learn important concepts related to app signing and security, how to sign your app for release to Google Play using Android Studio, and how to opt in to Play App Signing."><meta property="og:url" content="https://developer.android.com/studio/publish/app-signing"><meta property="og:image" content="https://developer.android.com/static/images/social/android-developers.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="675"><meta property="og:locale" content="en"><meta name="twitter:card" content="summary_large_image"><script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    
+    "headline": "Sign your app"
+  }
+</script><script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [{
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Android Studio",
+      "item": "https://developer.android.com/studio"
+    },{
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Sign your app",
+      "item": "https://developer.android.com/studio/publish/app-signing"
+    }]
+  }
+  </script>
+  
+
+  
+
+  
+
+  
+
+  
+<meta name="keywords" content="Android Studio, App Signing, Google Play, Publishing, Keystore, APK, App Bundle, Release, Security, Key Management">
+
+    </head>
+  <body class="color-scheme--light"
+        template="page"
+        theme="android-theme"
+        type="article"
+        
+        appearance
+        
+        layout="docs"
+        
+        
+        
+        
+        
+        display-toc
+        pending>
+  
+    <devsite-progress type="indeterminate" id="app-progress"></devsite-progress>
+  
+  
+    <a href="#main-content" class="skip-link button">
+      
+      Skip to main content
+    </a>
+    <section class="devsite-wrapper">
+      <devsite-cookie-notification-bar></devsite-cookie-notification-bar>
+        <devsite-header role="banner">
+  
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="devsite-header--inner" data-nosnippet>
+  <div class="devsite-top-logo-row-wrapper-wrapper">
+    <div class="devsite-top-logo-row-wrapper">
+      <div class="devsite-top-logo-row">
+        <button type="button" id="devsite-hamburger-menu"
+          class="devsite-header-icon-button button-flat material-icons gc-analytics-event"
+          data-category="Site-Wide Custom Events"
+          data-label="Navigation menu button"
+          visually-hidden
+          aria-label="Open menu">
+        </button>
+        
+<div class="devsite-product-name-wrapper">
+
+  <a href="/" class="devsite-site-logo-link gc-analytics-event"
+   data-category="Site-Wide Custom Events" data-label="Site logo" track-type="globalNav"
+   track-name="androidDevelopers" track-metadata-position="nav"
+   track-metadata-eventDetail="nav">
+  
+  <picture>
+    
+    <source srcset="https://www.gstatic.com/devrel-devsite/prod/v9ce9cb5b22b62a465ff52c45061a0a6a2d86a80b685e9aa8a182b203fdfbf420/android/images/lockup-dark-theme.png"
+            media="(prefers-color-scheme: dark)"
+            class="devsite-dark-theme">
+    
+    <img src="https://www.gstatic.com/devrel-devsite/prod/v9ce9cb5b22b62a465ff52c45061a0a6a2d86a80b685e9aa8a182b203fdfbf420/android/images/lockup.png" class="devsite-site-logo" alt="Android Developers">
+  </picture>
+  
+</a>
+
+
+
+</div>
+        <div class="devsite-top-logo-row-middle">
+          <div class="devsite-header-upper-tabs">
+            
+              
+              
+  <devsite-tabs class="upper-tabs">
+
+    <nav class="devsite-tabs-wrapper" aria-label="Upper tabs">
+      
+        
+          <tab class="devsite-dropdown
+    devsite-dropdown-full
+    
+    
+    ">
+  
+    <a href="https://developer.android.com/get-started"
+    class="devsite-tabs-content gc-analytics-event android-dropdown-tab"
+      track-metadata-eventdetail="https://developer.android.com/get-started"
+    
+       track-type="nav"
+       track-metadata-position="nav - essentials"
+       track-metadata-module="primary nav"
+       
+       
+         
+           data-category="Site-Wide Custom Events"
+         
+           data-label="Tab: Essentials"
+         
+           track-name="essentials"
+         
+       >
+    Essentials
+  
+    </a>
+    
+      <button
+         aria-haspopup="menu"
+         aria-expanded="false"
+         aria-label="Dropdown menu for Essentials"
+         track-type="nav"
+         track-metadata-eventdetail="https://developer.android.com/get-started"
+         track-metadata-position="nav - essentials"
+         track-metadata-module="primary nav"
+         
+          
+            data-category="Site-Wide Custom Events"
+          
+            data-label="Tab: Essentials"
+          
+            track-name="essentials"
+          
+        
+         class="devsite-tabs-dropdown-toggle devsite-icon devsite-icon-arrow-drop-down"></button>
+    
+  
+  <div class="devsite-tabs-dropdown" role="menu" aria-label="submenu" hidden>
+    <div class="devsite-tabs-dropdown-content">
+      
+      
+        <div class="devsite-tabs-dropdown-column
+                    android-dropdown android-dropdown-primary android-dropdown-ai">
+          
+            <ul class="devsite-tabs-dropdown-section
+                       ">
+              
+                <li class="devsite-nav-title" role="heading" tooltip>Build AI experiences</li>
+              
+              
+                <li class="devsite-nav-description">Build AI-powered Android apps with Gemini APIs and more.
+</li>
+              
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/ai"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/ai"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="build ai experiences"
+                     
+                     tooltip
+                  
+                    
+                     class="button button-primary"
+                    
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Get started
+                    </div>
+                    
+                  </a>
+                </li>
+              
+            </ul>
+          
+        </div>
+      
+        <div class="devsite-tabs-dropdown-column
+                    android-dropdown">
+          
+            <ul class="devsite-tabs-dropdown-section
+                       android-dropdown-section-icon android-dropdown-section-icon-launch">
+              
+                <li class="devsite-nav-title" role="heading" tooltip>Get started</li>
+              
+              
+                <li class="devsite-nav-description">Create your first app. Use Compose for UI and adaptive app development to support multiple device form factors.
+</li>
+              
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/get-started/overview"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/get-started/overview"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="get started"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Hello, world!
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/developer-verification"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/developer-verification"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="get started"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Developer Verification
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/adaptive-apps"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/adaptive-apps"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="get started"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Adaptive apps
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/compose"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/compose"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="get started"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Compose for UI
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/studio"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/studio"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="get started"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      AI-powered IDE
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/courses"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/courses"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="get started"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Training
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://google.play/business/guides/play-commerce/"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://google.play/business/guides/play-commerce/"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="get started"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Monetization with Play ↗️
+                    </div>
+                    
+                  </a>
+                </li>
+              
+            </ul>
+          
+        </div>
+      
+        <div class="devsite-tabs-dropdown-column
+                    android-dropdown">
+          
+            <ul class="devsite-tabs-dropdown-section
+                       android-dropdown-section-icon android-dropdown-section-icon-multiple-screens">
+              
+                <li class="devsite-nav-title" role="heading" tooltip>Optimize by form factor</li>
+              
+              
+                <li class="devsite-nav-description">Build apps that optimize the user experience on phones, tablets, foldables, cars, XR, and more.
+</li>
+              
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/phones-tablets-foldables"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/phones-tablets-foldables"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="optimize by form factor"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Phones, tablets, foldables
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/cars"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/cars"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="optimize by form factor"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Android for Cars
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/tv"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/tv"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="optimize by form factor"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Android TV
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/xr"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/xr"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="optimize by form factor"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Android XR
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/googlebook"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/googlebook"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="optimize by form factor"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Googlebook
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/chrome-os"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/chrome-os"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="optimize by form factor"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      ChromeOS
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/wear"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/wear"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="optimize by form factor"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Wear OS
+                    </div>
+                    
+                  </a>
+                </li>
+              
+            </ul>
+          
+        </div>
+      
+        <div class="devsite-tabs-dropdown-column
+                    android-dropdown">
+          
+            <ul class="devsite-tabs-dropdown-section
+                       android-dropdown-section-icon android-dropdown-section-icon-platform">
+              
+                <li class="devsite-nav-title" role="heading" tooltip>Build by category</li>
+              
+              
+                <li class="devsite-nav-description">Learn to build for your use case by following Google&#39;s prescriptive and opinionated guidance.
+</li>
+              
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/games"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/games"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="build by category"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Games
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/media"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/media"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="build by category"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Camera & media
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/social-and-messaging"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/social-and-messaging"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="build by category"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Social & messaging
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/health-and-fitness"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/health-and-fitness"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="build by category"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Health & fitness
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/productivity"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/productivity"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="build by category"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Productivity
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/work/overview"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/work/overview"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="build by category"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Enterprise apps
+                    </div>
+                    
+                  </a>
+                </li>
+              
+            </ul>
+          
+        </div>
+      
+        <div class="devsite-tabs-dropdown-column
+                    android-dropdown">
+          
+            <ul class="devsite-tabs-dropdown-section
+                       android-dropdown-section-icon android-dropdown-section-icon-stars">
+              
+                <li class="devsite-nav-title" role="heading" tooltip>Get the latest</li>
+              
+              
+                <li class="devsite-nav-description">Stay in touch with the latest releases throughout the year, join our preview programs, and give us your feedback.
+</li>
+              
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/latest-updates"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/latest-updates"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="get the latest"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Latest updates
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/latest-updates/experimental"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/latest-updates/experimental"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="get the latest"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Experimental updates
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/studio/preview"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/studio/preview"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="get the latest"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Android Studio preview
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/jetpack/androidx/versions"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/jetpack/androidx/versions"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="get the latest"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Jetpack & Compose libraries
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/training/wearables/versions/latest"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/training/wearables/versions/latest"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="get the latest"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Wear OS releases
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/design-for-safety/privacy-sandbox"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/design-for-safety/privacy-sandbox"
+                     track-metadata-position="nav - essentials"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="get the latest"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Privacy Sandbox ↗️
+                    </div>
+                    
+                  </a>
+                </li>
+              
+            </ul>
+          
+        </div>
+      
+    </div>
+  </div>
+</tab>
+        
+      
+        
+          <tab class="devsite-dropdown
+    devsite-dropdown-full
+    
+    
+    ">
+  
+    <a href="https://developer.android.com/design"
+    class="devsite-tabs-content gc-analytics-event android-dropdown-tab"
+      track-metadata-eventdetail="https://developer.android.com/design"
+    
+       track-type="nav"
+       track-metadata-position="nav - design &amp; plan"
+       track-metadata-module="primary nav"
+       
+       
+         
+           data-category="Site-Wide Custom Events"
+         
+           data-label="Tab: Design &amp; Plan"
+         
+           track-name="design &amp; plan"
+         
+       >
+    Design &amp; Plan
+  
+    </a>
+    
+      <button
+         aria-haspopup="menu"
+         aria-expanded="false"
+         aria-label="Dropdown menu for Design &amp; Plan"
+         track-type="nav"
+         track-metadata-eventdetail="https://developer.android.com/design"
+         track-metadata-position="nav - design &amp; plan"
+         track-metadata-module="primary nav"
+         
+          
+            data-category="Site-Wide Custom Events"
+          
+            data-label="Tab: Design &amp; Plan"
+          
+            track-name="design &amp; plan"
+          
+        
+         class="devsite-tabs-dropdown-toggle devsite-icon devsite-icon-arrow-drop-down"></button>
+    
+  
+  <div class="devsite-tabs-dropdown" role="menu" aria-label="submenu" hidden>
+    <div class="devsite-tabs-dropdown-content">
+      
+      
+        <div class="devsite-tabs-dropdown-column
+                    android-dropdown android-dropdown-primary android-dropdown-mad">
+          
+            <ul class="devsite-tabs-dropdown-section
+                       ">
+              
+                <li class="devsite-nav-title" role="heading" tooltip>Excellent Experiences</li>
+              
+              
+                <li class="devsite-nav-description">Build the best experiences for your best users.
+</li>
+              
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/quality/excellent"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/quality/excellent"
+                     track-metadata-position="nav - design &amp; plan"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="excellent experiences"
+                     
+                     tooltip
+                  
+                    
+                     class="button button-primary"
+                    
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Learn more
+                    </div>
+                    
+                  </a>
+                </li>
+              
+            </ul>
+          
+        </div>
+      
+        <div class="devsite-tabs-dropdown-column
+                    android-dropdown">
+          
+            <ul class="devsite-tabs-dropdown-section
+                       android-dropdown-section-icon android-dropdown-section-icon-layout">
+              
+                <li class="devsite-nav-title" role="heading" tooltip>UI Design</li>
+              
+              
+                <li class="devsite-nav-description">Design a beautiful user interface using Android best practices.</li>
+              
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/design/ui"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/design/ui"
+                     track-metadata-position="nav - design &amp; plan"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="ui design"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Design for Android
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/design/ui/mobile"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/design/ui/mobile"
+                     track-metadata-position="nav - design &amp; plan"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="ui design"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Mobile
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/design/ui/desktop"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/design/ui/desktop"
+                     track-metadata-position="nav - design &amp; plan"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="ui design"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Desktop experiences
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/design/ui/xr"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/design/ui/xr"
+                     track-metadata-position="nav - design &amp; plan"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="ui design"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      XR Headsets & XR Glasses
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/design/ui/ai-glasses"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/design/ui/ai-glasses"
+                     track-metadata-position="nav - design &amp; plan"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="ui design"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      AI Glasses
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/design/ui/widget"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/design/ui/widget"
+                     track-metadata-position="nav - design &amp; plan"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="ui design"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Widgets
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/design/ui/wear"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/design/ui/wear"
+                     track-metadata-position="nav - design &amp; plan"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="ui design"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Wear OS
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/design/ui/tv"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/design/ui/tv"
+                     track-metadata-position="nav - design &amp; plan"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="ui design"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-nav-item-title">
+                      Android TV
+                    </div>
+                    
+                  </a>
+                </li>
+              
+                <li class="devsite-nav-item">
+                  <a href="https://developer.android.com/design/ui/cars"
+                    
+                     track-type="nav"
+                     track-metadata-eventdetail="https://developer.android.com/design/ui/cars"
+                     track-metadata-position="nav - design &amp; plan"
+                     track-metadata-module="tertiary nav"
+                     
+                       track-metadata-module_headline="ui design"
+                     
+                     tooltip
+                  >
+                    
+                    <div class="devsite-na
