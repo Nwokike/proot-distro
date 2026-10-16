@@ -56,10 +56,10 @@ Second highly-testable UX mode: input = command string (+ optional stdin modal v
 
 ## 2. Milestones
 
-### M0 — Phase-0 device spike (GO/NO-GO) → *plan mode entered; implementation done; closing*
+### M0 — Phase-0 device spike (GO/NO-GO) → *architecture proven; device-retest loop DEFERRED (D-011)*
 Goal: prove the load-bearing mechanics on a real phone before any UI work. CI-built APK only.
-**Status 2026-10-16:** **G1 ✓✓** (exec from nativeLibraryDir), **G2 ✓** (in-process OCI install), **G3 ✓** (guest exec through loader), **G5 ✓** (interactive PTY shell on-device — O-3 closed: Python-side PTY), **G6 ✓** (export). **G4 = one open bug**: `apt` fresh installs work; **upgrade-over-existing packages fails** (`dpkg` chown ENOENT through link2symlink — full arc + spikes 8/9/10 in `docs/m0-checklist.md`). spike-10 (CI green, run 38939581051) ships: Termux device-truth argv one-to-one, G4 with `--no-upgrade` (expected M0-OK), new **G4b probe** isolating the upgrade bug, D0 diagnostics. **Owner device retest pending**; owner Termux control #2 (`apt-get install --only-upgrade perl-base` in Termux) completes the matrix.
-Exit: G4 cowsay M0-OK on-device (+ G4b result recorded). If G4b fails in Termux too → bug is upstream-wide: keep `--no-upgrade` product behavior + UI note, document; M0 still closes green (fresh installs + sessions are the load-bearing claims).
+**Status 2026-10-16:** **G1 ✓✓** (exec from nativeLibraryDir), **G2 ✓** (in-process OCI install), **G3 ✓** (guest exec through loader), **G5 ✓** (interactive PTY shell on-device — O-3 closed: Python-side PTY), **G6 ✓** (export). **G4 = one open bug, upgrade-over-existing only**: fresh `apt install` paths work; dpkg chown ENOENT through link2symlink when upgrading existing packages (arc: `docs/m0-checklist.md` §"Device retests #4+", spikes 8/9/10). spike-10 (CI green) shipped the Termux device-truth argv + `--no-upgrade` workaround + G4b isolation probe; **owner retest: still failing, and the retest loop is closed by owner ruling (D-011) until after M1–M6**. Interim product behavior: `--no-upgrade` + guest copy note. **M0 is NON-BLOCKING for M1–M6** (the go/no-go claims are green; this is a package-manager edge bug, not an architecture risk).
+**Resume recipe (post-milestones, D-011):** install `spike-10` (or later) → Run ALL → capture G4 + G4b log text; owner Termux control #2 (`apt-get install --only-upgrade perl-base`) completes the matrix (same failure in Termux ⇒ upstream-wide, document; works ⇒ flag/env delta).
 **Still owed beyond the current device (gate 5):** one run on a second/older device (seccomp/OEM variance) — same spike APK; schedule when a second device is available (noted in `play-policy.md` §2.3).
 
 ### M1 — `flet-terminal` refactor (0.3.x → 0.4.0)
