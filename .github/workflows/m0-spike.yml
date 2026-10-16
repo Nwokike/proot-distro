@@ -16,8 +16,15 @@ env:
 
 jobs:
   apk:
-    name: Build spike APK
+    name: Build spike APK (${{ matrix.arch }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both production ABIs (O-6 resolved: arm64-v8a + x86_64). Each leg
+        # verifies via the APK gate that the wheel-set payload for its ABI
+        # actually reached jniLibs, 16K-aligned.
+        arch: [arm64-v8a, x86_64]
     defaults:
       run:
         working-directory: m0-spike
@@ -36,12 +43,13 @@ jobs:
 
       - name: Lint + compile + flet API guard
         run: |
-          uvx ruff check src tools
-          uv run --frozen python -m py_compile src/main.py tools/*.py
+          uvx ruff check src
+          uv run --frozen python -m py_compile src/main.py
           uv run --frozen python tools/check_flet_api.py src/main.py
 
-      - name: Build native payload wheel (flet-proot)
-        run: python3 tools/build_proot_wheel.py --out dist
+      - name: Build native payload wheel set (flet-proot, pinned + sha256-verified)
+        working-directory: .
+        run: python3 tools/build_flet_proot_wheel.py --out m0-spike/dist
 
       # House signing convention (same as Nwokike/Sherlock, DDGS, …):
       # KEYSTORE_BASE64 -> kiri_keystore.jks, alias/passwords via secrets.
@@ -57,10 +65,12 @@ jobs:
           FLET_ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           FLET_ANDROID_SIGNING_KEY_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           FLET_ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: uv run --frozen flet build apk --split-per-abi --yes -v
+        run: |
+          uv run --frozen flet build apk --split-per-abi --yes -v \
+            --arch ${{ matrix.arch }}
 
-      - name: Inspect APK (payload presence + 16K alignment)
-        run: python3 tools/check_apk_alignment.py build/apk/*.apk
+      - name: Inspect APK (enforcing: payload presence + 16K alignment)
+        run: python3 ../tools/check_apk_alignment.py build/apk/*.apk
 
       # Delivery is the prerelease below, NOT actions/upload-artifact:
       # this account's Actions artifact storage quota is exhausted
@@ -74,6 +84,8 @@ jobs:
           body: |
             Throwaway M0 device-spike APK — proves proot mechanics on Android (go/no-go).
 
+            Native payload comes from the sha256-pinned `flet-proot` wheel set
+            (proot 5.1.107.96 + libtalloc 2.5.0 + libandroid-shmem 0.7; ABI: ${{ matrix.arch }}).
             Device protocol: `docs/m0-checklist.md` · commit `${{ github.sha }}`
           prerelease: true
           make_latest: false

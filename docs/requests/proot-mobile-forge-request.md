@@ -20,3 +20,13 @@ I've verified the app side already works with `[tool.flet.android].legacy_packag
 Is this acceptable for pypi.flet.dev / mobile-forge? Happy to open the recipe issue there and/or contribute the `build.sh` plus test builds. The fallback if it's out of scope: I publish platform-tagged wheels from my own CI — but the official forge makes it a clean one-line dependency for every Flet app that wants a real Linux userspace on Android.
 
 Posted: https://github.com/flet-dev/flet/discussions/6979 (2026-10-16)
+
+---
+
+## Status updates
+
+**2026-10-16 (same day, M2 executed):** discussion still **Unanswered / 0 comments** — no maintainer response yet. M2 did not wait on it:
+
+- **Fallback shipped (production path):** `tools/build_flet_proot_wheel.py` builds the per-ABI wheel set (`flet_proot-5.1.107.96-1-py3-none-android_24_{arm64_v8a,x86_64}.whl`) from the sha256 lock `tools/flet_proot_sources.json`, asserting 16 KiB PT_LOAD alignment before writing; the enforcing APK gate (`tools/check_apk_alignment.py`) verifies presence + alignment in built APKs. Consumed via `PIP_FIND_LINKS` + `[tool.flet.android].dependencies=["flet-proot==5.1.107.96"]`.
+- **Recipe bundle prepared (kept-alive option):** `docs/requests/mobile-forge-recipe-flet-proot/` (`meta.yaml`, repack `build.sh` with the same pins, `test.py`, `licenses/`) — one copy away from a `recipes/flet-proot/` PR.
+- **Status reply posted on the discussion:** https://github.com/flet-dev/flet/discussions/6979#discussioncomment-18981202 — asks the maintainers whether a repack-based `build.sh` (pinned debs) is acceptable for the forge, or whether from-source builds are required; offers to open the recipe PR immediately if repackaging is fine.

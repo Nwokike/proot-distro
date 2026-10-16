@@ -33,7 +33,7 @@ Record results below (one row per gate). Evidence: exact log excerpt + device mo
 - **G4-apt ✗ rc=100 — LAST blocker, root-caused:** dpkg `unable to make backup link of './usr/bin/perl' … Permission denied` + `error creating new backup file '/var/lib/dpkg/status-old'` = **`link()` denied by Android SELinux for apps**. Fix (spike-8): adopt proot-distro's Termux-mode extensions one-to-one (`proot_cmd.py::_add_proot_extensions`): `--link2symlink` + `-L` (their comment: "Fix lstat for dpkg symlink warnings") + `--kill-on-exit` + `--sysvipc` + formatted `--kernel-release`, and pin `PROOT_L2S_DIR=<rootfs>/.l2s` (their l2s.py:70-71). All flags verified in proot 5.1.107.96 `src/cli/proot.h`.
 
 ## CI evidence — APK alignment (recorded 2026-10-16, at play-policy verification request)
-Every CI build runs the "Inspect APK (payload presence + 16K alignment)" step (`m0-spike/tools/check_apk_alignment.py`) against the built split APKs. First green run **38906734815** (repeated every build since, incl. spike-8/9) printed:
+Every CI build runs the "Inspect APK (payload presence + 16K alignment)" step (`tools/check_apk_alignment.py`; moved from `m0-spike/tools/` and made **enforcing for the flet-proot payload libs** in M2 — a missing payload lib or any PT_LOAD < 0x4000 now fails the build; stdlib libs stay report-only). First green run **38906734815** (repeated every build since, incl. spike-8/9) printed:
 
 ```
 lib/arm64-v8a/libproot.so           align=0x4000 (16K-OK) soname=None

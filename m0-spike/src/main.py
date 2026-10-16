@@ -80,7 +80,11 @@ def bootstrap_env() -> dict:
         }
     )
 
-    staged = stage_runtime_libs(native_p, dirs["runtime"]) if native_p else []
+    staged, payload = (
+        stage_runtime_libs(native_p, dirs["runtime"])
+        if native_p
+        else ([], "no nativeLibraryDir")
+    )
 
     ld = [str(p) for p in (native_p, dirs["runtime"]) if p]
     os.environ["LD_LIBRARY_PATH"] = ":".join(ld)
@@ -89,16 +93,30 @@ def bootstrap_env() -> dict:
         os.environ["PROOT_LOADER"] = str(native_p / "libproot-loader.so")
         os.environ["PROOT_TMP_DIR"] = str(dirs["tmp"])
 
-    return {"dirs": dirs, "native": native_p, "staged": staged}
+    return {"dirs": dirs, "native": native_p, "staged": staged, "payload": payload}
 
 
-def stage_runtime_libs(native: Path, runtime: Path) -> list[str]:
+def stage_runtime_libs(native: Path, runtime: Path) -> tuple[list[str], str]:
     """Copy payloads whose DT_SONAME differs from their jni filename so the
     linker can satisfy DT_NEEDED names via LD_LIBRARY_PATH (mmap-exec of
-    app-data files stays allowed; execve is not involved here)."""
+    app-data files stays allowed; execve is not involved here).
+
+    Also returns the payload provenance line (flet-proot wheel version +
+    pinned source packages) for the G0 evidence log — the device record then
+    proves the libraries came from the sha256-pinned wheel, not a hand-copy.
+    """
     staged: list[str] = []
+    provenance = "flet-proot manifest unavailable"
     try:
         import flet_proot  # type: ignore[import-not-found]
+
+        version = getattr(flet_proot, "VERSION", "?")
+        build = getattr(flet_proot, "WHEEL_BUILD_TAG", "?")
+        sources = getattr(flet_proot, "SOURCES", [])
+        pinned = ", ".join(
+            f"{s.get('package')} {s.get('version')}" for s in sources
+        )
+        provenance = f"flet-proot {version} build {build} [{pinned}]"
 
         for lib in getattr(flet_proot, "LIBS", []):
             soname, jni = lib.get("soname"), lib["jni"]
@@ -114,7 +132,7 @@ def stage_runtime_libs(native: Path, runtime: Path) -> list[str]:
             staged.append(f"{jni} -> {dst.name}")
     except Exception as e:  # manifest absent in dev / partial builds
         staged.append(f"manifest unavailable: {e!r}")
-    return staged
+    return staged, provenance
 
 
 # ── gates ────────────────────────────────────────────────────────────────────
@@ -671,6 +689,7 @@ def main(page: ft.Page):
     log(f"FLET_PLATFORM={os.environ.get('FLET_PLATFORM')!r} link64={Path('/system/bin/linker64').exists()}")
     log(f"nativeLibraryDir: {native!r}")
     log(f"storage: {json.dumps({k: str(v) for k, v in dirs.items()})}")
+    log(f"payload provenance: {boot['payload']}")
     log(f"staged runtime libs: {boot['staged']}")
     log(f"PD_PROOT_BIN={os.environ.get('PD_PROOT_BIN')!r}")
     log(f"LD_LIBRARY_PATH={os.environ.get('LD_LIBRARY_PATH')!r}")

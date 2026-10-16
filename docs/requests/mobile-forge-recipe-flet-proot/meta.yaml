@@ -1,0 +1,11 @@
+# {% set version = "5.1.107.96" %}
+# {% set build = "1" %}
+
+package:
+  name: flet-proot
+  version: {{ version }}
+
+build:
+  number: {{ build }}
+
+license: GPL-2.0-or-later
