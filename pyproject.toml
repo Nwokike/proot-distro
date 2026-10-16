@@ -1,0 +1,24 @@
+[project]
+name = "proot-distro-flet"
+version = "0.1.0"
+description = "Run Debian, Ubuntu, Alpine and any Docker image on your phone — no root, no Termux. Built with Flet."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "flet>=1.0.4",
+    "flet-ads>=1.0.4",
+    "flet-terminal>=0.3.9",
+    "proot-distro>=5.10.0",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "flet-cli>=1.0.4",
+    "flet-desktop>=1.0.4",
+    "pytest>=9.1.1",
+    "pytest-timeout>=2.4.0",
+    "ruff>=0.17.1",
+]
