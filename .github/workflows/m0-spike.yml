@@ -1,0 +1,80 @@
+name: M0 Spike
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "m0-spike/**"
+      - ".github/workflows/m0-spike.yml"
+
+permissions:
+  contents: write
+
+env:
+  UV_PYTHON: "3.14"
+
+jobs:
+  apk:
+    name: Build spike APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: m0-spike
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Lint + compile tools
+        run: |
+          uvx ruff check src tools
+          uv run --no-project python -m py_compile src/main.py tools/*.py
+
+      - name: Build native payload wheel (flet-proot)
+        run: python3 tools/build_proot_wheel.py --out dist
+
+      - name: Create throwaway signing keystore
+        run: |
+          keytool -genkeypair -v -keystore spike.jks -alias spike -keyalg RSA \
+            -keysize 2048 -validity 3650 -storepass spike12345 -keypass spike12345 \
+            -dname "CN=M0 Spike, O=Kiri Research Labs"
+
+      - name: Sync Python deps
+        run: uv sync --frozen
+
+      - name: flet build apk (split-per-abi, legacy packaging)
+        env:
+          PIP_FIND_LINKS: ${{ github.workspace }}/m0-spike/dist
+          FLET_ANDROID_SIGNING_KEY_STORE: ${{ github.workspace }}/m0-spike/spike.jks
+          FLET_ANDROID_SIGNING_KEY_STORE_PASSWORD: spike12345
+          FLET_ANDROID_SIGNING_KEY_PASSWORD: spike12345
+          FLET_ANDROID_SIGNING_KEY_ALIAS: spike
+        run: uv run --frozen flet build apk --split-per-abi --yes -v
+
+      - name: Inspect APK (payload presence + 16K alignment)
+        run: python3 tools/check_apk_alignment.py build/apk/*.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: m0-spike-apk
+          path: m0-spike/build/apk/*.apk
+          if-no-files-found: error
+
+      - name: Publish spike prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: spike-${{ github.run_number }}
+          name: "M0 Spike build #${{ github.run_number }}"
+          body: |
+            Throwaway M0 device-spike APK — proves proot mechanics on Android (go/no-go).
+
+            Device protocol: `docs/m0-checklist.md` · commit `${{ github.sha }}`
+          prerelease: true
+          make_latest: false
+          files: m0-spike/build/apk/*.apk

@@ -60,6 +60,7 @@ Gates (each pass/fail on-device):
 4. Spawn path decided: flet-terminal 0.3.9 spawns nothing (verified — view-only control). First try Python-side `subprocess`/`create_subprocess_exec` running the `--get-proot-cmd` argv; if Python subprocess is unreliable under serious_python on Android (a known upstream hang report), test Dart-side `Process` spawn (would become a flet-terminal package feature, keeping app code pure Python). Session visible in flet-terminal either way. Test BOTH shapes: a one-shot exec (`proot … sh -c 'cmd'`, the structured mode's dependency) and a long-lived interactive session (stdin pump + resize, the console mode's dependency).
 5. Repeat 1–4 on a second/older device (seccomp/OEM variance).
 Exit: if green → M1–M5 proceed; if exec blocked → fallback plan (linker64 trick) goes to M1 planning.
+Implementation: `m0-spike/` (pyproject, `src/main.py` gates G0–G6, `tools/build_proot_wheel.py`, `tools/check_apk_alignment.py`) built by `.github/workflows/m0-spike.yml` (CI-only); device results recorded in [m0-checklist.md](m0-checklist.md).
 
 ### M1 — `flet-terminal` refactor (0.3.x → 0.4.0)
 Goal: the "perfect for this project" terminal package, matching the new one-to-one extension style. Full blueprint from the trio study; headline: **add contract tests + compat matrix FIRST, then drop the pin** (otherwise a visible floor is traded for invisible drift risk).
