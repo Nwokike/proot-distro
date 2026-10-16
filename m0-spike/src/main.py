@@ -120,10 +120,10 @@ def stage_runtime_libs(native: Path, runtime: Path) -> list[str]:
 # ── gates ────────────────────────────────────────────────────────────────────
 
 
-def _run(argv: list[str], timeout: int, cwd: str | None = None) -> str:
+def _run(argv: list[str], timeout: int, cwd: str | None = None, env: dict | None = None) -> str:
     t0 = time.time()
     try:
-        p = subprocess.run(argv, capture_output=True, timeout=timeout, cwd=cwd)
+        p = subprocess.run(argv, capture_output=True, timeout=timeout, cwd=cwd, env=env)
         out = p.stdout.decode("utf-8", "replace") + p.stderr.decode("utf-8", "replace")
         return f"rc={p.returncode} in {time.time() - t0:.1f}s\n{out.strip()[-4000:]}"
     except subprocess.TimeoutExpired:
@@ -187,6 +187,29 @@ def guest_argv(native: Path, rootfs: Path, script: str) -> list[str]:
     ]
 
 
+def guest_env() -> dict:
+    """Guest environment — one-to-one with proot-distro's own defaults.
+
+    PATH = constants.py DEFAULT_PATH_ENV (non-Termux variant, :115-118);
+    HOME/USER/TERM mirror commands/login/__init__.py::_build_normal_env
+    (:281-286: HOME=login_home, USER=login_user, TERM or xterm-256color).
+    Merged over the host essentials proot itself needs to start
+    (LD_LIBRARY_PATH, PROOT_LOADER, PROOT_TMP_DIR) — without PATH the guest's
+    sh cannot find id/ls/apt-get even though they exist in the rootfs.
+    """
+    env = dict(os.environ)
+    env.update(
+        {
+            "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            ":/usr/local/games:/usr/games",
+            "HOME": "/root",
+            "USER": "root",
+            "TERM": os.environ.get("TERM") or "xterm-256color",
+        }
+    )
+    return env
+
+
 # ── interactive session — PTY-backed ────────────────────────────────────────
 #
 # One-to-one adoption of the OWNER'S OWN recipe: Nwokike/flet-terminal's
@@ -215,25 +238,39 @@ class ProotSession:
         except Exception as e:
             return f"posix-pty unavailable: {e!r}"
 
-    def __init__(self, argv: list[str], deliver, on_error):
+    def __init__(self, argv: list[str], deliver, on_error, env: dict | None = None):
         self.argv = argv
         self.deliver = deliver  # callable(bytes), session-thread safe
         self.on_error = on_error
+        self.env = env
         self.master_fd: int | None = None
+        self._slave_fd: int | None = None
         self.proc: subprocess.Popen | None = None
+
+    def _preexec(self) -> None:  # child-only: own session + controlling tty
+        os.setsid()
+        if self._slave_fd is not None:
+            with contextlib.suppress(OSError):
+                import fcntl
+                import termios
+
+                fcntl.ioctl(self._slave_fd, termios.TIOCSCTTY, 0)
 
     def start(self) -> None:
         import pty
 
         master_fd, slave_fd = pty.openpty()
+        self._slave_fd = slave_fd
         self.proc = subprocess.Popen(
             self.argv,
             stdin=slave_fd,
             stdout=slave_fd,
             stderr=slave_fd,
             close_fds=True,
-            start_new_session=True,
+            preexec_fn=self._preexec,
+            env=self.env,
         )
+        self._slave_fd = None
         os.close(slave_fd)
         self.master_fd = master_fd
         threading.Thread(target=self._reader, daemon=True).start()
@@ -413,12 +450,13 @@ def main(page: ft.Page):
             ],
             deliver,
             on_error=log,
+            env=guest_env(),
         )
         try:
             session.start()
             return (
-                "session started (PTY-backed, owner's example pattern) — type in the terminal\n"
-                "(try: ls / ; cat /etc/os-release ; exit) — resize wired via TIOCSWINSZ"
+                "session started (PTY + controlling tty, guest env from proot-distro defaults)\n"
+                "(try: ls / ; cat /etc/os-release ; apt-get update ; exit) — resize via TIOCSWINSZ"
             )
         except Exception:
             return traceback.format_exc()
@@ -439,19 +477,27 @@ def main(page: ft.Page):
         await run_in_thread("G2", _install, "alpine:3.21", "alpine")
         await run_in_thread(
             "G3",
-            _run,
-            guest_argv(native, rootfs_path("alpine", dirs),
-                       "id; uname -a; cat /etc/os-release") if native else ["false"],
-            120,
+            lambda: _run(
+                guest_argv(native, rootfs_path("alpine", dirs), "id; uname -a; cat /etc/os-release"),
+                120,
+                env=guest_env(),
+            )
+            if native
+            else "no native dir",
         )
         await run_in_thread("G4-install", _install, "debian:bookworm", "debian")
         if native:
             await run_in_thread(
                 "G4-apt",
-                _run,
-                guest_argv(native, rootfs_path("debian", dirs),
-                           "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends cowsay && /usr/games/cowsay M0-OK"),
-                900,
+                lambda: _run(
+                    guest_argv(
+                        native,
+                        rootfs_path("debian", dirs),
+                        "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends cowsay && /usr/games/cowsay M0-OK",
+                    ),
+                    900,
+                    env=guest_env(),
+                ),
             )
 
     def export_report() -> str:
@@ -483,9 +529,9 @@ def main(page: ft.Page):
         ], wrap=True),
         ft.Row([
             gate_button("G2 install alpine", lambda: _install("alpine:3.21", "alpine")),
-            gate_button("G3 one-shot alpine", lambda: _run(guest_argv(native, rootfs_path("alpine", dirs), "id; uname -a; cat /etc/os-release"), 120) if native else "no native dir"),
+            gate_button("G3 one-shot alpine", lambda: _run(guest_argv(native, rootfs_path("alpine", dirs), "id; uname -a; cat /etc/os-release"), 120, env=guest_env()) if native else "no native dir"),
             gate_button("G4 install debian", lambda: _install("debian:bookworm", "debian")),
-            gate_button("G4 apt cowsay", lambda: _run(guest_argv(native, rootfs_path("debian", dirs), "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends cowsay && /usr/games/cowsay M0-OK"), 900) if native else "no native dir"),
+            gate_button("G4 apt cowsay", lambda: _run(guest_argv(native, rootfs_path("debian", dirs), "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends cowsay && /usr/games/cowsay M0-OK"), 900, env=guest_env()) if native else "no native dir"),
         ], wrap=True),
         ft.Divider(),
         ft.Text("G5 — interactive session (flet-terminal)", weight=ft.FontWeight.BOLD),

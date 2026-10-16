@@ -32,7 +32,7 @@ Recovered the house signing material from an older app repo (secrets are write-o
 |---|---|---|
 | O-1 | Product/brand name (repo + `[tool.flet].product` + dir rename) | M0/M1 |
 | O-2 | flet pin style: exact `==1.0.4` pair (FFmpeg style) vs `>=` floor (Sherlock style) | M1 |
-| O-3 | Spawn port: Python-side `subprocess` vs Dart-side `Process` (flet-terminal feature) | M0 gate 4 → M1 |
+| O-3 | Spawn port: Python-side `subprocess` vs Dart-side `Process` (flet-terminal feature) | **CLOSED 2026-10-16 by device evidence**: Python-side wins — PTY session ran on-device (spike-5, owner's example pattern: `pty.openpty` + `Popen` + `TIOCSWINSZ`); `sys.executable` is the Flutter host so the CLI-subprocess route is dead, but direct proot spawn is proven. |
 | O-4 | Dual-mode UX (interactive console + structured command→outputs) | M4 |
 | O-5 | `flet-notifications` inclusion for session persistence (default: NO — patcher complication) | M4/M5 |
 | O-6 | x86_64 ABI inclusion (emulator QA) vs what the forge wheel ships | M2 |

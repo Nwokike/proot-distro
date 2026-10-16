@@ -26,6 +26,14 @@ Record results below (one row per gate). Evidence: exact log excerpt + device mo
 | G5 session | Long-lived interactive shell in flet-terminal: typing, output streaming, Ctrl-C, `exit` → decides spawn port (Python vs Dart) for M1 | | |
 | G6 export | Report file written to app documents | | |
 
+## Device run #2 (2026-10-16 · Android 16 aarch64 · spike-5) — evidence
+- **G0 ✓ (device truth)** — `posixdb probe: {'pwd': True, 'grp': False}` → only `grp` shimmed (settles the pwd question: pwd EXISTS on Android); `pty: posix-pty available (openpty OK)`; nativeLibraryDir + staged `libtalloc.so -> libtalloc.so.2` confirmed again.
+- **G1 ✓** — proot exec again, `process_vm = yes, seccomp_filter = yes`.
+- **G2 ✓ `OK in 7.4s`** — alpine:3.21 installed IN-PROCESS via proot-distro (OCI pull + extract) — including "Registering Android-specific UIDs and GIDs" = **the grp shim worked on-device**.
+- **G4-install ✓ `OK in 40.1s`** — debian:bookworm installed (46.2 MiB layer).
+- **G5 ✓ (first true interactive shell)** — PTY session; owner's screenshot shows a live `#` (fake-root) prompt and working keystrokes; `sh` loaded from the rootfs = **proot loader mmap-exec on Android proven end-to-end**. ("can't access tty; job control turned off" → fixed in spike-6 via setsid+TIOCSCTTY preexec.)
+- **G3/G4-apt ✗ rc=127 (`id/ls/apt-get: not found`)** — root cause: the guest inherited the app's Android PATH (our minimal spawn bypasses proot-distro's env building). Fix in spike-6: `guest_env()` — one-to-one with `constants.py DEFAULT_PATH_ENV` + `_build_normal_env` HOME/USER/TERM, merged over the host essentials proot needs (LD_LIBRARY_PATH/PROOT_LOADER/PROOT_TMP_DIR).
+
 ## Device run #1 (2026-10-16 · Android 16 aarch64 · spike-3) — evidence
 - **G0 ✓** — nativeLibraryDir found; `staged runtime libs: ['libtalloc.so -> libtalloc.so.2']`; `PD_PROOT_BIN` + `LD_LIBRARY_PATH` set; `TracerPid=0`; uid=10315.
 - **G1 ✓✓ (the go/no-go) — `libproot.so --version` EXECUTES from nativeLibraryDir**: `rc=0`, prints `proot 5.1.107.96`, `built-in accelerators: process_vm = yes, seccomp_filter = yes`. **The W^X/jniLibs/legacy-packaging architecture is proven on real hardware.**
