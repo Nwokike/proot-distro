@@ -27,3 +27,5 @@ No proot → `crit_error` + `sys.exit(1)` (startup probe exempts build/push/kill
 ## Update safety (bump = cheap, but re-verify)
 SAFE surfaces: env-var contract, on-disk layout, pure helpers (`parse_reference`, `derive_alias`, `iter_cached_images`, `paths.installed_container_names/container_rootfs`, `arch.*`, `progress.fmt_size`).
 FRAGILE (isolate behind one adapter): `command_*` signatures, `build_proot_args` (13 kwargs), `_run_install`/`_login_with_rootfs`, `ContainerLock`, the rootfs_fd convention. Re-verify `constants.py` + `build_proot_args` on each 5.x bump.
+
+**Session argv flags — verified against proot v5.1.107.96 primary sources** (`doc/proot/manual.txt` lines 75/86/111/149): `-r/--rootfs`, `-b/--bind` (also `-m/--mount`), `-w/--pwd/--cwd`, `-0/--root-id`. The spike's guest argv uses exactly these.
