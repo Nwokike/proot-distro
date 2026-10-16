@@ -251,14 +251,14 @@ wheels = [
 
 [[package]]
 name = "flet-terminal"
-version = "0.3.9"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "flet" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/da/cc/dd120643dd1ed44e30586cf27348bf23f61676fc77ac1e40604cea03837c/flet_terminal-0.3.9.tar.gz", hash = "sha256:47c8fa069dff87872967e24db017e7a44e55ff8e40c26f1196195341babdbb66", size = 32762, upload-time = "2026-09-23T14:09:16.702Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/88/03/f269605110b68283a2bb6fd0d0fea894b67b336821bf80974c338debff70/flet_terminal-0.4.0.tar.gz", hash = "sha256:543bb16756a8fdcadfe7cc84b8d18ee2adbdbe6a3f4ba46ea2591ed6e50ff1ee", size = 39660, upload-time = "2026-10-16T18:15:43.88Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a6/14/9c47e905abbd8af2f9709bbe052dfccc0cf5effae4d662ac17a6563aaa81/flet_terminal-0.3.9-py3-none-any.whl", hash = "sha256:4d5206d2bd403ef0b653d25d1b83ec32774e812c02e6fdf54deb59e4847c7a2d", size = 33115, upload-time = "2026-09-23T14:09:15.472Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/b8/62ea3ddea7a4f668c02482570e6bfb42fd4c663b2562627929a4e18c2d5c/flet_terminal-0.4.0-py3-none-any.whl", hash = "sha256:6aba4adf4a7c302a9cd794c866f1cd8499a228716c6be2867f1abb6858c8d1f9", size = 30902, upload-time = "2026-10-16T18:15:42.673Z" },
 ]
 
 [[package]]
@@ -338,7 +338,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "flet", specifier = "==1.0.4" },
-    { name = "flet-terminal", specifier = "==0.3.9" },
+    { name = "flet-terminal", specifier = "==0.4.0" },
     { name = "proot-distro", specifier = "==5.10.0" },
 ]
 

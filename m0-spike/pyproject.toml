@@ -5,7 +5,7 @@ description = "Throwaway M0 device-spike harness: proves proot mechanics on Andr
 requires-python = ">=3.14"
 dependencies = [
     "flet==1.0.4",
-    "flet-terminal==0.3.9",
+    "flet-terminal==0.4.0",
     "proot-distro==5.10.0",
 ]
 
