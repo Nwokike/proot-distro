@@ -25,6 +25,7 @@ import io
 import json
 import os
 import platform
+import struct
 import subprocess
 import sys
 import threading
@@ -186,25 +187,61 @@ def guest_argv(native: Path, rootfs: Path, script: str) -> list[str]:
     ]
 
 
-# ── interactive session (the Python-subprocess-on-Android answer) ───────────
+# ── interactive session — PTY-backed ────────────────────────────────────────
+#
+# One-to-one adoption of the OWNER'S OWN recipe: Nwokike/flet-terminal's
+# examples/flet_terminal_example/src/pty_service.py ("cross-platform process
+# and PTY management for Linux, Windows, and Android"), which the owner built
+# and ran on Android: pty.openpty() -> Popen(argv, stdio=slave_fd,
+# start_new_session=True) -> os.read(master) loop; resize via TIOCSWINSZ
+# ioctl on the master fd. termios/fcntl/pty ship in the Android stdlib build
+# (libtermios.so / libfcntl.so appear in nativeLibraryDir).
 
 
 class ProotSession:
-    def __init__(self, argv: list[str], deliver):
+    @staticmethod
+    def availability() -> str:
+        if sys.platform in ("emscripten", "wasi", "win32"):
+            return f"posix-pty not applicable on {sys.platform}"
+        try:
+            import fcntl  # noqa: F401
+            import pty
+            import termios  # noqa: F401
+
+            m, s = pty.openpty()
+            os.close(m)
+            os.close(s)
+            return "posix-pty available (openpty OK)"
+        except Exception as e:
+            return f"posix-pty unavailable: {e!r}"
+
+    def __init__(self, argv: list[str], deliver, on_error):
         self.argv = argv
         self.deliver = deliver  # callable(bytes), session-thread safe
+        self.on_error = on_error
+        self.master_fd: int | None = None
         self.proc: subprocess.Popen | None = None
 
     def start(self) -> None:
+        import pty
+
+        master_fd, slave_fd = pty.openpty()
         self.proc = subprocess.Popen(
-            self.argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0
+            self.argv,
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            close_fds=True,
+            start_new_session=True,
         )
+        os.close(slave_fd)
+        self.master_fd = master_fd
         threading.Thread(target=self._reader, daemon=True).start()
         threading.Thread(target=self._waiter, daemon=True).start()
 
     def _reader(self) -> None:
-        fd = self.proc.stdout.fileno()
-        while True:
+        fd = self.master_fd
+        while self.master_fd == fd and fd is not None:
             try:
                 data = os.read(fd, 4096)
             except OSError:
@@ -218,11 +255,26 @@ class ProotSession:
         self.deliver(f"\r\n[session exited rc={rc}]\r\n".encode())
 
     def write(self, data) -> None:
-        if self.proc and self.proc.stdin:
+        if self.master_fd is not None:
             with contextlib.suppress(OSError):
-                os.write(self.proc.stdin.fileno(), data)
+                os.write(self.master_fd, data)
+
+    def resize(self, cols: int, rows: int) -> None:
+        if self.master_fd is None or cols <= 0 or rows <= 0:
+            return
+        try:
+            import fcntl
+            import termios
+
+            fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+        except Exception as e:
+            self.on_error(f"resize failed: {e!r}")
 
     def stop(self) -> None:
+        if self.master_fd is not None:
+            with contextlib.suppress(OSError):
+                os.close(self.master_fd)
+            self.master_fd = None
         if self.proc and self.proc.poll() is None:
             self.proc.terminate()
 
@@ -337,6 +389,15 @@ def main(page: ft.Page):
     if not isinstance(mt, ft.Text):
         mt.set_on_bytes(on_bytes)
 
+        def on_terminal_resize(e) -> None:
+            if session is None:
+                return
+            with contextlib.suppress(Exception):
+                dims = json.loads(e.data)
+                session.resize(int(dims.get("cols", 0)), int(dims.get("rows", 0)))
+
+        mt.on_resize = on_terminal_resize
+
     def session_start() -> str:
         nonlocal session
         if not native:
@@ -351,10 +412,14 @@ def main(page: ft.Page):
                 "/bin/sh", "-i",
             ],
             deliver,
+            on_error=log,
         )
         try:
             session.start()
-            return "session started — type in the terminal (try: ls / ; cat /etc/os-release ; exit)\nresize is NOT wired in the spike"
+            return (
+                "session started (PTY-backed, owner's example pattern) — type in the terminal\n"
+                "(try: ls / ; cat /etc/os-release ; exit) — resize wired via TIOCSWINSZ"
+            )
         except Exception:
             return traceback.format_exc()
 
@@ -441,6 +506,7 @@ def main(page: ft.Page):
     euid = getattr(os, "geteuid", lambda: "n/a")()
     log(f"python: {sys.version.split()[0]}  uid={uid} euid={euid}")
     log(f"posixdb probe: {posixdb_probe}  shimmed: {posixdb_shimmed}")
+    log(f"pty: {ProotSession.availability()}")
     log(f"FLET_PLATFORM={os.environ.get('FLET_PLATFORM')!r} link64={Path('/system/bin/linker64').exists()}")
     log(f"nativeLibraryDir: {native!r}")
     log(f"storage: {json.dumps({k: str(v) for k, v in dirs.items()})}")

@@ -1,15 +1,22 @@
 """Minimal `grp`/`pwd` shims for Android's embedded CPython.
 
-VERIFIED: CPython's Android port excludes `grp` (PEP 738, "Unsupported
-modules": curses/readline, dbm.gnu, dbm.ndbm, grp, multiprocessing,
-tkinter/turtle) — and the device log confirms `ModuleNotFoundError: No
-module named 'grp'`. `pwd` is NOT in PEP 738's unsupported list, so it may
-well exist on the device; `probe()` reports device truth and `ensure()`
-installs a shim for whichever module is actually missing.
+VERIFIED root cause: CPython gates the `grp` module in `configure.ac` on
+`getgrent` AND (`getgrgid` OR `getgrgid_r`). Bionic provides `getgrent`/
+`setgrent`/`endgrent` only since API 26 (`__INTRODUCED_IN(26)`), while
+flet-dev/python-build targets api_level=24 → the module is (correctly)
+skipped at configure time; on the 3.12 flow it is additionally forced off
+by `android/patches/grp.patch` (inherited from Chaquopy). Device log
+confirms `ModuleNotFoundError: No module named 'grp'`.
 
-`proot-distro` imports both unconditionally (`helpers/rootfs.py:42-44`) and
-uses exactly two calls while registering the Android uid/gid entries into a
-container's /etc files:
+Termux hit the identical regression (termux-packages#28684) and ships `grp`
+via a `getgrent` stub returning NULL + forced `ac_cv_func_getgrent=yes`
+(PR #28768). This shim mirrors Termux's degradation exactly: real callers
+get synthetic `getgrgid`/`getgrnam` results and `getgrall()` returns `[]`.
+Upstream enablement request: https://github.com/flet-dev/python-build/issues/45
+
+`proot-distro` imports both modules unconditionally (`helpers/rootfs.py:42-44`)
+and uses exactly two calls while registering the Android uid/gid entries
+into a container's /etc files:
 
     pwd.getpwuid(os.getuid()).pw_name   -> written as  aid_{name}
     grp.getgrgid(g).gr_name             -> written as  aid_{name}
@@ -21,8 +28,8 @@ guest ends up with entries like:
     aid_3003:x:3003:root,aid_u0_a315
 
 This is a platform-capability shim, not an upstream patch: nothing inside
-proot-distro is modified, and nothing is invented beyond the two accessors
-the library actually calls (unknown lookups raise KeyError, matching CPython).
+proot-distro is modified, and nothing is invented beyond the accessors the
+library actually calls (unknown lookups raise KeyError, matching CPython).
 """
 
 from __future__ import annotations
@@ -42,6 +49,12 @@ def _pw_name(uid: int) -> str:
     return f"u0_a{uid - 10000}" if uid >= 10000 else str(uid)
 
 
+def _gid() -> int:
+    """os.getgid() is POSIX-only; the shim also runs on Windows (dev previews)."""
+    getgid = getattr(os, "getgid", None)
+    return getgid() if getgid else 0
+
+
 def _shim_pwd() -> types.ModuleType:
     struct_passwd = namedtuple("struct_passwd", _STRUCT_PASSWD)
     mod = types.ModuleType("pwd")
@@ -49,16 +62,17 @@ def _shim_pwd() -> types.ModuleType:
     mod.__doc__ = "Android shim (see posixdb.py)"
 
     def getpwuid(uid):
-        return struct_passwd(_pw_name(uid), "x", uid, os.getgid(), "Android app", "/", "/sbin/nologin")
+        return struct_passwd(_pw_name(uid), "x", uid, _gid(), "Android app", "/", "/sbin/nologin")
 
     def getpwnam(name):
-        uid = os.getuid()
+        uid = getattr(os, "getuid", lambda: 0)()
         if name == _pw_name(uid):
             return getpwuid(uid)
         raise KeyError(name)
 
     def getpwall():
-        return [getpwuid(os.getuid())]
+        uid = getattr(os, "getuid", lambda: 0)()
+        return [getpwuid(uid)]
 
     mod.getpwuid = getpwuid
     mod.getpwnam = getpwnam
@@ -72,18 +86,6 @@ def _shim_grp() -> types.ModuleType:
     mod.struct_group = struct_group
     mod.__doc__ = "Android shim (see posixdb.py)"
 
-    def _gids():
-        out: list[int] = []
-        seen: set[int] = set()
-        gids = [os.getgid()]
-        if hasattr(os, "getgroups"):
-            gids.extend(os.getgroups())
-        for g in gids:
-            if g not in seen:
-                seen.add(g)
-                out.append(g)
-        return out
-
     def getgrgid(gid):
         # proot-distro prefixes "aid_" itself; numeric names reproduce
         # Android's aid_<gid> convention exactly.
@@ -93,7 +95,9 @@ def _shim_grp() -> types.ModuleType:
         raise KeyError(name)
 
     def getgrall():
-        return [getgrgid(g) for g in _gids()]
+        # Termux parity: their getgrent stub returns NULL, so getgrall() is
+        # always empty there too (termux-packages PR #28768).
+        return []
 
     mod.getgrgid = getgrgid
     mod.getgrnam = getgrnam
