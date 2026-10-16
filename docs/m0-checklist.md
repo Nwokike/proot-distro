@@ -84,3 +84,19 @@ Recorded 2026-10-16 from the fix commits + CI releases (older spike release page
 - Update this file with pass/fail + evidence.
 - `docs/decisions.md`: close O-3 (spawn port), annotate O-7 (zstd) and O-8 (Termux-masquerade) with device evidence.
 - If G1–G4 green: proceed to M1 (flet-terminal refactor) plan mode.
+
+## M2 evidence — production `flet-proot` wheel set (recorded 2026-10-16)
+CI run **38953589146** (`M0 Spike`, dual-ABI matrix legs: arm64-v8a + x86_64) — **all green**:
+- Wheel set built from the sha256 lock (`tools/flet_proot_sources.json`; proot 5.1.107.96 / libtalloc 2.5.0 / libandroid-shmem 0.7) → `flet_proot-5.1.107.96-1-py3-none-android_24_{arm64_v8a,x86_64}.whl`; the builder's build-time assert saw every payload at `align=0x4000`.
+- The **now-enforcing** APK gate (fails on missing/short payload) printed against the real APKs:
+  ```
+  lib/arm64-v8a/libandroid-shmem.so   align=0x4000 (16K-OK) [payload] soname=None
+  lib/arm64-v8a/libproot-loader.so    align=0x4000 (16K-OK) [payload] soname=None
+  lib/arm64-v8a/libproot.so           align=0x4000 (16K-OK) [payload] soname=None
+  lib/arm64-v8a/libtalloc.so          align=0x4000 (16K-OK) [payload] soname=libtalloc.so.2
+  OK: all payload libs present and 16K-aligned
+  ```
+  (x86_64 leg identical for `lib/x86_64/*`.)
+- Release **`spike-13`**: `m0-spike-arm64-v8a.apk` (27.7 MB) + `m0-spike-x86_64.apk` (28.1 MB).
+- The spike's **G0 gate now logs the payload provenance line** (`payload provenance: flet-proot 5.1.107.96 build 1 [proot …, libtalloc …, libandroid-shmem …]`) — device screenshots will carry the wheel-source evidence when the deferred D-011 loop resumes.
+- Consumed via `PIP_FIND_LINKS` + `[tool.flet.android].dependencies = ["flet-proot==5.1.107.96"]` (per-ABI tag resolution confirmed working in CI, including a **py3-none-any legacy mode** kept for single-arch device builds).
