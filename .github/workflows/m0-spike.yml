@@ -69,7 +69,7 @@ jobs:
           uv run --frozen flet build apk --split-per-abi --yes -v \
             --arch ${{ matrix.arch }}
 
-      - name: Inspect APK (enforcing: payload presence + 16K alignment)
+      - name: "Inspect APK (enforcing — payload presence + 16K alignment)"
         run: python3 ../tools/check_apk_alignment.py build/apk/*.apk
 
       # Delivery is the prerelease below, NOT actions/upload-artifact:
