@@ -18,6 +18,9 @@ No pins above Android ceilings (msgpack rule: never ≥1.2.x); floors in pyproje
 ## D-005 · 2026-10-16 · Testing loop (verified mechanics)
 (1) `uv run pytest` offline for all logic incl. fake-transport `ProotSession` tests; (2) `uv run flet run` for all non-extension UI with placeholder panes; (3) CI `build-<sha>` artifacts installed on device = the only true gate for extension + proot behavior. No local `flet build` (owner rule). Evidence: `testing-findings.md`.
 
+## D-006 · 2026-10-16 · CI delivery = GitHub Releases only, never artifacts
+`actions/upload-artifact` fails on this account: **"Artifact storage quota has been hit"** (observed in M0 spike run 38905063919; the same account-level quota already blocks Data Formulator CI). Release assets are unaffected → every workflow delivers via `softprops/action-gh-release` prereleases (house pattern). The M0 workflow's artifact step was removed after the first run.
+
 ## Open decisions (resolve in the owning milestone's plan mode)
 | # | Decision | Owner milestone |
 |---|---|---|

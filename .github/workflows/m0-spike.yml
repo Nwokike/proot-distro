@@ -59,13 +59,10 @@ jobs:
       - name: Inspect APK (payload presence + 16K alignment)
         run: python3 tools/check_apk_alignment.py build/apk/*.apk
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: m0-spike-apk
-          path: m0-spike/build/apk/*.apk
-          if-no-files-found: error
-
+      # Delivery is the prerelease below, NOT actions/upload-artifact:
+      # this account's Actions artifact storage quota is exhausted
+      # ("Artifact storage quota has been hit", 2026-10-16) — release assets
+      # are unaffected and are the house delivery mechanism anyway.
       - name: Publish spike prerelease
         uses: softprops/action-gh-release@v2
         with:
