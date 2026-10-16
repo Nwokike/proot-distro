@@ -26,6 +26,12 @@ Record results below (one row per gate). Evidence: exact log excerpt + device mo
 | G5 session | Long-lived interactive shell in flet-terminal: typing, output streaming, Ctrl-C, `exit` → decides spawn port (Python vs Dart) for M1 | | |
 | G6 export | Report file written to app documents | | |
 
+## Device run #3 (2026-10-16 · Android 16 aarch64 · spike-6) — evidence
+- **G0/G1/G2 ✓** — probe again ({'pwd': True, 'grp': False}), pty OK, alpine install 5.5s.
+- **G3 ✓ FULL GREEN** — `rc=0`, `uid=0(root)`, `groups=3003(aid_3003),9997(aid_9997),20322(aid_20322),50322(aid_50322)` (shim `getgrgid` live), Alpine 3.21.8 `os-release`, real kernel line. **PATH env fix verified.**
+- **G4-install ✓** 16.3s; **G5 ✓** session with controlling tty — owner screenshots show a working shell: coloured `ls`, `cd`, full `/bin` busybox listing, live prompt.
+- **G4-apt ✗ rc=100 — LAST blocker, root-caused:** dpkg `unable to make backup link of './usr/bin/perl' … Permission denied` + `error creating new backup file '/var/lib/dpkg/status-old'` = **`link()` denied by Android SELinux for apps**. Fix (spike-8): adopt proot-distro's Termux-mode extensions one-to-one (`proot_cmd.py::_add_proot_extensions`): `--link2symlink` + `-L` (their comment: "Fix lstat for dpkg symlink warnings") + `--kill-on-exit` + `--sysvipc` + formatted `--kernel-release`, and pin `PROOT_L2S_DIR=<rootfs>/.l2s` (their l2s.py:70-71). All flags verified in proot 5.1.107.96 `src/cli/proot.h`.
+
 ## Device run #2 (2026-10-16 · Android 16 aarch64 · spike-5) — evidence
 - **G0 ✓ (device truth)** — `posixdb probe: {'pwd': True, 'grp': False}` → only `grp` shimmed (settles the pwd question: pwd EXISTS on Android); `pty: posix-pty available (openpty OK)`; nativeLibraryDir + staged `libtalloc.so -> libtalloc.so.2` confirmed again.
 - **G1 ✓** — proot exec again, `process_vm = yes, seccomp_filter = yes`.

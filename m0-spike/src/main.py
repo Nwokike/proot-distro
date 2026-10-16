@@ -171,6 +171,7 @@ def guest_argv(native: Path, rootfs: Path, script: str) -> list[str]:
     return [
         str(native / "libproot.so"),
         "-0",
+        *proot_extensions(),
         "-r",
         str(rootfs),
         "-b",
@@ -187,7 +188,33 @@ def guest_argv(native: Path, rootfs: Path, script: str) -> list[str]:
     ]
 
 
-def guest_env() -> dict:
+def proot_extensions() -> list[str]:
+    """Termux-mode extension flags — one-to-one with proot-distro's
+    commands/login/proot_cmd.py::_add_proot_extensions (non-minimal branch).
+
+    --link2symlink is REQUIRED on Android: SELinux denies the link() syscall
+    to apps, and dpkg's backup-link step fails without it (observed on-device:
+    "unable to make backup link of './usr/bin/perl' ... Permission denied" /
+    "error creating new backup file '/var/lib/dpkg/status-old'").
+    -L is theirs too ("Fix lstat for dpkg symlink warnings"). All flags
+    verified present in proot 5.1.107.96 (src/cli/proot.h lines 157/199/239/285).
+    """
+    try:
+        from proot_distro.constants import DEFAULT_FAKE_KERNEL_VERSION
+    except Exception:  # desktop / proot-distro not importable here
+        DEFAULT_FAKE_KERNEL_VERSION = "#1 SMP PREEMPT_DYNAMIC Fri, 10 Oct 2025 00:00:00 +0000"
+    uname_m = platform.machine() or "aarch64"
+    return [
+        "--kill-on-exit",
+        "--link2symlink",
+        "--sysvipc",
+        f"--kernel-release=\\Linux\\localhost\\{platform.release()}"
+        f"\\{DEFAULT_FAKE_KERNEL_VERSION}\\{uname_m}\\localdomain\\-1\\",
+        "-L",
+    ]
+
+
+def guest_env(rootfs: Path | None = None) -> dict:
     """Guest environment — one-to-one with proot-distro's own defaults.
 
     PATH = constants.py DEFAULT_PATH_ENV (non-Termux variant, :115-118);
@@ -207,6 +234,13 @@ def guest_env() -> dict:
             "TERM": os.environ.get("TERM") or "xterm-256color",
         }
     )
+    if rootfs is not None:
+        # l2s.py:70-71 — proot-distro pins PROOT_L2S_DIR to <rootfs>/.l2s;
+        # every link2symlink intermediate lives there.
+        l2s = rootfs / ".l2s"
+        with contextlib.suppress(OSError):
+            l2s.mkdir(parents=True, exist_ok=True)
+        env["PROOT_L2S_DIR"] = str(l2s)
     return env
 
 
@@ -444,13 +478,13 @@ def main(page: ft.Page):
             return f"no alpine rootfs at {r} — run G2 first"
         session = ProotSession(
             [
-                str(native / "libproot.so"), "-0", "-r", str(r),
+                str(native / "libproot.so"), "-0", *proot_extensions(), "-r", str(r),
                 "-b", "/dev", "-b", "/proc", "-b", "/sys", "-w", "/",
                 "/bin/sh", "-i",
             ],
             deliver,
             on_error=log,
-            env=guest_env(),
+            env=guest_env(r),
         )
         try:
             session.start()
@@ -480,7 +514,7 @@ def main(page: ft.Page):
             lambda: _run(
                 guest_argv(native, rootfs_path("alpine", dirs), "id; uname -a; cat /etc/os-release"),
                 120,
-                env=guest_env(),
+                env=guest_env(rootfs_path("alpine", dirs)),
             )
             if native
             else "no native dir",
@@ -496,7 +530,7 @@ def main(page: ft.Page):
                         "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends cowsay && /usr/games/cowsay M0-OK",
                     ),
                     900,
-                    env=guest_env(),
+                    env=guest_env(rootfs_path("debian", dirs)),
                 ),
             )
 
@@ -529,9 +563,9 @@ def main(page: ft.Page):
         ], wrap=True),
         ft.Row([
             gate_button("G2 install alpine", lambda: _install("alpine:3.21", "alpine")),
-            gate_button("G3 one-shot alpine", lambda: _run(guest_argv(native, rootfs_path("alpine", dirs), "id; uname -a; cat /etc/os-release"), 120, env=guest_env()) if native else "no native dir"),
+            gate_button("G3 one-shot alpine", lambda: _run(guest_argv(native, rootfs_path("alpine", dirs), "id; uname -a; cat /etc/os-release"), 120, env=guest_env(rootfs_path("alpine", dirs))) if native else "no native dir"),
             gate_button("G4 install debian", lambda: _install("debian:bookworm", "debian")),
-            gate_button("G4 apt cowsay", lambda: _run(guest_argv(native, rootfs_path("debian", dirs), "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends cowsay && /usr/games/cowsay M0-OK"), 900, env=guest_env()) if native else "no native dir"),
+            gate_button("G4 apt cowsay", lambda: _run(guest_argv(native, rootfs_path("debian", dirs), "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends cowsay && /usr/games/cowsay M0-OK"), 900, env=guest_env(rootfs_path("debian", dirs))) if native else "no native dir"),
         ], wrap=True),
         ft.Divider(),
         ft.Text("G5 — interactive session (flet-terminal)", weight=ft.FontWeight.BOLD),
@@ -553,6 +587,7 @@ def main(page: ft.Page):
     log(f"python: {sys.version.split()[0]}  uid={uid} euid={euid}")
     log(f"posixdb probe: {posixdb_probe}  shimmed: {posixdb_shimmed}")
     log(f"pty: {ProotSession.availability()}")
+    log(f"proot extensions: {' '.join(proot_extensions())}")
     log(f"FLET_PLATFORM={os.environ.get('FLET_PLATFORM')!r} link64={Path('/system/bin/linker64').exists()}")
     log(f"nativeLibraryDir: {native!r}")
     log(f"storage: {json.dumps({k: str(v) for k, v in dirs.items()})}")
