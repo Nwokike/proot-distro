@@ -365,5 +365,138 @@ deliberate product decisions:
    silently on first boot or on a timer.
 2. **Refresh cadence.** `apt update` on every app launch or on a background
    schedule would be pure metadata churn with no user benefit. Refresh indexes
-   only when the user opens the package flow (or explic
-...[truncated 6154 chars]
+   only when the user opens the package flow (or explicitly taps
+   "Refresh package indexes"); never on launch, never on a timer.
+3. **Bulk archive operations are always explicit.** Besides the optional
+   post-install upgrade (item 1), no other guest-wide archive operation runs
+   automatically: no boot-time `apt upgrade`, no nightly `apt update` daemon,
+   no silent index refresh. The only archive traffic our defaults generate is
+   what a normal interactive shell user would generate by typing the command
+   themselves — the archives' designed workload (§3.1). Settings copy should
+   say plainly: "Package downloads happen inside your container, from the
+   distro's own mirrors, only when you run a command or tap an update action."
+
+> **Repair note (2026-10-16).** A write-tool truncation cut this document
+> mid-sentence after §3.2 item 2; the literal marker was committed by
+> accident. Sections §3.2(2)–§7 below were **reconstructed** the same day by
+> re-grounding every claim in (a) the surviving §1–§3 text and its primary
+> sources, (b) `docs/reference/dep-proot-distro.md` (pull/install plumbing),
+> and (c) the in-repo compliance set (`licensing.md`, `play-policy.md`).
+> The original wording of the lost paragraphs is not recoverable; the
+> substance below preserves every internally cross-referenced item (§4
+> digest-pinned defaults, §5 UI wording, §1.3 copy block). Re-verify all
+> outward-facing facts (rate limits, ToS clauses) at M5/M6 as planned.
+
+---
+
+## 4. Certified defaults — digest pinning, registries, staleness
+
+### 4.1 Pin certified images by digest, display them by tag
+
+The certified catalog (roadmap §1: `ubuntu:24.04`, `debian:bookworm`,
+`alpine:3.21`) should carry, per entry, **both** the human tag (for display,
+never for the wire) and a `name:tag@sha256:<digest>` reference (for pulls).
+Why this is load-bearing, from §2.3:
+
+- **Re-pull storms** (risk case 2) are caused by floating tags changing
+  upstream and invalidating the on-device `oci_layers/` cache. A catalog that
+  pins digests makes "install Ubuntu 24.04" reproducible across the fleet:
+  every device pulls byte-identical layers until *we* bump the digest via a
+  normal app update (the D-004 "bump a version" path).
+- **UI copy stays human** ("Ubuntu 24.04 (LTS) — 29 MB base") while the
+  machine-facing ref is exact; the container manifest written by install
+  should record the resolved digest so support can reproduce any container's
+  provenance.
+- Upstream support check: proot-distro's reference parsing accepts
+  tagged/digested OCI refs and its pull path verifies layer digests
+  (`docs/reference/dep-proot-distro.md` — `parse_reference` / `pull_image`);
+  the catalog change is data-only, no forks, no patching.
+
+Custom (user-typed) OCI refs remain **unpinned by design** — the user owns
+staleness there; the UI should show the resolved digest after pull for
+transparency.
+
+### 4.2 Per-distro registry field (no single global registry)
+
+Per §2.4's verified findings, the catalog entry format should be
+`{display_name, ref, digest, registry, notes}` where `registry` defaults to
+Docker Hub (`registry-1.docker.io`) and can point at official alternative
+registries where they exist (verified list in §2.4: Arch via
+`quay.io/archlinux/archlinux` / `ghcr.io/archlinux/archlinux`; Fedora via
+`registry.fedoraproject.org`). This avoids ever needing a central pull proxy
+(§2.1(5) — a shared proxy aggregates every user onto one suspendable
+identity; we do not build one).
+
+### 4.3 Rolling-release staleness (Arch note, "mirrors §4")
+
+Rolling distros age in days, not months. The certified set deliberately
+contains no rolling distro. If a rolling distro is ever certified (Arch),
+the catalog note must carry the upstream advice (`pacman -Syu` right after
+first start, per the Arch docker README cited in §1.2) and UI copy must say
+"container base may be weeks old — update inside the container". Custom-ref
+users own this entirely.
+
+---
+
+## 5. UI wording (factual-reference copy only)
+
+Rules distilled from §1 (trademarks) and `licensing.md` §4.6 / A9, to be
+applied verbatim in M3–M6 UI copy:
+
+1. **Distro names are factual text, never branding.** "Ubuntu 24.04",
+   "Debian 12 (bookworm)", "Alpine 3.21" appear in list rows and
+   descriptions; no distro logo art, no "Official", no endorsement-adjacent
+   phrasing anywhere (screen, store listing, screenshots).
+2. **Every pull is user-initiated, sized, and cancelable** (also the
+   highest-probability Play tripwire — `licensing.md` A9 / `play-policy.md`
+   A-1): the install flow shows the download size (from the registry
+   manifest where available, otherwise a conservative estimate labeled as
+   such) and requires an explicit tap before any network traffic.
+3. **Limit errors read as policy, not as app failure.** Copy pattern:
+   "Docker Hub pull limit reached. This is a Docker Hub rate limit, not an
+   app error — wait a few hours and retry, or add an optional Docker Hub
+   token in Settings to raise your limit." Never a tight retry loop
+   (§2.1(3) ToS, §2.3 risk 3).
+4. **Attribution lines** (§1.3 block) live in the licenses screen (M6),
+   reachable from the install flow; the store listing carries the
+   non-affiliation disclaimer per `licensing.md` A7.
+5. **Guest package traffic copy** (§3.2 item 3): state that package
+   downloads come from the distro's own mirrors, happen only from user
+   commands, and that "update all packages" is a manual, explicitly-sized
+   action.
+
+---
+
+## 6. Action checklist (milestone × owner of record)
+
+| # | Action | Milestone |
+|---|---|---|
+| B1 | Certified catalog entries with digest pins + per-distro `registry` field (§4.1–4.2); manifest records resolved digest | M3 |
+| B2 | Size-disclosure + consent prompt before every OCI pull (§5.2) | M3 |
+| B3 | Pull-limit error copy + optional `PD_DOCKER_AUTH` "Docker Hub token" settings field (never a baked-in shared token) | M4/M5 |
+| B4 | Attribution copy from §1.3 into the licenses screen; store-listing disclaimer block | M6 (with `licensing.md` A2/A7) |
+| B5 | Re-verify rate limits, ToS clauses (effective-date check), and mirror/registry liveness before submission | M6 |
+| B6 | Design rule: no central pull proxy; per-device anonymous pulls stay the default (§2.4) | M3 onward |
+| B7 | Pre-upgrade default OFF; index refresh only on explicit user action (§3.2 items 1–2) | M3/M4 |
+
+---
+
+## 7. UNVERIFIED ledger (recheck at M6)
+
+1. Alpine: no image-wide license page found and no trademark policy page
+   found (`alpinelinux.org/license` 404 on 2026-10-16) — both re-check;
+   until then plain-text factual reference only, no logo (§1.2).
+2. No distro-run OCI registry verified for Debian or Alpine (§2.4).
+3. Blob-vs-manifest accounting for Docker Hub pull limits (does a multi-layer
+   pull consume one unit or N?) — budget conservatively (§2.2).
+4. Whether a *bundled offline fallback rootfs* (M3 exit criterion) re-packed
+   from upstream layers still counts as "unmodified" redistribution under the
+   Canonical clause (§1.2) — confirm the exact bundling mechanic at M6.
+5. Fedora post-2024 trademark guidelines text (bot-wall on 2026-10-16 —
+   whether the Secondary-Mark clauses changed) (§1.2).
+6. Kali Play-policy posture if ever certified (pen-test tooling ↔ Play
+   "hacking tool" review risk is **not** covered by this document; see
+   `licensing.md` §7 item 7).
+
+*Sources: all primary URLs cited inline in §1–§3 (fetched 2026-10-16);
+companion docs `licensing.md` and `play-policy.md`; rebuilt tail noted above.*
