@@ -1,5 +1,32 @@
 # Testing findings — how this app gets tested (verified 2026-10-16)
 
+## Run-it-first rule (durable — learned the hard way)
+An APK must never be handed over before the app's code has been **executed once**:
+1. `tools/check_flet_api.py src/main.py` green (AST guard: every `ft.*` chain verified against the INSTALLED flet; caught `ft.ElevatedButton` and `ft.border.all`, both removed in Flet 1.0 — `ft.Button` / `ft.Border.all` are the 1.0 forms).
+2. Local `uv run flet run` smoke passed (main() constructs; extension panes may be absent — that is expected). The owner may also run it.
+3. Only then: CI build → device.
+The first spike APK crashed on the owner's phone with `module 'flet' has no attribute 'ElevatedButton'` because step 1+2 were skipped. They now run in CI too (lint step of `.github/workflows/m0-spike.yml`).
+
+## House activity-terminal log pattern (use in every device-facing app)
+From the owner's examples (flet-notifications / flet-yandex-ads):
+```python
+TERMINAL_BG = "#0D0D0D"; TERMINAL_TEXT = "#A6E22E"
+log_text = ft.Text(value="", font_family="Courier New", size=11, color=TERMINAL_TEXT, selectable=True)
+log_col = ft.Column(controls=[log_text], scroll=ft.ScrollMode.AUTO, expand=True)
+log_terminal = ft.Container(content=log_col, bgcolor=TERMINAL_BG, padding=12,
+    border=ft.Border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.WHITE)),
+    border_radius=8, height=340)
+# log(): "[%H:%M:%S] " prefix; page.update(log_text); then run_task scroll_to(offset=-1)
+```
+Fixed-height scroll container is the scroll fix; timestamps make device screenshots self-documenting.
+
+## Desktop-run platform notes (proot spike)
+- `nativeLibraryDir` is None on desktop — gates must guard and say so (they do).
+- **proot-distro is Linux-only**: `proot_distro/dirfd.py` uses `os.O_DIRECTORY`, so importing it on Windows raises — the spike catches this with a friendly message. Device (Android/Linux) imports fine.
+- `os.getuid`/`TracerPid`/`/proc` are POSIX-only — use guarded lookups (done).
+- `sys.executable -c` spawn works on desktop (G1b ✓) — still must be re-proven on Android.
+
+
 ## The hard fact: extension widgets never render under `flet run`
 Verified against installed `flet-cli` 1.0.4:
 - Desktop `flet run` ensures the **prebuilt flet-desktop client** (`run.py:222-232` → `ensure_flet_desktop_package_installed()` + `flet_desktop.open_flet_view`); it compiles nothing.

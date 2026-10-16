@@ -46,6 +46,12 @@ legacy_packaging = true
 target_arch = ["arm64-v8a"]
 dependencies = ["flet-proot"]
 
+# House signing convention: the CI decodes KEYSTORE_BASE64 -> kiri_keystore.jks
+# and overrides this via FLET_ANDROID_SIGNING_* env (see workflow).
+[tool.flet.android.signing]
+key_store = "../../../../kiri_keystore.jks"
+key_alias = "upload"
+
 [tool.flet.android.permission]
 "android.permission.INTERNET" = true
 "android.permission.ACCESS_NETWORK_STATE" = true

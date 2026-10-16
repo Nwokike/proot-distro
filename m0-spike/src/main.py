@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import datetime
 import glob
 import io
 import json
@@ -29,7 +30,6 @@ import sys
 import threading
 import time
 import traceback
-from datetime import UTC
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -37,6 +37,10 @@ import flet as ft
 
 APP_DIR = Path(__file__).resolve().parent
 RESULTS: dict[str, str] = {}
+
+# Activity terminal — house pattern (Courier New, #A6E22E on #0D0D0D).
+TERMINAL_BG = "#0D0D0D"
+TERMINAL_TEXT = "#A6E22E"
 
 
 # ── bootstrap (env must be set before proot_distro is ever imported) ────────
@@ -129,7 +133,15 @@ def _run(argv: list[str], timeout: int, cwd: str | None = None) -> str:
 
 def _install(image_ref: str, name: str) -> str:
     """In-process proot-distro install (lazy import AFTER env is set)."""
-    from proot_distro.commands.install import command_install
+    try:
+        from proot_distro.commands.install import command_install
+    except (ImportError, AttributeError) as e:
+        # e.g. os.O_DIRECTORY missing on Windows: proot-distro uses POSIX
+        # dir-fd APIs and only imports on Linux/Android.
+        return (
+            f"proot-distro cannot import on this platform ({e!r}).\n"
+            "It is Linux-only (POSIX dir-fd APIs) — this gate runs on the Android device."
+        )
 
     ns = SimpleNamespace(
         image_ref=image_ref,
@@ -219,20 +231,39 @@ class ProotSession:
 
 
 def main(page: ft.Page):
-    page.title = "M0 Spike"
-    page.padding = 12
+    page.appbar = ft.AppBar(adaptive=True, title="M0 Spike")
+    page.padding = 16
     page.scroll = ft.ScrollMode.AUTO
 
     boot = bootstrap_env()
     dirs, native = boot["dirs"], boot["native"]
-    log_view = ft.ListView(spacing=2, auto_scroll=True)
-    log_lines: list[str] = []
 
-    def log(msg: str) -> None:
-        print(msg, flush=True)
-        log_lines.extend(str(msg).splitlines() or [""])
-        log_view.controls = [ft.Text(t, font_family="monospace", size=11, selectable=True) for t in log_lines[-500:]]
-        page.update()
+    # Activity terminal — house pattern: single growing Text inside a
+    # fixed-height scrollable container (the scroll fix).
+    log_text = ft.Text(value="", font_family="Courier New", size=11, color=TERMINAL_TEXT, selectable=True)
+    log_col = ft.Column(controls=[log_text], scroll=ft.ScrollMode.AUTO, expand=True)
+    log_terminal = ft.Container(
+        content=log_col,
+        bgcolor=TERMINAL_BG,
+        padding=12,
+        border=ft.Border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.WHITE)),
+        border_radius=8,
+        height=340,
+    )
+
+    def log(message: str) -> None:
+        print(message, flush=True)
+        ts = datetime.datetime.now().strftime("%H:%M:%S")
+        block = str(message).strip("\n")
+        log_text.value = f"{log_text.value}\n[{ts}] {block}" if log_text.value else f"[{ts}] {block}"
+        page.update(log_text)
+
+        async def _scroll_to_end():
+            await asyncio.sleep(0.05)
+            with contextlib.suppress(Exception):
+                await log_col.scroll_to(offset=-1)  # offset=-1: jump to newest
+
+        page.run_task(_scroll_to_end)
 
     def gate_result(gate: str, body: str) -> None:
         RESULTS[gate] = body
@@ -309,11 +340,11 @@ def main(page: ft.Page):
             return traceback.format_exc()
 
     # Buttons ────────────────────────────────────────────────────────────────
-    def gate_button(label: str, handler) -> ft.ElevatedButton:
+    def gate_button(label: str, handler) -> ft.Button:
         async def _click(_e):
             await run_in_thread(label.split(" ")[0], lambda: handler())
 
-        return ft.ElevatedButton(label, on_click=_click)
+        return ft.Button(label, on_click=_click)
 
     async def run_all(_e):
         if not native:
@@ -340,8 +371,6 @@ def main(page: ft.Page):
             )
 
     def export_report() -> str:
-        from datetime import datetime
-
         doc = dirs["data"] / "m0-report.md"
         device = {
             "android_release": platform.release(),
@@ -352,11 +381,11 @@ def main(page: ft.Page):
             "device_model": os.environ.get("FLET_PLATFORM_DEVICE_MODEL"),
         }
         with doc.open("w", encoding="utf-8") as f:
-            f.write(f"# M0 spike report — {datetime.now(UTC).isoformat()}\n\n")
+            f.write(f"# M0 spike report — {datetime.datetime.now(datetime.UTC).isoformat()}\n\n")
             f.write(f"device: `{json.dumps(device)}`\n\n")
             for gate, body in RESULTS.items():
                 f.write(f"## {gate}\n\n```\n{body}\n```\n\n")
-            f.write(f"## raw log tail\n\n```\n{chr(10).join(log_lines[-300:])}\n```\n")
+            f.write(f"## raw log tail\n\n```\n{log_text.value[-8000:]}\n```\n")
         return f"report written: {doc}"
 
     page.add(
@@ -364,7 +393,7 @@ def main(page: ft.Page):
         ft.Text("Tap Run ALL, then start the interactive session (G5). Results are recorded in docs/m0-checklist.md.",
                 size=12, color=ft.Colors.GREY_600),
         ft.Row([
-            ft.ElevatedButton("Run ALL (G1-G4)", on_click=run_all, icon=ft.Icons.PLAY_ARROW),
+            ft.Button("Run ALL (G1-G4)", on_click=run_all, icon=ft.Icons.PLAY_ARROW),
             gate_button("G1 exec", g1),
             gate_button("G1b spawn-probe", g1b),
         ], wrap=True),
@@ -378,24 +407,20 @@ def main(page: ft.Page):
         ft.Text("G5 — interactive session (flet-terminal)", weight=ft.FontWeight.BOLD),
         ft.Row([
             gate_button("Start session", session_start),
-            ft.ElevatedButton("Stop session", on_click=lambda _e: session and session.stop()),
+            ft.Button("Stop session", on_click=lambda _e: session and session.stop()),
         ], wrap=True),
-        ft.Container(mt, height=280, border=ft.border.all(1, ft.Colors.GREY_400)),
+        ft.Container(mt, height=280, border=ft.Border.all(1, ft.Colors.GREY_400)),
         ft.Divider(),
-        ft.Row([ft.ElevatedButton("G6 export report", on_click=lambda _e: gate_result("G6", export_report()))]),
+        ft.Row([ft.Button("G6 export report", on_click=lambda _e: gate_result("G6", export_report()))]),
         ft.Text("Log", weight=ft.FontWeight.BOLD),
-        ft.Container(
-            content=log_view,
-            height=320,
-            padding=8,
-            bgcolor=ft.Colors.BLACK,
-            border_radius=6,
-        ),
+        log_terminal,
     )
 
     log("===== G0 bootstrap =====")
     log(f"platform: {platform.platform()}")
-    log(f"python: {sys.version.split()[0]}  uid={os.getuid()} euid={os.geteuid()}")
+    uid = getattr(os, "getuid", lambda: "n/a")()
+    euid = getattr(os, "geteuid", lambda: "n/a")()
+    log(f"python: {sys.version.split()[0]}  uid={uid} euid={euid}")
     log(f"FLET_PLATFORM={os.environ.get('FLET_PLATFORM')!r} link64={Path('/system/bin/linker64').exists()}")
     log(f"nativeLibraryDir: {native!r}")
     log(f"storage: {json.dumps({k: str(v) for k, v in dirs.items()})}")

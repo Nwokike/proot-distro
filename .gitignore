@@ -16,3 +16,7 @@ wheels/
 m0-spike/dist/
 m0-spike/build/
 m0-spike/spike.jks
+
+# Signing material — NEVER commit (house rule)
+kiri-signing.json
+*.jks
