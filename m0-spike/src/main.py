@@ -235,6 +235,16 @@ def main(page: ft.Page):
     page.padding = 16
     page.scroll = ft.ScrollMode.AUTO
 
+    # `grp` is excluded from CPython's Android build (PEP 738) and the device
+    # log confirms it (ModuleNotFoundError) — but proot-distro imports it
+    # unconditionally. `probe()` reports which modules the device really has;
+    # `ensure()` shims only the missing ones. Runs BEFORE any proot_distro import.
+    sys.path.insert(0, str(APP_DIR))
+    import posixdb
+
+    posixdb_probe = posixdb.probe()
+    posixdb_shimmed = posixdb.ensure()
+
     boot = bootstrap_env()
     dirs, native = boot["dirs"], boot["native"]
 
@@ -293,14 +303,23 @@ def main(page: ft.Page):
         return "\n".join(out)
 
     def g1b() -> str:
-        return f"sys.executable={sys.executable!r}\n" + _run([sys.executable, "-c", "print('spawn-ok')"], timeout=30)
+        out = f"sys.executable={sys.executable!r}\n" + _run([sys.executable, "-c", "print('spawn-ok')"], timeout=30)
+        return (
+            out
+            + "\nnote: on Android sys.executable is the Flutter host (app_process64), not the embedded\n"
+            "interpreter — the CLI-subprocess route is NOT viable; use in-process APIs + direct proot spawn."
+        )
 
     # G5 wiring (needs page; created before use) ────────────────────────────
+    # NOTE: plain `Terminal` (a @control) — MobileTerminal composes
+    # `@ft.component` children (ExtraKeysBar) and raises outside an active
+    # renderer context ("no current renderer is set. Call render.render or
+    # render.withContext") — a documented M1 flet-terminal refactor item.
     try:
-        from flet_terminal import MobileTerminal  # type: ignore[import-not-found]
+        from flet_terminal import Terminal as FletTerminalControl  # type: ignore[import-not-found]
 
-        mt: ft.Control = MobileTerminal(
-            show_search=True, scrollback=5000, font_family="monospace", auto_focus=False, expand=True
+        mt: ft.Control = FletTerminalControl(
+            scrollback=5000, font_family="monospace", auto_focus=False, expand=True
         )
     except Exception as e:  # dev previews / build without the extension
         mt = ft.Text(f"flet-terminal unavailable: {e!r}")
@@ -421,6 +440,7 @@ def main(page: ft.Page):
     uid = getattr(os, "getuid", lambda: "n/a")()
     euid = getattr(os, "geteuid", lambda: "n/a")()
     log(f"python: {sys.version.split()[0]}  uid={uid} euid={euid}")
+    log(f"posixdb probe: {posixdb_probe}  shimmed: {posixdb_shimmed}")
     log(f"FLET_PLATFORM={os.environ.get('FLET_PLATFORM')!r} link64={Path('/system/bin/linker64').exists()}")
     log(f"nativeLibraryDir: {native!r}")
     log(f"storage: {json.dumps({k: str(v) for k, v in dirs.items()})}")

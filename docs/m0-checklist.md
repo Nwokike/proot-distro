@@ -1,9 +1,16 @@
 # M0 checklist — device spike (go/no-go)
 
-**Build:** `.github/workflows/m0-spike.yml` → prerelease `spike-<run#>` (APK attached) or the Actions artifact.
-**Install:** sideload the `arm64-v8a` APK (throwaway CI keystore; allow install from unknown sources).
+**Build:** `.github/workflows/m0-spike.yml` → prerelease `spike-<run#>` (APK attached) — CI-only, signed with the **house kiri keystore** (alias `upload`; secrets wired 2026-10-16).
+**Install:** sideload the `arm64-v8a` APK (allow install from unknown sources).
 **Run:** open the app → tap **Run ALL (G1–G4)** → then **Start session** (G5) → **G6 export report**.
-**Report back:** screenshots of the log + the G6 report text (or the file from the app documents dir).
+**Report back:** screenshots of the log (activity-terminal, timestamped) + the G6 report text (or the file from the app documents dir).
+
+## Desktop pre-run (2026-10-16, Windows — informational, superseded by the device run)
+Owner pressed all buttons in a local `flet run` session:
+- G0 storage dirs + activity-terminal log render ✓ (timestamps visible), G6 report file written ✓
+- G1b `sys.executable -c` → `spawn-ok` ✓ (desktop; Android must still be proven)
+- G1/G3/G5 correctly refuse with "no nativeLibraryDir" (desktop has none) ✓
+- G2/G4: `proot-distro` refuses to import on Windows (`os.O_DIRECTORY` — POSIX-only) → now reported with a friendly Linux-only message ✓
 
 Record results below (one row per gate). Evidence: exact log excerpt + device model + Android version.
 
@@ -18,6 +25,14 @@ Record results below (one row per gate). Evidence: exact log excerpt + device mo
 | G4 apt cowsay | `apt-get update && apt-get install cowsay` + run → **loader mmap-exec of newly written guest binaries** (the load-bearing claim) | | |
 | G5 session | Long-lived interactive shell in flet-terminal: typing, output streaming, Ctrl-C, `exit` → decides spawn port (Python vs Dart) for M1 | | |
 | G6 export | Report file written to app documents | | |
+
+## Device run #1 (2026-10-16 · Android 16 aarch64 · spike-3) — evidence
+- **G0 ✓** — nativeLibraryDir found; `staged runtime libs: ['libtalloc.so -> libtalloc.so.2']`; `PD_PROOT_BIN` + `LD_LIBRARY_PATH` set; `TracerPid=0`; uid=10315.
+- **G1 ✓✓ (the go/no-go) — `libproot.so --version` EXECUTES from nativeLibraryDir**: `rc=0`, prints `proot 5.1.107.96`, `built-in accelerators: process_vm = yes, seccomp_filter = yes`. **The W^X/jniLibs/legacy-packaging architecture is proven on real hardware.**
+- **G1b ✗ (by design) — `sys.executable` is `/system/bin/app_process64`** (the Flutter host), spawn → `rc=-6`, "Error changing dalvik-cache ownership". The CLI-subprocess route via sys.executable is NOT viable → design: in-process library APIs + direct proot spawn (as planned).
+- **G2/G4 ✗ → FIXED in spike-4** — `ModuleNotFoundError: No module named 'grp'`: CPython's Android port excludes `grp` (PEP 738 unsupported list) while proot-distro imports it unconditionally (`helpers/rootfs.py:42`). Fix: `src/posixdb.py` platform shim (installs only the missing module; probe logged). `pwd` is NOT in PEP 738's list — device probe will confirm.
+- **G3/G4-apt/G5** — blocked downstream of G2 in this run (no rootfs yet); expected to proceed once G2 passes.
+- **FletTerminal renderer error (owner-visible)** — `MobileTerminal()` raises `RuntimeError: No current renderer is set…` (flet/components/utils.py:31) outside a `@ft.component` tree; reproduced locally. spike-4 uses the plain `Terminal` control; M1 refactor item recorded in `reference/dep-flet-terminal.md`.
 
 ## Failure triage (if a gate is red)
 1. Re-run the gate once (transient network for G2/G4).
