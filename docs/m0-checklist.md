@@ -32,6 +32,19 @@ Record results below (one row per gate). Evidence: exact log excerpt + device mo
 - **G4-install ✓** 16.3s; **G5 ✓** session with controlling tty — owner screenshots show a working shell: coloured `ls`, `cd`, full `/bin` busybox listing, live prompt.
 - **G4-apt ✗ rc=100 — LAST blocker, root-caused:** dpkg `unable to make backup link of './usr/bin/perl' … Permission denied` + `error creating new backup file '/var/lib/dpkg/status-old'` = **`link()` denied by Android SELinux for apps**. Fix (spike-8): adopt proot-distro's Termux-mode extensions one-to-one (`proot_cmd.py::_add_proot_extensions`): `--link2symlink` + `-L` (their comment: "Fix lstat for dpkg symlink warnings") + `--kill-on-exit` + `--sysvipc` + formatted `--kernel-release`, and pin `PROOT_L2S_DIR=<rootfs>/.l2s` (their l2s.py:70-71). All flags verified in proot 5.1.107.96 `src/cli/proot.h`.
 
+## CI evidence — APK alignment (recorded 2026-10-16, at play-policy verification request)
+Every CI build runs the "Inspect APK (payload presence + 16K alignment)" step (`m0-spike/tools/check_apk_alignment.py`) against the built split APKs. First green run **38906734815** (repeated every build since, incl. spike-8/9) printed:
+
+```
+lib/arm64-v8a/libproot.so           align=0x4000 (16K-OK) soname=None
+lib/arm64-v8a/libproot-loader.so    align=0x4000 (16K-OK) soname=None
+lib/arm64-v8a/libtalloc.so          align=0x4000 (16K-OK) soname=libtalloc.so.2
+lib/arm64-v8a/libandroid-shmem.so   align=0x4000 (16K-OK) soname=None
+(+ every CPython stdlib lib_*.so in lib/arm64-v8a: all 0x4000 (16K-OK))
+```
+
+So: **the M0 APK's native libs ARE verified 16 KB-aligned** — `0x4000` satisfies Play's 16 KB page requirement for targetSdk ≥35. The step also fails the build if `libproot.so` is missing from jniLibs. M2 keeps the NDK r28+ rebuild requirement for the production `flet-proot` wheel; M5 keeps gating releases on this step's output.
+
 ## Device run #2 (2026-10-16 · Android 16 aarch64 · spike-5) — evidence
 - **G0 ✓ (device truth)** — `posixdb probe: {'pwd': True, 'grp': False}` → only `grp` shimmed (settles the pwd question: pwd EXISTS on Android); `pty: posix-pty available (openpty OK)`; nativeLibraryDir + staged `libtalloc.so -> libtalloc.so.2` confirmed again.
 - **G1 ✓** — proot exec again, `process_vm = yes, seccomp_filter = yes`.

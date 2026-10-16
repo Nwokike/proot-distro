@@ -29,7 +29,7 @@ research reference, not legal advice.
 | S11 | Kali Linux Trademark Policy | `https://www.kali.org/docs/policy/trademark/` | 2026-10-16 |
 | S12 | Google "Include open source notices" (Play services OSS guidance) | `https://developers.google.com/android/guides/opensource` | 2026-10-16 |
 | S13 | Google Play Developer Content Policy hub (policy index) | `https://play.google/developer-content-policy/` | 2026-10-16 |
-| S14 | Google Play Deceptive Behavior policy | `https://support.google.com/googleplay/android-developer/answer/9888077` (redirected to `…/answer/17006354`; full body quoted from the sibling fetch that succeeded) | 2026-10-16 |
+| S14 | Google Play Deceptive Behavior policy (full policy + key considerations quoted from page body) | `https://support.google.com/googleplay/android-developer/answer/9888077` (resolves to `…/answer/17006354`) | 2026-10-16 |
 | S15 | BSD-3-Clause, MIT, PSF-2.0, MPL-2.0, LGPL-2.1, BSD-ish texts from installed dist-info license files + `https://www.mozilla.org/en-US/MPL/2.0/` + Flutter LICENSE (`https://raw.githubusercontent.com/flutter/flutter/main/LICENSE`) | `.venv/.../*.dist-info/` | 2026-10-16 |
 | S16 | Installed dist-info METADATA `License`/`License-Expression` fields (exact versions below) | `.venv/Lib/site-packages/*.dist-info/METADATA` | 2026-10-16 |
 
@@ -674,7 +674,7 @@ not app collection; the download-size consent in 5.2(1) covers the user
 facing side); (c) rootfs contents never leave the device (no app-collected
 account data inside guests by default). Nothing in the Data safety form
 changes the license analysis. Anything beyond this paragraph (e.g. whether
-guest-OS telemetry counts as app collection) is **UNVERIFIED �� needs
+guest-OS telemetry counts as app collection) is **UNVERIFIED — needs
 counsel** and is out of scope for this reference.
 
 ---
