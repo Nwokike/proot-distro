@@ -167,37 +167,35 @@ def rootfs_path(name: str, dirs: dict) -> Path:
     return dirs["xdg_data"] / "proot-distro" / "containers" / name / "rootfs"
 
 
-def _container_shm(rootfs: Path) -> Path:
-    """Per-container shm dir exactly as proot-distro creates it
-    (`containers/<name>/shm`, mode 1777) and binds to /dev/shm — required by
-    the --sysvipc path we enable (root-caused 2026-10-16; we previously passed
-    --sysvipc without any shm dir/bind)."""
-    shm = rootfs.parent / "shm"
+def _shm_bind(rootfs: Path) -> str:
+    """Device truth (owner's `proot-distro login debian --get-proot-cmd`,
+    2026-10-16): proot-distro binds <rootfs>/tmp to /dev/shm — NOT a sibling
+    shm/ dir (my earlier research agent's claim; corrected by the device)."""
+    shm = rootfs / "tmp"
     with contextlib.suppress(OSError):
         shm.mkdir(parents=True, exist_ok=True)
         os.chmod(shm, 0o1777)
-    return shm
+    return f"--bind={shm}:/dev/shm"
 
 
 def guest_argv(native: Path, rootfs: Path, script: str) -> list[str]:
     return [
         str(native / "libproot.so"),
-        "-0",
+        # one-to-one with Termux's printed argv (device truth): --change-id=0:0
+        # (we previously used the -0 shortcut), long --rootfs=/--bind= forms.
+        "--change-id=0:0",
         *proot_extensions(),
-        "-r",
-        str(rootfs),
-        "-b",
-        "/dev",
-        "-b",
-        "/proc",
-        "-b",
-        "/sys",
-        # proot-distro's non-minimal binds (verified diff, root-cause research):
-        f"--bind={_container_shm(rootfs)}:/dev/shm",
+        f"--rootfs={rootfs}",
+        "--bind=/dev",
+        "--bind=/proc",
+        "--bind=/sys",
         "--bind=/dev/urandom:/dev/random",
         "--bind=/proc/self/fd:/dev/fd",
-        "-w",
-        "/",
+        "--bind=/proc/self/fd/0:/dev/stdin",
+        "--bind=/proc/self/fd/1:/dev/stdout",
+        "--bind=/proc/self/fd/2:/dev/stderr",
+        _shm_bind(rootfs),
+        "--cwd=/root",
         "/bin/sh",
         "-c",
         script,
@@ -456,6 +454,25 @@ def main(page: ft.Page):
             "interpreter — the CLI-subprocess route is NOT viable; use in-process APIs + direct proot spawn."
         )
 
+    def g4b_perl_upgrade() -> str:
+        """Direct probe of the upgrade-path bug: upgrading perl-base over the
+        existing install (dpkg hardlink entries + l2s + chown). Owner's Termux
+        control only proved FRESH installs work (trixie/perl-5.40); this probe
+        isolates upgrade-over-existing."""
+        r = rootfs_path("debian", dirs)
+        if not native:
+            return "no native dir"
+        return _run(
+            guest_argv(
+                native,
+                r,
+                "apt-get install -y --only-upgrade perl-base 2>&1 | tail -12; "
+                "dpkg -l perl-base | tail -1",
+            ),
+            300,
+            env=guest_env(r),
+        )
+
     def d0_diag() -> str:
         """Diagnostics for the dpkg chown-ENOENT case (run after a failed apt)."""
         r = rootfs_path("debian", dirs)
@@ -529,12 +546,18 @@ def main(page: ft.Page):
             return f"no alpine rootfs at {r} — run G2 first"
         session = ProotSession(
             [
-                str(native / "libproot.so"), "-0", *proot_extensions(), "-r", str(r),
-                "-b", "/dev", "-b", "/proc", "-b", "/sys",
-                f"--bind={_container_shm(r)}:/dev/shm",
+                str(native / "libproot.so"),
+                "--change-id=0:0",
+                *proot_extensions(),
+                f"--rootfs={r}",
+                "--bind=/dev", "--bind=/proc", "--bind=/sys",
                 "--bind=/dev/urandom:/dev/random",
                 "--bind=/proc/self/fd:/dev/fd",
-                "-w", "/",
+                "--bind=/proc/self/fd/0:/dev/stdin",
+                "--bind=/proc/self/fd/1:/dev/stdout",
+                "--bind=/proc/self/fd/2:/dev/stderr",
+                _shm_bind(r),
+                "--cwd=/root",
                 "/bin/sh", "-i",
             ],
             deliver,
@@ -620,7 +643,8 @@ def main(page: ft.Page):
             gate_button("G2 install alpine", lambda: _install("alpine:3.21", "alpine")),
             gate_button("G3 one-shot alpine", lambda: _run(guest_argv(native, rootfs_path("alpine", dirs), "id; uname -a; cat /etc/os-release"), 120, env=guest_env(rootfs_path("alpine", dirs))) if native else "no native dir"),
             gate_button("G4 install debian", lambda: _install("debian:bookworm", "debian")),
-            gate_button("G4 apt cowsay", lambda: _run(guest_argv(native, rootfs_path("debian", dirs), "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends cowsay && /usr/games/cowsay M0-OK"), 900, env=guest_env(rootfs_path("debian", dirs))) if native else "no native dir"),
+            gate_button("G4 apt cowsay", lambda: _run(guest_argv(native, rootfs_path("debian", dirs), "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade -qq --no-install-recommends cowsay && /usr/games/cowsay M0-OK"), 900, env=guest_env(rootfs_path("debian", dirs))) if native else "no native dir"),
+            gate_button("G4b perl upgrade probe", g4b_perl_upgrade),
             gate_button("D0 diag", d0_diag),
         ], wrap=True),
         ft.Divider(),
