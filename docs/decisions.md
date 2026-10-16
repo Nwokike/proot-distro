@@ -45,3 +45,9 @@ Owner initially said "our flet version should not be 1.0.4 but 1.1.0". **Verifie
 | O-7 | zstd OCI layers: verify `compression.zstd` in Flet's bundled Python 3.14 (fallback: gzip images) | M0/M3 |
 | O-8 | TERMUX-masquerade env (`TERMUX_VERSION` + prefix) to unlock Termux-mode proot flags after M0 | M0 → M3 |
 | O-9 | Whether the no-local-builds rule extends to dev-only desktop builds (the only way to see extensions locally) | owner |
+
+## D-011 · 2026-10-16 · M0 device-retest loop DEFERRED (owner) — M1 proceeds
+Owner ruling: "The tenth spike still don't work… I'm not going to continue doing it. When we are done with all my milestones, then we can go back to the loop if it is still available."
+Ruling: the spike device-retest loop is **closed for now and not blocking**. M0's load-bearing claims are already proven on hardware (G1 exec from nativeLibraryDir, G2 in-process OCI install, G3 guest exec via loader, G5 interactive PTY session — see `m0-checklist.md`). The one open failure is **G4-apt only for upgrade-over-existing packages** (dpkg chown ENOENT through link2symlink; fresh installs work). Interim product behavior: `--no-upgrade` (already in spike-10's G4) + guest UI note if the bug proves durable.
+**Resume recipe (cold):** install release `spike-10` (or any later build), Run ALL, capture the G4 + G4b log text; G4b (`--only-upgrade perl-base`) isolates the upgrade path. Owner Termux control #2 (`apt-get install --only-upgrade perl-base` in Termux's Debian) completes the matrix: same failure in Termux ⇒ upstream/proot-wide (document, keep workaround); works in Termux ⇒ flag/env delta to chase. Do this when the owner re-opens the loop (after M1–M6), not before.
+Evidence: owner message 2026-10-16 (spike-10 retest failing); apt arc in `docs/m0-checklist.md` §"Device retests #4+".
