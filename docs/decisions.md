@@ -1,4 +1,4 @@
-# Decision log — proot-distro-flet
+# Decision log — proot-distro
 
 Append-only. Each decision: date, context, ruling, evidence link.
 
@@ -26,6 +26,9 @@ Switched public per owner ("if you make the repository public, the GitHub action
 
 ## D-008 · 2026-10-16 · Signing: house keystore + secrets, scripted
 Recovered the house signing material from an older app repo (secrets are write-only even for admins, so `tools/export_keystore_from_repo.py` temporarily ran a workflow in `Nwokike/Sherlock` that packed `KEYSTORE_BASE64`/`KEY_ALIAS`/`KEYSTORE_PASSWORD`/`KEY_PASSWORD` into a throwaway prerelease asset, then deleted branch+release — source repo left untouched). `tools/setup_signing.py` set all four secrets on this repo; verified alias = `upload`, keystore ≈ 3.7 KB b64. Workflow decodes with the exact house lines (`echo "$KEYSTORE_BASE64" | base64 --decode > kiri_keystore.jks`); pyproject carries the house `[tool.flet.android.signing]` block. Both scripts are generic — use for every future repo.
+
+## D-009 · 2026-10-16 · Repo renamed to `proot-distro`
+Renamed `Nwokike/proot-distro-flet` → `Nwokike/proot-distro` per owner ("rename the repo proot distro, don't add flet"). GitHub redirects every old URL (releases, links, remotes); all in-repo references updated. The **local workspace dir and the uv project name stay `proot-distro-flet`** — uv rejects a project that depends on a package with its own name, so the project name must differ from the wrapped `proot-distro` dependency (commented in pyproject.toml).
 
 ## Open decisions (resolve in the owning milestone's plan mode)
 | # | Decision | Owner milestone |

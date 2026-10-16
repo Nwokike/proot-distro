@@ -18,5 +18,5 @@ Frozen `uv sync`; `compileall`; **button-API grep guard**; **Python AST namespac
 ## Drifts to avoid (working tree currently ships them)
 `version.json` 0.1.0 vs pyproject 1.0.0; `requires-python >=3.14` vs CI `UV_PYTHON 3.12`; `ci/android-excludes.txt` deleted while the workflow still passes `--excludes` to it → the Android proof step as written cannot pass. Lesson: the version-consistency gate only works if all sources move in one commit.
 
-## Transferables for proot-distro-flet
+## Transferables for proot-distro
 One `proot_service.py` as the sole importer + lazy-load gate + `to_thread` + plain-data returns; declare every directly-imported transitive in pyproject (DDGS's test guards it); steer proot-distro via env contract (`TERMUX__*`, `PD_PROOT_BIN`, XDG) — **no patches needed**; add the Android compile proof to our CI quality job; keep `docs/dependency-studies`-style per-dep docs (this repo's convention, mirrored here).

@@ -30,5 +30,5 @@ Loose floors in pyproject + exact in `uv.lock` + `uv sync --frozen` in CI:
 ## Config/CI/tests worth copying
 `[tool.flet]` org/product/company/build_number/icon + boot_screen message + android bundle_id/perms/meta_data/signing + `cleanup.package_files` (audited globs incl. `oauthlib/**`). CI: quality (version-consistency script across pyproject/constants/version.json/workflow, ruff, `pytest -m "not live"`) → placeholder release → parallel apk-split/aab/windows/linux jobs; keystore only via `FLET_ANDROID_SIGNING_*` secrets. pytest: `pythonpath=["src"]`, `timeout=60`, strict markers/config, own-module warnings as errors. Ruff: richest set (E,F,W,UP,B,Q,C4,PERF,ERA,I,T20,DTZ,RUF,S,TRY,BLE,EM,A,SIM,RET,RSE) with commented ignores.
 
-## Transferable checklist for proot-distro-flet
+## Transferable checklist for proot-distro
 src layout `{main.py, app_shell.py, core/, state/, services/, components/, screens/, hooks/}` + `tests/{conftest.py(FakePage), flet_tree.py}`; observable state + controller bridge + keep-alive services + render flusher; JSON KV storage with atomic replace + flush on lifecycle events; `version.json` + update service + changelog; ads service with UMP + interstitial interval; cleanup globs audited to the real tree (ours: near-zero — only `oauthlib/**`).

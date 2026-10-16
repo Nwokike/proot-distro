@@ -1,4 +1,4 @@
-# proot-distro-flet
+# proot-distro
 
 **Linux on Android without root or Termux** — run Debian, Ubuntu, Alpine and any Docker/OCI image on your phone. A [Flet](https://flet.dev) app wrapping [proot-distro](https://github.com/termux/proot-distro) (PRoot containers), with a native xterm-style terminal.
 

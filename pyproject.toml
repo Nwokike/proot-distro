@@ -1,4 +1,6 @@
 [project]
+# The uv project name must differ from the wrapped dependency "proot-distro"
+# (uv rejects self-dependencies); the repo itself is Nwokike/proot-distro.
 name = "proot-distro-flet"
 version = "0.1.0"
 description = "Run Debian, Ubuntu, Alpine and any Docker image on your phone — no root, no Termux. Built with Flet."

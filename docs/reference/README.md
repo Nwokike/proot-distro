@@ -1,4 +1,4 @@
-# Reference library — proot-distro-flet
+# Reference library — proot-distro
 
 Context-preservation library (animepahe-tv convention). Each file is a distilled, source-verified study so the project can be resumed cold by a human or another agent.
 

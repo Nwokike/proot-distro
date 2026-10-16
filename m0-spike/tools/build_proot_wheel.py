@@ -60,7 +60,7 @@ DEB_SOURCES = [
 ]
 
 TIMEOUT = 120.0
-UA = "kiri-m0-spike-wheel-builder/0.1 (+https://github.com/Nwokike/proot-distro-flet)"
+UA = "kiri-m0-spike-wheel-builder/0.1 (+https://github.com/Nwokike/proot-distro)"
 
 
 # ── network ──────────────────────────────────────────────────────────────────

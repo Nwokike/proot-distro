@@ -1,6 +1,6 @@
 # app-ffmpeg.md — FFmpeg Lite (native-shipment reference)
 
-Verified 2026-10-16 against `C:\Users\nwoki\.zcode\workspace\default\ffmpeg`. **The closest sibling to proot-distro-flet** because it ships native code through the same Forge pipeline.
+Verified 2026-10-16 against `C:\Users\nwoki\.zcode\workspace\default\ffmpeg`. **The closest sibling to this app** because it ships native code through the same Forge pipeline.
 
 ## Identity
 "FFmpeg Lite" v1.0.0 build 1, bundle `ng.kiri.ffmpeg`. Wraps **PyAV `av==18.1.0` → FFmpeg 8** via the Forge-built `flet-libffmpeg` wheel; flet family pinned exactly (`flet==flet-ads==flet-audio==...==1.0.4`) with the reason in-comment: "audited against one exact Flet/PyAV wire contract — a minor framework release can change component constructors and event semantics".
@@ -23,5 +23,5 @@ Verified 2026-10-16 against `C:\Users\nwoki\.zcode\workspace\default\ffmpeg`. **
 5. Runbook promises an AAB `minSdk`/versionCode inspection step that **doesn't exist in the workflow** — implement it for real in ours (assert `libproot.so` ABI floor).
 6. Linux packaging symlinked `/usr/bin/ffmpeg` — never shadow a system binary name; use a unique name.
 
-## Transferables for proot-distro-flet
+## Transferables for proot-distro
 Mirror the two-artifact Forge shape; probe-gating analog (`proot_probe`: binary present/executable, arch, rootfs writability); exact-pin flet family; lockstep identity chain pyproject→constants→version.json→changelog; the CI skeleton (but add the missing finalize + floor-inspection steps); `split_per_abi` + per-ABI size reporting.

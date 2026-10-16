@@ -7,12 +7,12 @@ House convention (verified in Nwokike/Sherlock, DDGS, CollabShell, akili-v2…):
     pyproject: key_store = "../../../../kiri_keystore.jks", key_alias = "upload"
 
 Usage (direct):
-    python tools/setup_signing.py --repo Nwokike/proot-distro-flet \\
+    python tools/setup_signing.py --repo Nwokike/proot-distro \\
         --keystore kiri_keystore.jks --alias upload \\
         --store-password '…' --key-password '…'
 
 Usage (from an export produced by export_keystore_from_repo.py):
-    python tools/setup_signing.py --repo Nwokike/proot-distro-flet \\
+    python tools/setup_signing.py --repo Nwokike/proot-distro \\
         --from-json kiri-signing.json
 
 Validates the keystore before uploading when `openssl` is available
@@ -65,7 +65,7 @@ def _set_secret(repo: str, name: str, value: bytes) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--repo", required=True, help="target repo, e.g. Nwokike/proot-distro-flet")
+    ap.add_argument("--repo", required=True, help="target repo, e.g. Nwokike/proot-distro")
     ap.add_argument("--keystore", help="path to the keystore file (.jks/.p12)")
     ap.add_argument("--alias", default="upload")
     ap.add_argument("--store-password", default=None)

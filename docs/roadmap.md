@@ -1,7 +1,7 @@
-# Roadmap — proot-distro-flet
+# Roadmap — proot-distro
 
 **Date:** 2026-10-16 · **Status:** milestone breakdown, pre-plan-mode (M1 planning next)
-**Working name:** `proot-distro-flet` (dir + pyproject); product brand TBD — one rename touches dir + `[project].name` + repo name only.
+**Naming:** repo = `Nwokike/proot-distro` (renamed from `proot-distro-flet`, 2026-10-16). Local dir + uv project name stay `proot-distro-flet` because the uv project cannot be named the same as its `proot-distro` dependency. Product brand TBD.
 
 ---
 
