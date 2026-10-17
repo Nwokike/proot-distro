@@ -1,9 +1,9 @@
 # M0 checklist — device spike (go/no-go)
 
-**Build:** `.github/workflows/m0-spike.yml` → prerelease `spike-<run#>` (APK attached) — CI-only, signed with the **house kiri keystore** (alias `upload`; secrets wired 2026-10-16).
+**Build:** `.github/workflows/m0-spike.yml` → prerelease `spike-<run#>` (arm64-v8a + x86_64 APKs attached) — CI-only, signed with the **house kiri keystore** (alias `upload`; secrets wired 2026-10-16). The APK's native payload comes from the sha256-pinned `flet-proot` wheel set (see §M2 evidence).
 **Install:** sideload the `arm64-v8a` APK (allow install from unknown sources).
-**Run:** open the app → tap **Run ALL (G1–G4)** → then **Start session** (G5) → **G6 export report**.
-**Report back:** screenshots of the log (activity-terminal, timestamped) + the G6 report text (or the file from the app documents dir).
+**Run (2026-10-17 revision — one OS, owner-ruled):** open the app → tap **Run ALL** (G1 exec → G1b → G2 installs **debian:bookworm only** → G3 one-shot exec in it → G4 `apt-get install cowsay` with `--no-upgrade` → G4b probe of the known-broken upgrade path) → then **Start session** (G5, now the container's **login shell** — expect the `root@hostname` Debian prompt like `pd login debian`, not a bare `#`) → **G6 export report**. The apt script string is shared by Run ALL and the G4 button so they cannot diverge.
+**Report back:** screenshots of the log (activity-terminal, timestamped) + the G6 report text (or the file from the app documents dir). The G0 block now also logs `f2fs probe: ...` (a device-side replication of proot's own probe) — that line is the key evidence for the D-011 apt bug.
 
 ## Desktop pre-run (2026-10-16, Windows — informational, superseded by the device run)
 Owner pressed all buttons in a local `flet run` session:

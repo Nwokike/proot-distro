@@ -1,13 +1,19 @@
 """M0 device spike — throwaway gate harness (see docs/roadmap.md M0).
 
-Proves on-device, in order:
+Proves on-device, in order — ONE OS (debian:bookworm; owner ruling 2026-10-17
+"lets only install 1 os in test"):
   G1  nativeLibraryDir exec: libproot.so --version
   G1b Python self-spawn probe (sys.executable -c)  -> informs the CLI route
-  G2  in-process proot-distro install (alpine:3.21 via Docker Hub OCI)
-  G3  one-shot guest exec (proot -0 -r rootfs ... /bin/sh -c ...)
-  G4  OCI pull debian:bookworm + apt-get install cowsay + run it
-      (proves loader mmap-exec of newly written guest binaries)
-  G5  long-lived interactive session in flet-terminal (ProotSession)
+  G2  in-process proot-distro install (debian:bookworm via Docker Hub OCI)
+  G3  one-shot guest exec in that container (id; uname -a; /etc/os-release)
+  G4  apt-get install cowsay + run it (proves loader mmap-exec of guest binaries)
+      --no-upgrade: dpkg's upgrade-over-existing path is the known-broken one
+      (dpkg chown ENOENT, see D-011); fresh installs prove the load-bearing claim
+  G4b isolated probe of that upgrade path (--only-upgrade perl-base)
+  G5  long-lived interactive session in flet-terminal (ProotSession) — spawned
+      as the container's LOGIN shell (bash -l), one-to-one with what
+      `proot-distro login debian` runs, so the prompt matches Termux
+      (root@hostname) instead of a bare `#`
   G6  evidence export to the app documents dir
 
 Everything runs on the Flet app thread via asyncio.to_thread; env is set
@@ -38,6 +44,19 @@ import flet as ft
 
 APP_DIR = Path(__file__).resolve().parent
 RESULTS: dict[str, str] = {}
+
+# ONE OS (owner ruling 2026-10-17). The gate script is defined ONCE so the
+# Run-ALL path and the individual buttons can never diverge again — they did
+# once (Run ALL lacked --no-upgrade while the button had it), which made every
+# device run look like the same mysterious failure.
+IMAGE_REF = "debian:bookworm"
+CONTAINER_NAME = "debian"
+APT_SCRIPT = (
+    "apt-get update -qq && DEBIAN_FRONTEND=noninteractive "
+    "apt-get install -y -qq --no-upgrade --no-install-recommends cowsay "
+    "&& /usr/games/cowsay M0-OK"
+)
+GUEST_BASH = "usr/bin/bash"  # usrmerge layout inside the rootfs
 
 # Activity terminal — house pattern (Courier New, #A6E22E on #0D0D0D).
 TERMINAL_BG = "#0D0D0D"
@@ -255,8 +274,16 @@ def guest_env(rootfs: Path | None = None) -> dict:
     Merged over the host essentials proot itself needs to start
     (LD_LIBRARY_PATH, PROOT_LOADER, PROOT_TMP_DIR) — without PATH the guest's
     sh cannot find id/ls/apt-get even though they exist in the rootfs.
+
+    PROOT_F2FS_WORKAROUND is intentionally NOT forced anymore. Verified in the
+    pinned upstream source (termux/proot v5.1.107.96, src/path/f2fs-bug.c:120-136
+    + src/path/canon.c:156): "1" force-enables, "0" force-disables, unset → proot
+    probes the device. Termux (our reference behavior) leaves it to the probe;
+    we forced "0" and still failed — so the deviation bought nothing and the
+    probe case needs real device evidence (see f2fs_probe below).
     """
     env = dict(os.environ)
+    env.pop("PROOT_F2FS_WORKAROUND", None)
     env.update(
         {
             "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -264,13 +291,6 @@ def guest_env(rootfs: Path | None = None) -> dict:
             "HOME": "/root",
             "USER": "root",
             "TERM": os.environ.get("TERM") or "xterm-256color",
-            # proot's f2fs workaround (canon.c: substitute_binding_stat ->
-            # should_skip_file_access_due_to_f2fs_bug) SYNTHESIZES -ENOENT when
-            # its readdir probe misses a just-created entry — which is exactly
-            # dpkg's .dpkg-new + link2symlink sequence on f2fs app storage.
-            # Root-caused 2026-10-16 ("error setting ownership of .dpkg-new:
-            # No such file or directory"); disabling trusts the kernel.
-            "PROOT_F2FS_WORKAROUND": "0",
         }
     )
     if rootfs is not None:
@@ -281,6 +301,38 @@ def guest_env(rootfs: Path | None = None) -> dict:
             l2s.mkdir(parents=True, exist_ok=True)
         env["PROOT_L2S_DIR"] = str(l2s)
     return env
+
+
+def f2fs_probe(base_dir: Path) -> str:
+    """Replicate proot's f2fs-bug probe on host-side app storage (G0 evidence).
+
+    Verbatim port of termux/proot v5.1.107.96 src/path/f2fs-bug.c:21-110: create
+    "aa", then "Aa" (fails on case-insensitive fs), then access "aA" (should NOT
+    exist), then fork+create "aA" (EEXIST ⇒ the kernel's case-folding lies ⇒ bug).
+    Proot would enable its workaround for such a device. This logs the truth so
+    the next D-011 session reasons from data, not guesses.
+    """
+    import tempfile
+
+    try:
+        d = Path(tempfile.mkdtemp(prefix="proot_f2fsbug_", dir=str(base_dir)))
+        try:
+            (d / "aa").write_bytes(b"x")
+            try:
+                (d / "Aa").write_bytes(b"x")
+            except OSError:
+                return f"f2fs probe: case-INSENSITIVE fs in {base_dir} (unexpected)"
+            if (d / "aA").exists():
+                return f"f2fs probe: access() sees non-existent 'aA' (bug-signature 1) in {base_dir}"
+            return f"f2fs probe: bug NOT present in {base_dir} (proot leaves the workaround off)"
+        finally:
+            with contextlib.suppress(OSError):
+                for p in sorted(d.glob("*"), reverse=True):
+                    with contextlib.suppress(OSError):
+                        p.unlink()
+                d.rmdir()
+    except Exception as e:
+        return f"f2fs probe failed: {e!r}"
 
 
 # ── interactive session — PTY-backed ────────────────────────────────────────
@@ -520,10 +572,9 @@ def main(page: ft.Page):
         return "\n".join(out)
 
     # G5 wiring (needs page; created before use) ────────────────────────────
-    # NOTE: plain `Terminal` (a @control) — MobileTerminal composes
-    # `@ft.component` children (ExtraKeysBar) and raises outside an active
-    # renderer context ("no current renderer is set. Call render.render or
-    # render.withContext") — a documented M1 flet-terminal refactor item.
+    # NOTE: plain `Terminal` (a @control) is enough here — the session is one
+    # shell, and flet-terminal >=0.4.0 makes MobileTerminal constructible
+    # anywhere anyway (the renderer-context landmine was fixed in M1).
     try:
         from flet_terminal import Terminal as FletTerminalControl  # type: ignore[import-not-found]
 
@@ -559,9 +610,14 @@ def main(page: ft.Page):
         nonlocal session
         if not native:
             return "no nativeLibraryDir — cannot start a session"
-        r = rootfs_path("alpine", dirs)
+        r = rootfs_path(CONTAINER_NAME, dirs)
         if not r.is_dir():
-            return f"no alpine rootfs at {r} — run G2 first"
+            return f"no {CONTAINER_NAME} rootfs at {r} — run G2 first"
+        # Login-shell parity with `proot-distro login`: upstream runs the
+        # container's login shell with -l (commands/login/__init__.py: inner =
+        # login_shell [-l | -c ...]) — that is what gives Termux its
+        # root@hostname prompt; a bare `sh -i` only ever showed `#`.
+        inner = ["/bin/bash", "-l"] if (r / GUEST_BASH).exists() else ["/bin/sh", "-i"]
         session = ProotSession(
             [
                 str(native / "libproot.so"),
@@ -576,7 +632,7 @@ def main(page: ft.Page):
                 "--bind=/proc/self/fd/2:/dev/stderr",
                 _shm_bind(r),
                 "--cwd=/root",
-                "/bin/sh", "-i",
+                *inner,
             ],
             deliver,
             on_error=log,
@@ -585,7 +641,8 @@ def main(page: ft.Page):
         try:
             session.start()
             return (
-                "session started (PTY + controlling tty, guest env from proot-distro defaults)\n"
+                f"session started: Debian login shell ({' '.join(inner)}) via PTY — "
+                "expect the proot-distro-style prompt (root@hostname)\n"
                 "(try: ls / ; cat /etc/os-release ; apt-get update ; exit) — resize via TIOCSWINSZ"
             )
         except Exception:
@@ -604,30 +661,20 @@ def main(page: ft.Page):
             return
         await run_in_thread("G1", g1)
         await run_in_thread("G1b", g1b)
-        await run_in_thread("G2", _install, "alpine:3.21", "alpine")
-        await run_in_thread(
-            "G3",
-            lambda: _run(
-                guest_argv(native, rootfs_path("alpine", dirs), "id; uname -a; cat /etc/os-release"),
-                120,
-                env=guest_env(rootfs_path("alpine", dirs)),
-            )
-            if native
-            else "no native dir",
-        )
-        await run_in_thread("G4-install", _install, "debian:bookworm", "debian")
+        await run_in_thread("G2", _install, IMAGE_REF, CONTAINER_NAME)
         if native:
+            r = rootfs_path(CONTAINER_NAME, dirs)
+            await run_in_thread(
+                "G3",
+                lambda: _run(
+                    guest_argv(native, r, "id; uname -a; cat /etc/os-release"),
+                    120,
+                    env=guest_env(r),
+                ),
+            )
             await run_in_thread(
                 "G4-apt",
-                lambda: _run(
-                    guest_argv(
-                        native,
-                        rootfs_path("debian", dirs),
-                        "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends cowsay && /usr/games/cowsay M0-OK",
-                    ),
-                    900,
-                    env=guest_env(rootfs_path("debian", dirs)),
-                ),
+                lambda: _run(guest_argv(native, r, APT_SCRIPT), 900, env=guest_env(r)),
             )
 
     def export_report() -> str:
@@ -658,10 +705,9 @@ def main(page: ft.Page):
             gate_button("G1b spawn-probe", g1b),
         ], wrap=True),
         ft.Row([
-            gate_button("G2 install alpine", lambda: _install("alpine:3.21", "alpine")),
-            gate_button("G3 one-shot alpine", lambda: _run(guest_argv(native, rootfs_path("alpine", dirs), "id; uname -a; cat /etc/os-release"), 120, env=guest_env(rootfs_path("alpine", dirs))) if native else "no native dir"),
-            gate_button("G4 install debian", lambda: _install("debian:bookworm", "debian")),
-            gate_button("G4 apt cowsay", lambda: _run(guest_argv(native, rootfs_path("debian", dirs), "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade -qq --no-install-recommends cowsay && /usr/games/cowsay M0-OK"), 900, env=guest_env(rootfs_path("debian", dirs))) if native else "no native dir"),
+            gate_button("G2 install debian", lambda: _install(IMAGE_REF, CONTAINER_NAME)),
+            gate_button("G3 one-shot (debian)", lambda: _run(guest_argv(native, rootfs_path(CONTAINER_NAME, dirs), "id; uname -a; cat /etc/os-release"), 120, env=guest_env(rootfs_path(CONTAINER_NAME, dirs))) if native else "no native dir"),
+            gate_button("G4 apt cowsay", lambda: _run(guest_argv(native, rootfs_path(CONTAINER_NAME, dirs), APT_SCRIPT), 900, env=guest_env(rootfs_path(CONTAINER_NAME, dirs))) if native else "no native dir"),
             gate_button("G4b perl upgrade probe", g4b_perl_upgrade),
             gate_button("D0 diag", d0_diag),
         ], wrap=True),
@@ -690,6 +736,7 @@ def main(page: ft.Page):
     log(f"nativeLibraryDir: {native!r}")
     log(f"storage: {json.dumps({k: str(v) for k, v in dirs.items()})}")
     log(f"payload provenance: {boot['payload']}")
+    log(f2fs_probe(dirs["tmp"]))
     log(f"staged runtime libs: {boot['staged']}")
     log(f"PD_PROOT_BIN={os.environ.get('PD_PROOT_BIN')!r}")
     log(f"LD_LIBRARY_PATH={os.environ.get('LD_LIBRARY_PATH')!r}")
