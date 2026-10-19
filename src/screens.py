@@ -1,11 +1,4 @@
-"""Screens — distro manager and settings, as state-driven component views.
-
-These views never mutate their own controls (that is what "Frozen controls
-cannot be updated" was). Every display value is read from the observable
-`core.state.state` during render; user actions only write state or call
-controller methods. Local text inputs hold their transient values in
-`use_state` so they survive re-renders.
-"""
+"""The two views, as state-driven components."""
 
 from __future__ import annotations
 
@@ -288,6 +281,8 @@ def DistroView() -> ft.Control:
         controls.append(ft.Column(controls=[_container_row(r) for r in st.containers], spacing=4))
     else:
         controls.append(empty_state("No containers yet", "Install any Docker image to begin."))
+    if st.data_note:
+        controls.append(ft.Text(st.data_note, size=10, color=theme.AppColors.WARN, selectable=True))
 
     return ft.Column(controls=controls, spacing=4, expand=True, scroll=ft.ScrollMode.AUTO)
 
@@ -366,6 +361,18 @@ def SettingsView() -> ft.Control:
                             + (f" · {st.cached_count} cached image(s)" if st.cached_count else ""),
                             size=12,
                             color=theme.text_dim(),
+                        ),
+                        *(
+                            [
+                                ft.Text(
+                                    st.data_note,
+                                    size=10,
+                                    color=theme.AppColors.WARN,
+                                    selectable=True,
+                                )
+                            ]
+                            if st.data_note
+                            else []
                         ),
                         ft.TextButton("Clear cached downloads", on_click=lambda _e: _clear_cache()),
                         ft.Text(

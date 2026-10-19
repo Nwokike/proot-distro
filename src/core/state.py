@@ -1,10 +1,4 @@
-"""Global reactive state — every mutation re-renders subscribed components.
-
-Views never own display data. They read this object inside `@ft.component`
-trees (the `use_state(state)` subscribe pattern) and call controller methods
-for user actions; the controller mutates fields here and nothing else. That
-is what keeps imperative "frozen control" updates out of the codebase.
-"""
+"""Observable state — every mutation re-renders subscribed views."""
 
 from __future__ import annotations
 
@@ -17,6 +11,8 @@ class AppState:
     probe_passed: bool = False
     probe_summary: str = ""
     probe_running: bool = False
+    # Why data is missing/empty when it is — failures are shown, never swallowed.
+    data_note: str = ""
 
     # Distro screen
     containers: list = None  # list[dict] — installed containers

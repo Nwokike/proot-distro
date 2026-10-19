@@ -1,10 +1,4 @@
-"""AppController — builds the shell and owns every service call.
-
-One-to-one wrapping: each action is a single upstream call on a worker thread
-(`asyncio.to_thread`), its result lands in the observable state, and the views
-re-render from that state. Views never mutate controls; this module never
-touches a control either — only `state.*` fields and page-level services.
-"""
+"""AppController — owns the services and every action."""
 
 from __future__ import annotations
 
@@ -22,6 +16,13 @@ from services import proot_service
 from state.controller_ctx import ControllerMethods, ControllerMethodsCtx
 
 logger = logging.getLogger(__name__)
+
+
+def _reason(exc: BaseException) -> str:
+    """One honest line for a failure — never a bare swallow."""
+    text = str(exc).strip() or exc.__class__.__name__
+    return text.splitlines()[0][:200]
+
 
 _THEME_MODES = {
     "system": ft.ThemeMode.SYSTEM,
@@ -41,15 +42,11 @@ class AppController:
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
     async def init(self) -> None:
-        # 1. Environment + payload probe BEFORE the UI shows anything. The env
-        #    contract and the grp shim are what make upstream importable on
-        #    Android at all (device-proven, M0); nothing else is patched.
+        # The env contract + grp shim must be set before proot_distro is importable.
         await self.check_probe()
 
-        # 2. Shared services (mounted once; refcount discipline is theirs).
         self._mount_services()
 
-        # 3. Themes + persisted preferences, then the shell.
         light, dark = theme.build_theme()
         self.page.theme = light
         self.page.dark_theme = dark
@@ -72,7 +69,6 @@ class AppController:
         self.page._controller = self
         self.page.render(lambda: ControllerMethodsCtx(methods, lambda: AppShell()))
 
-        # 4. First data load.
         await self.refresh_containers()
 
     def _mount_services(self) -> None:
@@ -103,8 +99,8 @@ class AppController:
             logger.debug("prefs restore failed: %r", exc)
         state.theme_revision += 1
 
-    def _noop_cancel(self) -> None:  # upstream install isn't interruptible; the
-        return None  # view shows live stages and leaves cleanup to remove
+    def _noop_cancel(self) -> None:
+        return None
 
     def _on_connectivity(self, _e) -> None:
         # Informational only: installs fail loudly without a network.
@@ -113,9 +109,24 @@ class AppController:
     # ── actions (state-only mutations) ────────────────────────────────────────
 
     async def refresh_containers(self) -> None:
-        state.containers = await asyncio.to_thread(self.proot.list_containers)
-        state.storage_bytes = await asyncio.to_thread(self.proot.storage_bytes)
-        state.cached_count = len(await asyncio.to_thread(self.proot.cached_images))
+        notes: list[str] = []
+        try:
+            state.containers = await asyncio.to_thread(self.proot.list_containers)
+        except Exception as exc:
+            state.containers = []
+            notes.append(f"container list unavailable: {_reason(exc)}")
+        try:
+            state.storage_bytes = await asyncio.to_thread(self.proot.storage_bytes)
+        except Exception as exc:
+            state.storage_bytes = 0
+            notes.append(f"storage size unavailable: {_reason(exc)}")
+        try:
+            cached = await asyncio.to_thread(self.proot.cached_images)
+            state.cached_count = len(cached)
+        except Exception as exc:
+            state.cached_count = 0
+            notes.append(f"cached-image list unavailable: {_reason(exc)}")
+        state.data_note = " · ".join(notes)
 
     async def install_distro(self, image: str, name: str) -> None:
         if state.installing:
@@ -164,7 +175,12 @@ class AppController:
 
     async def search_distro(self, query: str) -> None:
         state.search_status = f"searching “{query}”…"
-        results = await asyncio.to_thread(self.proot.search_images, query)
+        try:
+            results = await asyncio.to_thread(self.proot.search_images, query)
+        except Exception as exc:
+            state.search_results = []
+            state.search_status = f"search failed: {_reason(exc)}"
+            return
         state.search_results = results
         state.search_status = (
             f"{len(results)} result(s) — tap one to fill the fields"

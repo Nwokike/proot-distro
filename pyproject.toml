@@ -8,6 +8,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "flet>=1.0.4",
+    "flet-ads>=1.0.4",
     "flet-terminal>=0.4.0",
     "proot-distro>=5.10.0",
 ]
@@ -21,7 +22,6 @@ org = "ng.kiri"
 # follows the same placeholder and renames as one line when decided.
 product = "Proot Distro"
 company = "Kiri Research Labs"
-copyright = "Copyright © 2026 Kiri Research Labs. All rights reserved."
 build_number = 1
 
 [tool.flet.app]
@@ -57,6 +57,14 @@ dependencies = ["flet-proot==5.1.107.98"]
 [tool.flet.android.permission]
 "android.permission.INTERNET" = true
 "android.permission.ACCESS_NETWORK_STATE" = true
+
+# AdMob application id. flet-ads' Dart extension initializes the Mobile Ads
+# SDK at app launch, so an app that depends on flet-ads MUST declare this or
+# the process dies instantly on device (the app-5 crash). This is Google's
+# public TEST id — safe for dev builds; M5 swaps in the production id and the
+# CI gains the production-id guard (FFmpeg precedent).
+[tool.flet.android.meta_data]
+"com.google.android.gms.ads.APPLICATION_ID" = "ca-app-pub-3940256099944~3347511713"
 
 [dependency-groups]
 dev = [

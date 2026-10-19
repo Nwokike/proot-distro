@@ -1,17 +1,4 @@
-"""Proot environment probe — gates every screen (FFmpeg probe pattern).
-
-Answers three questions the UI must never guess (M0-proven order):
-  1. Is the native payload there?  (`flet_proot` manifest in site-packages +
-     the `opt/lib` payloads staged into the APK's native library dir)
-  2. Can it run?                   (proot --version executes from it)
-  3. Is the storage writable?      (containers/ root exists and accepts files)
-
-`bootstrap_env()` ports the M0 spike's env dance (device-verified):
-ANDROID_NATIVE_LIBRARY_DIR -> PD_PROOT_BIN/PROOT_LOADER, LD_LIBRARY_PATH
-including a runtime dir for SONAME-staged libs (libtalloc.so.2). The staging
-reads the `flet_proot` manifest — proof that the binaries came from the
-sha256-pinned wheel (M2), not a hand-copied file.
-"""
+"""Environment + payload probe — the gates run before any UI."""
 
 from __future__ import annotations
 

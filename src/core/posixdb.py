@@ -1,36 +1,4 @@
-"""Minimal `grp`/`pwd` shims for Android's embedded CPython.
-
-VERIFIED root cause: CPython gates the `grp` module in `configure.ac` on
-`getgrent` AND (`getgrgid` OR `getgrgid_r`). Bionic provides `getgrent`/
-`setgrent`/`endgrent` only since API 26 (`__INTRODUCED_IN(26)`), while
-flet-dev/python-build targets api_level=24 → the module is (correctly)
-skipped at configure time; on the 3.12 flow it is additionally forced off
-by `android/patches/grp.patch` (inherited from Chaquopy). Device log
-confirms `ModuleNotFoundError: No module named 'grp'`.
-
-Termux hit the identical regression (termux-packages#28684) and ships `grp`
-via a `getgrent` stub returning NULL + forced `ac_cv_func_getgrent=yes`
-(PR #28768). This shim mirrors Termux's degradation exactly: real callers
-get synthetic `getgrgid`/`getgrnam` results and `getgrall()` returns `[]`.
-Upstream enablement request: https://github.com/flet-dev/python-build/issues/45
-
-`proot-distro` imports both modules unconditionally (`helpers/rootfs.py:42-44`)
-and uses exactly two calls while registering the Android uid/gid entries
-into a container's /etc files:
-
-    pwd.getpwuid(os.getuid()).pw_name   -> written as  aid_{name}
-    grp.getgrgid(g).gr_name             -> written as  aid_{name}
-
-The shims reproduce Android's own `u0_a<uid>` / numeric-group naming, so the
-guest ends up with entries like:
-
-    aid_u0_a315:x:10315:10315:Termux:/:/sbin/nologin
-    aid_3003:x:3003:root,aid_u0_a315
-
-This is a platform-capability shim, not an upstream patch: nothing inside
-proot-distro is modified, and nothing is invented beyond the accessors the
-library actually calls (unknown lookups raise KeyError, matching CPython).
-"""
+"""pwd/grp shims for Android CPython (grp is absent per PEP 738)."""
 
 from __future__ import annotations
 

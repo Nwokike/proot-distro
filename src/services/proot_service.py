@@ -1,21 +1,4 @@
-"""proot_service — the ONLY module allowed to import `proot_distro.*`.
-
-Contract (the Data Formulator pattern, enforced by tests):
-  * every public method returns plain data (dict/list/str/int/bool);
-  * `proot_distro` is imported lazily, AFTER `bootstrap()` has installed the
-    env contract (its constants are computed at import time) and the `grp`
-    shim (Android CPython lacks the module — device-proven, PEP 738);
-  * upstream's argparse handlers exit via `SystemExit`, so every call goes
-    through `_run_command()`, which catches that AND `RuntimeError` and turns
-    it into an `Outcome`;
-  * progress is captured with `contextlib.redirect_stderr` (stdlib capture —
-    never a monkeypatch; the owner's rule and upstream's design agree);
-  * screens/services never touch `proot_distro` internals directly.
-
-Surfaces used are the update-safe set documented in
-`docs/dependency-studies/proot-distro-api.md` §5; the fragile internals
-(argparse namespaces) are confined to the `_NS_*` builders below.
-"""
+"""The only module allowed to import proot_distro."""
 
 from __future__ import annotations
 
@@ -47,7 +30,7 @@ class Outcome:
 
 
 def bootstrap() -> None:
-    """Env contract + shims BEFORE the first proot_distro import (idempotent)."""
+    """Env contract + shims before the first proot_distro import (idempotent)."""
     global _BOOTSTRAPPED
     if _BOOTSTRAPPED:
         return
@@ -186,13 +169,9 @@ def _container_rows() -> list[dict]:
 
 
 def list_containers() -> list[dict]:
-    try:
-        return _container_rows()
-    except ProotUnavailable:
-        return []
-    except Exception as exc:
-        logger.warning("list_containers failed: %r", exc)
-        return []
+    """Installed containers. Raises with the real reason — the controller
+    surfaces it in the UI instead of showing a silently empty list."""
+    return _container_rows()
 
 
 def install(image: str, name: str, on_line=None) -> Outcome:
@@ -249,44 +228,39 @@ def remove_cached_image(identifier: str) -> Outcome:
 def search_images(query: str, limit: int = 20) -> list[dict]:
     """Docker Hub search — upstream's own normalized hits (plain dicts)."""
     bootstrap()
-    try:
-        from proot_distro.helpers.docker import search as docker_search
+    from proot_distro.helpers.docker import search as docker_search
 
-        results, _total = docker_search.search_images(query, limit)
-        return [r for r in results if isinstance(r, dict)]
-    except Exception as exc:
-        logger.warning("search_images failed: %r", exc)
-        return []
+    results, _total = docker_search.search_images(query, limit)
+    return [r for r in results if isinstance(r, dict)]
 
 
 def cached_images() -> list[dict]:
     """Cached OCI images (host-side sizes) for the storage screen."""
     bootstrap()
-    try:
-        from proot_distro.helpers.docker import cache
+    from proot_distro.helpers.docker import cache
 
-        rows = []
-        for image in cache.iter_cached_images():
-            size = 0
-            with contextlib.suppress(Exception):
-                path = image.get("full_path") or image.get("path")
-                if path and Path(path).is_dir():
-                    size = _tree_bytes(Path(path))
-            rows.append(
-                {
-                    "identifier": image.get("image_ref") or image.get("id") or "?",
-                    "arch": image.get("arch", ""),
-                    "size_bytes": size,
-                }
-            )
-        return rows
-    except Exception as exc:
-        logger.warning("cached_images failed: %r", exc)
-        return []
+    rows = []
+    for image in cache.iter_cached_images():
+        size = 0
+        with contextlib.suppress(Exception):
+            path = image.get("full_path") or image.get("path")
+            if path and Path(path).is_dir():
+                size = _tree_bytes(Path(path))
+        rows.append(
+            {
+                "identifier": image.get("image_ref") or image.get("id") or "?",
+                "arch": image.get("arch", ""),
+                "size_bytes": size,
+            }
+        )
+    return rows
 
 
 def storage_bytes() -> int:
-    return _tree_bytes(storage_paths.xdg_data_home() / "proot-distro")
+    try:
+        return _tree_bytes(storage_paths.xdg_data_home() / "proot-distro")
+    except OSError as exc:
+        raise ProotUnavailable(f"storage size unavailable: {exc}") from exc
 
 
 def busy_locks() -> list[str]:

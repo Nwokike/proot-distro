@@ -205,6 +205,18 @@ wheels = [
 ]
 
 [[package]]
+name = "flet-ads"
+version = "1.0.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "flet" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/31/16/54cdbddfcbdc1c6831ef2c08823f1c848b97f474685984b0750dcc8fb847/flet_ads-1.0.4.tar.gz", hash = "sha256:d65693031d50fe8eb83b4017849b2e1a94cba057c6d5bfa86092a43b1d412a29", size = 16567, upload-time = "2026-10-08T22:25:18.835Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5c/c6/c8db01557809f3e7d035e385514b03f4d6c29cef74d9a6d23d8a6c5b40b1/flet_ads-1.0.4-py3-none-any.whl", hash = "sha256:a9650ba0b9d27b341b3f9e2fd43ba2343e0fb748be832de380569d9850b85d6e", size = 21488, upload-time = "2026-10-08T22:25:17.863Z" },
+]
+
+[[package]]
 name = "flet-cli"
 version = "1.0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -573,6 +585,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "flet" },
+    { name = "flet-ads" },
     { name = "flet-terminal" },
     { name = "proot-distro" },
 ]
@@ -589,6 +602,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "flet", specifier = ">=1.0.4" },
+    { name = "flet-ads", specifier = ">=1.0.4" },
     { name = "flet-terminal", specifier = ">=0.4.0" },
     { name = "proot-distro", specifier = ">=5.10.0" },
 ]

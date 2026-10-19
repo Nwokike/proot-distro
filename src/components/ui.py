@@ -1,8 +1,4 @@
-"""Shared UI pieces — headers, cards, empty states, probe warning, hints.
-
-Every control here reads its colors through `core.theme` at construction time
-inside a render, so a theme flip re-renders correctly in both palettes.
-"""
+"""Shared UI pieces."""
 
 from __future__ import annotations
 

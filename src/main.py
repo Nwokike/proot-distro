@@ -1,4 +1,4 @@
-"""Entry point — thin, like the house apps: construct the controller, run it."""
+"""Entry point — construct the controller, run it."""
 
 from __future__ import annotations
 

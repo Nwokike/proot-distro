@@ -1,11 +1,4 @@
-"""Storage layout — the app-private home for proot-distro's state.
-
-On device we never touch Termux paths: proot-distro runs in "generic mode"
-(IS_TERMUX False) and puts everything under $XDG_DATA_HOME/proot-distro. The
-StoragePaths service is the async, client-implemented way to resolve the
-support directory; the sync env fallback (`FLET_APP_STORAGE_DATA`) covers code
-paths that run outside a page (imports, services, tests).
-"""
+"""Where proot-distro keeps its state inside this app."""
 
 from __future__ import annotations
 

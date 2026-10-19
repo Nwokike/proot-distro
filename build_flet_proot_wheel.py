@@ -1,35 +1,8 @@
 #!/usr/bin/env python3
-"""Build the `flet-proot` native payload wheel(s) from pinned Termux debs.
+"""Build the flet-proot payload wheels from pinned Termux debs.
 
-Self-contained (one file, no helpers, no lock file): the sha256 pins and the
-ELF checks live below. Downloads each pinned .deb, verifies its sha256,
-extracts the ELF payloads, checks DT_NEEDED coverage + 16 KiB PT_LOAD
-alignment, and writes one wheel per architecture:
-
-    flet_proot/__init__.py          importable manifest (VERSION, LIBS, SOURCES)
-    flet_proot-<ver>-<build>.dist-info/…
-    opt/lib/libproot.so             proot ELF (exec'd from nativeLibraryDir)
-    opt/lib/libproot-loader.so      proot's unbundled loader (PROOT_LOADER)
-    opt/lib/libtalloc.so            real file; SONAME recorded in the manifest
-    opt/lib/libandroid-shmem.so     same
-
-Wheel naming mirrors the mobile-forge precedent (`flet-libffmpeg-8.1.2-1-…`):
-version = pinned proot version, build tag = the `wheel_build_tag` below,
-platform tag = `py3-none-android_24_<abi>` (so pip resolves the right payload
-per ABI, exactly like flet-libffmpeg's per-arch wheels).
-
-Bumping a source = editing `_PINNED_SOURCES` below (one commit). The pool
-keeps only current debs, so a removed version shows up here as a 404 with an
-actionable message.
-
-Usage (repo root):
-
-    python build_flet_proot_wheel.py --out dist          # both ABIs
-    python build_flet_proot_wheel.py --out dist --arch aarch64 \
-        --tag py3-none-any                               # single, legacy tag
-
-Stdlib only. Exits non-zero with an actionable message on any violation
-(sha256 mismatch, missing payload, alignment < 16 KiB, unmet DT_NEEDED).
+One self-contained file: the sha256 pins and the ELF/alignment checks live below.
+Bumping a source = editing _PINNED_SOURCES (one commit). Stdlib only.
 """
 
 from __future__ import annotations

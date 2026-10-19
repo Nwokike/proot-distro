@@ -1,9 +1,4 @@
-"""Theme — light/dark palettes and mode resolution (CollabShell pattern).
-
-`is_light_theme()` mirrors the client's SYSTEM resolution via
-`page.platform_brightness` and subscribes to the state so components re-render
-when the mode flips. Callers read the adaptive helpers inside render.
-"""
+"""Light/dark palettes and mode resolution."""
 
 from __future__ import annotations
 

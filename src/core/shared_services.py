@@ -1,10 +1,4 @@
-"""Shared long-lived services, mounted exactly once.
-
-Flet's service registry prunes by refcount after every event, and each
-`Service()` construction auto-registers — so services are mounted once here and
-screens reach them via the accessors (or page.* attributes), never by
-constructing a fresh instance per render. Mirrors the Sherlock pattern.
-"""
+"""Long-lived services, mounted exactly once."""
 
 from __future__ import annotations
 
