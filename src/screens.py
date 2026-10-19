@@ -15,6 +15,7 @@ from pathlib import Path
 import flet as ft
 
 from components import card, empty_state, hints_card, probe_banner, section_header
+from components.brand_hero import build_brand_hero, theme_action_row
 from core import theme
 from core.state import state
 from state.controller_ctx import ControllerMethodsCtx
@@ -230,6 +231,8 @@ def DistroView() -> ft.Control:
         )
 
     controls: list[ft.Control] = [
+        build_brand_hero("Linux on Android — no root, no Termux"),
+        theme_action_row(lambda: page.run_task(methods.cycle_theme_mode)),
         hints_card(st.hints_dismissed, lambda _e: setattr(state, "hints_dismissed", True)),
         section_header("Install", "Any Docker image — search, or type a reference"),
     ]
@@ -343,7 +346,7 @@ def SettingsView() -> ft.Control:
 
     return ft.Column(
         controls=[
-            hints_card(st.hints_dismissed, lambda _e: setattr(state, "hints_dismissed", True)),
+            theme_action_row(lambda: page.run_task(methods.cycle_theme_mode)),
             section_header("Appearance", "Theme follows the system unless you pick one"),
             card(
                 ft.Row(

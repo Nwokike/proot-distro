@@ -55,36 +55,45 @@ def test_views_construct_in_renderer_context():
     assert _render(screens.SettingsView) is not None
 
 
-def test_app_header_builds_and_tints_per_theme():
-    """AppHeader is a plain function: it executes fully offline (house pattern)."""
-    from components.app_header import AppHeader, app_icon_svg, theme_icon
+def test_brand_hero_builds_and_tints_per_theme():
+    """The hero icon lives in the home body (CollabShell pattern)."""
+    from components.brand_hero import app_icon_svg, build_brand_hero
     from core.state import state
 
     svg = app_icon_svg()
     assert b"<svg" in svg[:256]  # the real brand asset, not a placeholder
 
     state.theme_mode = "dark"
-    dark = AppHeader(title="Proot Distro", subtitle="Linux containers")
+    dark = build_brand_hero("Linux on Android — no root, no Termux")
     assert isinstance(dark, ft.Container)
-    icon = dark.content.controls[0].controls[0]  # brand mark inside the left row
+    icon = dark.content.controls[0]
     assert isinstance(icon, ft.Image) and icon.color == ft.Colors.WHITE
-    assert theme_icon() == ft.Icons.DARK_MODE
+    assert icon.width == 96  # hero-sized, not a toolbar glyph
 
     state.theme_mode = "light"
-    light = AppHeader(title="Proot Distro")
-    icon = light.content.controls[0].controls[0]
+    light = build_brand_hero()
+    icon = light.content.controls[0]
     assert icon.color is None  # artwork keeps its own colors on light
-    assert theme_icon() == ft.Icons.LIGHT_MODE
 
 
-def test_white_icon_variant_is_white():
-    """The README dark-swap asset must be a real white-on-transparent SVG."""
-    from components.app_header import app_icon_svg
+def test_white_icon_variant_is_gone():
+    """The white icon variant was removed by the owner — the README must not
+    reference it (no dangling dark-mode asset)."""
+    assert not (ROOT / "src" / "assets" / "icon_white.svg").exists()
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "icon_white.svg" not in readme
 
-    src = (ROOT / "src" / "assets" / "icon_white.svg").read_text(encoding="utf-8")
-    assert 'fill="#2e343a"' not in src
-    assert 'fill="#ffffff"' in src
-    assert app_icon_svg()  # the light variant still loads
+
+def test_theme_toggle_button_matches_mode():
+    from components.brand_hero import theme_toggle_button
+    from core.state import state
+
+    state.theme_mode = "system"
+    assert theme_toggle_button(lambda: None).icon == ft.Icons.BRIGHTNESS_AUTO_ROUNDED
+    state.theme_mode = "light"
+    assert theme_toggle_button(lambda: None).icon == ft.Icons.LIGHT_MODE_ROUNDED
+    state.theme_mode = "dark"
+    assert theme_toggle_button(lambda: None).icon == ft.Icons.DARK_MODE_ROUNDED
 
 
 def test_state_changes_rerender_without_frozen_errors():

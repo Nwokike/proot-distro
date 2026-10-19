@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Build the `flet-proot` native payload wheel(s) from pinned Termux debs.
 
-Production version of the M0 spike builder. Reads `tools/flet_proot_sources.json`
-(the pin lock), downloads each pinned .deb, verifies its sha256, extracts the
-ELF payloads, checks DT_NEEDED coverage + 16 KiB PT_LOAD alignment, and writes
-one wheel per architecture:
+Self-contained (one file, no helpers, no lock file): the sha256 pins and the
+ELF checks live below. Downloads each pinned .deb, verifies its sha256,
+extracts the ELF payloads, checks DT_NEEDED coverage + 16 KiB PT_LOAD
+alignment, and writes one wheel per architecture:
 
     flet_proot/__init__.py          importable manifest (VERSION, LIBS, SOURCES)
     flet_proot-<ver>-<build>.dist-info/…
@@ -14,15 +14,19 @@ one wheel per architecture:
     opt/lib/libandroid-shmem.so     same
 
 Wheel naming mirrors the mobile-forge precedent (`flet-libffmpeg-8.1.2-1-…`):
-version = pinned proot version, build tag = lock's `wheel_build_tag`,
+version = pinned proot version, build tag = the `wheel_build_tag` below,
 platform tag = `py3-none-android_24_<abi>` (so pip resolves the right payload
 per ABI, exactly like flet-libffmpeg's per-arch wheels).
 
+Bumping a source = editing `_PINNED_SOURCES` below (one commit). The pool
+keeps only current debs, so a removed version shows up here as a 404 with an
+actionable message.
+
 Usage (repo root):
 
-    python tools/build_flet_proot_wheel.py --out dist          # both ABIs
-    python tools/build_flet_proot_wheel.py --out dist --arch aarch64 \
-        --tag py3-none-any                                     # single, legacy tag
+    python build_flet_proot_wheel.py --out dist          # both ABIs
+    python build_flet_proot_wheel.py --out dist --arch aarch64 \
+        --tag py3-none-any                               # single, legacy tag
 
 Stdlib only. Exits non-zero with an actionable message on any violation
 (sha256 mismatch, missing payload, alignment < 16 KiB, unmet DT_NEEDED).
@@ -34,8 +38,8 @@ import argparse
 import base64
 import hashlib
 import io
-import json
 import re
+import struct
 import sys
 import tarfile
 import urllib.error
@@ -43,16 +47,157 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from elfinfo import ALIGN_16K, ElfError, elf_info, unmet_needed  # noqa: E402
-
-TOOLS_DIR = Path(__file__).resolve().parent
-DEFAULT_LOCK = TOOLS_DIR / "flet_proot_sources.json"
-LICENSE_DIR = TOOLS_DIR / "licenses"
+REPO_ROOT = Path(__file__).resolve().parent
+LICENSE_DIR = REPO_ROOT / "LICENSES"
 
 DIST_NAME = "flet_proot"
 TIMEOUT = 120.0
 UA = "kiri-flet-proot-wheel-builder/1.0 (+https://github.com/Nwokike/proot-distro)"
+
+# ── the pin set (the "bump a version" path: one edit here) ──────────────────
+# proot 5.1.107.98 replaced 5.1.107.96 when Termux dropped the old debs from
+# the pool (CI 404). talloc/shmem unchanged.
+
+_PINNED_SOURCES = {
+    "pool_root": "https://packages.termux.dev/apt/termux-main/pool/main",
+    "wheel_build_tag": "1",
+    "packages": {
+        "proot": {
+            "pool_dir": "p/proot",
+            "version": "5.1.107.98",
+            "debs": {
+                "aarch64": {
+                    "file": "proot_5.1.107.98_aarch64.deb",
+                    "sha256": "29de40efea4daa2a6168b617915206511c63e8d46bf5f4b07d48723441ef7f3b",
+                },
+                "x86_64": {
+                    "file": "proot_5.1.107.98_x86_64.deb",
+                    "sha256": "1c31ad7e1046f4d418fef19b6dfaa9a14801d2047ade6ad0375b3f5501e3e227",
+                },
+            },
+        },
+        "libtalloc": {
+            "pool_dir": "libt/libtalloc",
+            "version": "2.5.0",
+            "debs": {
+                "aarch64": {
+                    "file": "libtalloc_2.5.0_aarch64.deb",
+                    "sha256": "556591f43bb773ad8777e1a29522640866a55f95dab71914418b94a8c58ad5a7",
+                },
+                "x86_64": {
+                    "file": "libtalloc_2.5.0_x86_64.deb",
+                    "sha256": "b8c6d95f20075dc1f9ec6573575b2444e8d526e48e0d8d6d5cf4e071e6e06530",
+                },
+            },
+        },
+        "libandroid-shmem": {
+            "pool_dir": "liba/libandroid-shmem",
+            "version": "0.7",
+            "debs": {
+                "aarch64": {
+                    "file": "libandroid-shmem_0.7_aarch64.deb",
+                    "sha256": "0da3a24d558b93c92bcf8d611e0826a99ff96e396b148e6cdf33b47c47c57ff6",
+                },
+                "x86_64": {
+                    "file": "libandroid-shmem_0.7_x86_64.deb",
+                    "sha256": "ffa9e4c87467b158b148d0ff92dda796aa038276c2075af3269cdcdb06f25797",
+                },
+            },
+        },
+    },
+}
+
+# ── minimal ELF64 reader (what Android native payloads must satisfy) ─────────
+# align  — minimum PT_LOAD p_align (16 KiB = 0x4000 is the Play requirement
+#          for targetSdk 35+; smaller means unaligned loads on 16 KiB pages).
+# needed — DT_NEEDED names the linker must find at load time.
+# soname — DT_SONAME (jniLibs names must be lib*.so, so SONAMEs are
+#          re-materialised at app runtime, not at packaging time).
+
+DT_NEEDED, DT_STRTAB, DT_SONAME = 1, 5, 14
+ALIGN_16K = 0x4000
+
+# bionic/system libraries provided by the platform — never shipped by us.
+SYSTEM_SONAMES = {
+    "libc.so",
+    "libdl.so",
+    "libm.so",
+    "liblog.so",
+    "libandroid.so",
+    "libz.so",
+}
+
+
+class ElfError(SystemExit):
+    """Raised when a blob is not the expected ELF64 payload."""
+
+
+def _cstr(blob: bytes, off: int) -> str:
+    end = blob.find(b"\0", off)
+    return blob[off : end if end != -1 else len(blob)].decode("utf-8", "replace")
+
+
+def elf_info(blob: bytes, label: str) -> dict:
+    """Return {needed: [str], soname: str|None, align: int|None} for an ELF64 blob."""
+    if blob[:4] != b"\x7fELF":
+        raise ElfError(f"{label}: not an ELF file")
+    if blob[4] != 2:
+        raise ElfError(f"{label}: only ELF64 supported (ei_class={blob[4]})")
+    e_phoff = struct.unpack_from("<Q", blob, 0x20)[0]
+    e_phentsize = struct.unpack_from("<H", blob, 0x36)[0]
+    e_phnum = struct.unpack_from("<H", blob, 0x38)[0]
+    loads: list[tuple[int, int, int, int]] = []
+    dyn_off = dyn_size = None
+    for i in range(e_phnum):
+        o = e_phoff + i * e_phentsize
+        p_type = struct.unpack_from("<I", blob, o)[0]
+        p_offset, p_vaddr = struct.unpack_from("<QQ", blob, o + 0x08)
+        p_filesz = struct.unpack_from("<Q", blob, o + 0x20)[0]
+        p_align = struct.unpack_from("<Q", blob, o + 0x30)[0]
+        if p_type == 1:  # PT_LOAD
+            loads.append((p_offset, p_vaddr, p_filesz, p_align))
+        elif p_type == 2:  # PT_DYNAMIC
+            dyn_off, dyn_size = p_offset, p_filesz
+    align = min((seg[3] for seg in loads), default=None)
+    if dyn_off is None:
+        return {"needed": [], "soname": None, "align": align}
+
+    def vaddr_to_off(v: int) -> int | None:
+        for p_offset, p_vaddr, p_filesz, _ in loads:
+            if p_vaddr <= v < p_vaddr + p_filesz:
+                return p_offset + (v - p_vaddr)
+        return None
+
+    entries: list[tuple[int, int]] = []
+    for i in range(dyn_size // 16):
+        d_tag, d_val = struct.unpack_from("<QQ", blob, dyn_off + i * 16)
+        if d_tag == 0:
+            break
+        entries.append((d_tag, d_val))
+    strtab_v = next((v for t, v in entries if t == DT_STRTAB), None)
+    strtab_off = vaddr_to_off(strtab_v) if strtab_v is not None else None
+    needed = (
+        [_cstr(blob, strtab_off + v) for t, v in entries if t == DT_NEEDED]
+        if strtab_off is not None
+        else []
+    )
+    soname = (
+        next((_cstr(blob, strtab_off + v) for t, v in entries if t == DT_SONAME), None)
+        if strtab_off is not None
+        else None
+    )
+    return {"needed": needed, "soname": soname, "align": align}
+
+
+def unmet_needed(info: dict, shipped_sonames: set[str]) -> list[str]:
+    """DT_NEEDED entries not satisfied by the shipped payloads or the platform."""
+    return [
+        n
+        for n in info["needed"]
+        if n not in shipped_sonames
+        and not n.startswith(("libc.", "libdl.", "libm."))
+        and n not in SYSTEM_SONAMES
+    ]
 
 # architecture -> Android wheel platform tag (mirrors flet-libffmpeg)
 ARCH_TAGS = {
@@ -81,7 +226,7 @@ def _fetch_verified(url: str, expected_sha256: str, what: str) -> bytes:
     if actual != expected_sha256:
         raise SystemExit(
             f"{what}: sha256 mismatch\n  url:      {url}\n  expected: {expected_sha256}\n  actual:   {actual}\n"
-            "The pinned .deb changed upstream — verify and bump tools/flet_proot_sources.json."
+            "The pinned .deb changed upstream — verify and bump _PINNED_SOURCES in this file."
         )
     return blob
 
@@ -173,7 +318,6 @@ def collect_payloads(lock: dict, arch: str, downloaded: dict[str, bytes]) -> lis
         )
 
     for pkg in ("proot", "libtalloc", "libandroid-shmem"):
-        spec = lock["packages"][pkg]
         url = downloaded[pkg]["url"]
         files = deb_payloads(downloaded[pkg]["blob"])
         if pkg == "proot":
@@ -367,10 +511,9 @@ def main() -> int:
         default=None,
         help="override the platform tag (requires exactly one --arch; e.g. py3-none-any)",
     )
-    ap.add_argument("--lock", default=str(DEFAULT_LOCK), help="sources lock path")
     args = ap.parse_args()
 
-    lock = json.loads(Path(args.lock).read_text(encoding="utf-8"))
+    lock = _PINNED_SOURCES
     arches = args.arch or sorted(ARCH_TAGS)
     if args.tag and len(arches) != 1:
         raise SystemExit("--tag requires exactly one --arch")

@@ -1029,17 +1029,17 @@ Guest-visible env (written INTO the container, not read from host): `PD_CONTAINE
 ## 4. How this project uses it today + fullest-utilization map
 
 ### 4.1 Current use (verified in-repo)
-- **Spike G2/G4 in-process `command_install`** (`m0-spike/src/main.py:136-168`
+- **Device-verified G2/G4 in-process `command_install`** (the original device spike's `main.py:136-168`, closed era — D-016;
   `_install`): lazy-imports `proot_distro.commands.install.command_install` AFTER
   env setup, builds a `SimpleNamespace(image_ref, custom_container_name,
   override_arch=None, allow_insecure=False)`, wraps the call in
   `redirect_stdout+redirect_stderr`, catches `SystemExit` (reads `.code`) and
   bare `Exception`. Import failure (e.g. `os.O_DIRECTORY` missing on Windows) is
   reported as "Linux-only — this gate runs on the Android device".
-- **Env-before-import bootstrap** (`m0-spike/src/main.py:47` region + `proot_probe`
+- **Env-before-import bootstrap** (the device spike's `main.py:47` region — closed era, D-016 — + `proot_probe`
   per roadmap M3 §90): `TERMUX__PREFIX/HOME`, `TERMUX_APP__PACKAGE_NAME`,
   `XDG_DATA_HOME/XDG_CACHE_HOME`, `PD_PROOT_BIN` set before any proot_distro import.
-- **Own proot spawn, not `command_login`** (`m0-spike/src/main.py:170-215`
+- **Own proot spawn, not `command_login`** (the device spike's `main.py:170-215`, closed era — D-016 —
   `guest_argv`/`proot_extensions`): hand-built argv (`libproot.so -0 <ext> -r
   <rootfs> -b /dev -b /proc -b /sys -w / ...`) mirroring
   `_add_proot_extensions` incl. `--kill-on-exit --link2symlink --sysvipc -L`,
@@ -1213,7 +1213,7 @@ to the fullest." Every differentiator below is a package API Termux's own
    (`docker/__init__.py:100-149` verified textually); live-import equality
    (e.g. `docker.pull_image is pull.pull_image`) **unverified** — trivially
    checkable with the venv python on Linux/Android (import fails on Windows:
-   POSIX dir-fd APIs — cf. `m0-spike/src/main.py` import guard).
+   POSIX dir-fd APIs — cf. the app's `core/posixdb.py` import guard).
 8. Windows introspection: per the task brief, `...\ .venv\Scripts\python.exe -c`
    cannot import POSIX modules — all claims above are source reads, which is
    why exact `file:line` refs are given instead of `inspect.signature` output.

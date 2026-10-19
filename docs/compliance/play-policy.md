@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-16 · **Status:** pre-M1 reference; re-verify each milestone (policy pages change; quotes below are pinned to fetch date)
 **App:** Flet/Python Android app running Linux containers via bundled `libproot.so` (proot rides in the APK through `jniLibs`/legacy-packaging); pulls Ubuntu/Debian/Alpine OCI images from Docker Hub **at runtime, user-initiated**; monetized via AdMob through `flet-ads` 1.0.4; public repo `github.com/Nwokike/proot-distro`.
-**Context read first:** `docs/roadmap.md`, `docs/decisions.md`, `docs/reference/app-ffmpeg.md` (Play-facing CI guards), `docs/m0-checklist.md` (device evidence runs #1–3), `docs/reference/dep-flet-ads.md` + `docs/dependency-studies/flet-ads.md` (ConsentManager/UMP flow), `m0-spike/tools/check_apk_alignment.py` (ELF alignment evidence tooling).
+**Context read first:** `docs/roadmap.md`, `docs/decisions.md`, `docs/reference/app-ffmpeg.md` (Play-facing CI guards), the device-spike evidence preserved in `docs/decisions.md` D-016, `docs/reference/dep-flet-ads.md` + `docs/dependency-studies/flet-ads.md` (ConsentManager/UMP flow), `tools/check_apk_alignment.py` (ELF alignment evidence tooling).
 **Verification rule used throughout:** every policy claim quotes Google's official docs (`support.google.com/googleplay/android-developer/…`, `developer.android.com`, AdMob help, UMP developer docs) with URLs. Anything that cannot be pinned to an official page is labeled **UNVERIFIED**.
 
 ## Source index (all fetched 2026-10-16)
@@ -47,7 +47,7 @@ And the adjacent self-install clause (relevant to §7 "install external apps"):
 
 ### 1.2 Flow (a): rootfs OCI images pulled at runtime — legal analysis
 
-**What happens technically.** On a user tap ("Install Ubuntu"), `services/proot_service.py` calls proot-distro's in-process install path (`pull_image(ref, rootfs_fd, …)` → layer download from Docker Hub → digest verify → tar extract into the app-private `containers/<name>/rootfs/`), proven on-device (M0 G2 alpine 7.4 s, G4 debian:bookworm 40.1 s; `docs/m0-checklist.md` runs #2–3). The extracted tree contains full Linux userlands — including ELF binaries for `aarch64` Linux (guest `sh`, `apt-get`, `dpkg`, etc.).
+**What happens technically.** On a user tap ("Install Ubuntu"), `services/proot_service.py` calls proot-distro's in-process install path (`pull_image(ref, rootfs_fd, …)` → layer download from Docker Hub → digest verify → tar extract into the app-private `containers/<name>/rootfs/`), proven on-device during the original device spike (alpine 7.4 s, debian:bookworm 40.1 s — D-016). The extracted tree contains full Linux userlands — including ELF binaries for `aarch64` Linux (guest `sh`, `apt-get`, `dpkg`, etc.).
 
 **The three-pronged argument that this is user data, not "executable code" under the policy:**
 
@@ -65,14 +65,14 @@ When the user runs `apt-get install cowsay` in a session, package downloads happ
 - The artifacts (`.deb`s, unpacked ELF binaries with Linux ABI) are, again, not Android-loadable: not dex, not JAR, not Android `.so`. They cannot be `dlopen`ed by the app process, cannot reach ART, cannot touch Android APIs.
 - This is indistinguishable, policy-wise, from a browser app downloading files the user asked for, or a torrent client writing bytes to disk. The app never executes what apt fetched *as Android code* — guest binaries only ever run under proot translation, mediated by our shipped binary.
 
-M0 device note: `apt-get update && apt-get install cowsay` inside Debian is the last M0 blocker (G4-apt rc=100, `link()` denied by SELinux; fix = Termux-mode `--link2symlink` + `-L` + `--kill-on-exit` + `--sysvipc`, `docs/m0-checklist.md` run #3). The SELinux denial itself is evidence *for* our case: the platform treats guest file operations as ordinary app-data writes, not as code installation.
+Device-spike note: `apt-get update && apt-get install cowsay` inside Debian hit the upgrade-over-existing blocker (`link()` denied by SELinux; the session argv therefore carries Termux-mode `--link2symlink` + `-L` + `--kill-on-exit` + `--sysvipc` — D-016). The SELinux denial itself is evidence *for* our case: the platform treats guest file operations as ordinary app-data writes, not as code installation.
 
 ### 1.4 Flow (c): our app never downloads Android executables — the D-002-era reasoning
 
 The complete Android-executable chain ships **inside the APK** and never changes without a Play update:
 
-- `libproot.so` + loader + `libtalloc.so` + `libandroid-shmem.so` ride in the APK (`jniLibs` via the `flet-proot` native wheel, M2; M0 proven with hand-staged libs + `legacy_packaging = true` extracting to `nativeLibraryDir`, exposed to Python as `ANDROID_NATIVE_LIBRARY_DIR`).
-- M0 G1 proved `nativeLibraryDir/libproot.so --version` executes on-device (`proot 5.1.107.96`, `process_vm = yes, seccomp_filter = yes`).
+- `libproot.so` + loader + `libtalloc.so` + `libandroid-shmem.so` ride in the APK (`jniLibs` via the `flet-proot` native wheel, M2; proven on-device in the original device spike with hand-staged libs + `legacy_packaging = true` extracting to `nativeLibraryDir`, exposed to Python as `ANDROID_NATIVE_LIBRARY_DIR`).
+- The device spike proved `nativeLibraryDir/libproot.so --version` executes on-device (`proot 5.1.107.96`, `process_vm = yes, seccomp_filter = yes`).
 - The Python layer (`proot-distro` 5.10.0, pure-Python, zero deps) ships in the APK's Python bundle; it is never fetched at runtime.
 - The only runtime downloads are (a) OCI layers (user data, §1.2) and (b) AdMob ad assets (Google's own SDK).
 
@@ -85,7 +85,7 @@ So the sentence a reviewer checks — "may not download executable code (such as
 | D-1 | All downloads are explicit user taps with progress + cancel + size display (never silent background fetch) | Design locked (roadmap M3 install flow); not yet built — M3 |
 | D-2 | Bundle one default rootfs in the APK so first-run is fully offline (download is an *option*, not a requirement) | Planned (roadmap M3 exit: "offline first-boot with one bundled rootfs", ~30 MB budget); not yet built — M3 |
 | D-3 | Per-container delete/reset from UI (user data lifecycle, like downloads in any content app) | Planned M3 container actions; not yet built — M3 |
-| D-4 | Never download Android executables: proot + loader + Python layer all ship in APK | Proven M0 G1; wheel-ify in M2 |
+| D-4 | Never download Android executables: proot + loader + Python layer all ship in APK | Proven on-device (device spike); wheel-ified in M2 |
 | D-5 | Never install APKs / never trigger installs of other apps (no `REQUEST_INSTALL_PACKAGES`, no sideload prompts) | By design (no such flow exists); assert in M5 manifest audit |
 | D-6 | Reviewer-facing text prepared: store listing + "app access" instructions frame rootfs as user-downloaded Linux content, exec chain ships in-app | To write — M5/M6 |
 | D-7 | Fallback distribution ready if Play rejects: F-Droid/GitHub APK + GitHub Releases ritual already house-standard (D-006) | Releases-via-prerelease proven in M0; F-Droid track is M6 fallback |
@@ -131,7 +131,7 @@ What "support" means in practice (same page):
 > "run the following command to verify that it's using a 16 KB environment: adb shell getconf PAGE_SIZE. The command should return a value of 16384."
 > — https://developer.android.com/guide/practices/page-sizes
 
-**Our evidence.** `tools/check_apk_alignment.py` exists precisely for this: every CI build runs it against the built APKs. As of **M2 (2026-10-16)** it is *enforcing* for the flet-proot payload libs (`libproot.so`, `libproot-loader.so`, `libtalloc.so`, `libandroid-shmem.so`): each must be present in every inspected APK and each must have all PT_LOAD segments aligned to ≥ `0x4000` (16 KiB) — the Play requirement for targetSdk 35+; the CPython stdlib libs that serious_python bundles stay report-only. The wheel builder itself (`tools/build_flet_proot_wheel.py`) asserts the same alignment **before writing the wheel** from sha256-pinned Termux debs, so a regression fails at the earliest possible point with a named offender. Recorded output (first green run 38906734815, repeated every build since, re-verified by the M2 dual-ABI spike legs) shows every payload lib at `align=0x4000 (16K-OK)`; the excerpt is recorded in `docs/m0-checklist.md` §"CI evidence — APK alignment". The once-planned **NDK-r28+ rebuild is not required while the Termux prebuilts stay 16K-aligned** — the pin lock + build-time assert + APK gate are the guarantee (the NDK route remains a documented fallback if an upstream deb ever regresses). M5 keeps gating releases on this check.
+**Our evidence.** `tools/check_apk_alignment.py` exists precisely for this: every CI build runs it against the built APKs. As of **M2 (2026-10-16)** it is *enforcing* for the flet-proot payload libs (`libproot.so`, `libproot-loader.so`, `libtalloc.so`, `libandroid-shmem.so`): each must be present in every inspected APK and each must have all PT_LOAD segments aligned to ≥ `0x4000` (16 KiB) — the Play requirement for targetSdk 35+; the CPython stdlib libs that serious_python bundles stay report-only. The wheel builder itself (`tools/build_flet_proot_wheel.py`) asserts the same alignment **before writing the wheel** from sha256-pinned Termux debs, so a regression fails at the earliest possible point with a named offender. Recorded output (first green run 38906734815, repeated every build since, re-verified by the M2 dual-ABI spike legs) shows every payload lib at `align=0x4000 (16K-OK)`; the excerpt is recorded in `docs/decisions.md` D-013. The once-planned **NDK-r28+ rebuild is not required while the Termux prebuilts stay 16K-aligned** — the pin lock + build-time assert + APK gate are the guarantee (the NDK route remains a documented fallback if an upstream deb ever regresses). M5 keeps gating releases on this check.
 
 ### 2.3 minSdk floors
 
@@ -148,7 +148,7 @@ What "support" means in practice (same page):
 > "It isn't required to support every 64-bit architecture, but for each native 32-bit architecture you support you must include the corresponding 64-bit architecture."
 > — https://developer.android.com/google/play/requirements/64-bit
 
-Our posture: `arm64-v8a` is the ship ABI (M0 device truth is Android 16 aarch64); `--split-per-abi` planned (roadmap M5); x86_64 inclusion is an explicit open decision (O-6, emulator QA vs. what the forge wheel ships) — note the CollabShell precedent in-repo: x86_64 was dropped there because a dependency's x86_64 wheel lacked 16 KB ELF alignment (`docs/reference/app-collabshell.md`… wait, that path is `docs/reference/app-collabshell.md` per the reference dir listing; the in-repo citation is the CollabShell study row). Per the 64-bit rule, whatever 32-bit ABIs we ship (if any — roadmap currently implies 64-bit-only + possible x86_64) must be paired with their 64-bit counterparts; shipping arm64-v8a-only satisfies the rule outright. Assert ABI set from the AAB in the M5 inspection step.
+Our posture: `arm64-v8a` is the ship ABI (device truth from the original spike, D-016: Android 16 aarch64); `--split-per-abi` planned (roadmap M5); x86_64 inclusion is an explicit open decision (O-6, emulator QA vs. what the forge wheel ships) — note the CollabShell precedent in-repo: x86_64 was dropped there because a dependency's x86_64 wheel lacked 16 KB ELF alignment (`docs/reference/app-collabshell.md`… wait, that path is `docs/reference/app-collabshell.md` per the reference dir listing; the in-repo citation is the CollabShell study row). Per the 64-bit rule, whatever 32-bit ABIs we ship (if any — roadmap currently implies 64-bit-only + possible x86_64) must be paired with their 64-bit counterparts; shipping arm64-v8a-only satisfies the rule outright. Assert ABI set from the AAB in the M5 inspection step.
 
 ### 2.5 AAB vs APK
 
@@ -386,7 +386,7 @@ Owner key: **repo config** = code/pyproject/workflow change in `github.com/Nwoki
 ## Appendix B — UNVERIFIED ledger (must resolve before first submission)
 
 1. Reviewer acceptance of the "rootfs = user data" framing (§1.2) — settable only by submitting.
-2. ~~M0 APK 16 KB-alignment claim~~ — **RESOLVED 2026-10-16**: CI evidence recorded in `docs/m0-checklist.md` §"CI evidence — APK alignment" (all libs `0x4000` (16K-OK), run 38906734815 onward). Keep gating in M5.
+2. ~~M0 APK 16 KB-alignment claim~~ — **RESOLVED 2026-10-16**: CI evidence recorded in `docs/decisions.md` D-013 (all libs `0x4000` (16K-OK), run 38906734815 onward). Keep gating in M5.
 3. AdMob's own data-safety declared types — transcribe from Play SDK Index at M5 (§3.3).
 4. Export-compliance Q/A + exemption wording — complete in-console at M5 (§5).
 5. FGS type choice if sessions need persistence (§6.2).

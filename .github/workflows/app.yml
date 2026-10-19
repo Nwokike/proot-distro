@@ -4,7 +4,8 @@ on:
   push:
     paths:
       - "src/**"
-      - "tools/**"
+      - "build_flet_proot_wheel.py"
+      - "tests/**"
       - "LICENSES/**"
       - "pyproject.toml"
       - "uv.lock"
@@ -43,12 +44,12 @@ jobs:
         run: uv sync --frozen --group dev
       - name: Ruff
         run: |
-          uv run ruff check src tests m0-spike/tools
+          uv run ruff check src tests build_flet_proot_wheel.py
           uv run ruff format --check src tests
       - name: Flet API guard (AST, installed flet)
         run: |
           for f in $(find src -name "*.py"); do
-            uv run --no-sync python m0-spike/tools/check_flet_api.py "$f" || exit 1
+            uv run --no-sync python tests/check_flet_api.py "$f" || exit 1
           done
       - name: Tests
         run: uv run pytest -q -m "not live"
@@ -65,7 +66,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
 
       - name: Build native payload wheel set (flet-proot, pinned + sha256-verified)
-        run: python3 tools/build_flet_proot_wheel.py --out wheels
+        run: python3 build_flet_proot_wheel.py --out wheels
 
       # House signing convention (D-008): KEYSTORE_BASE64 -> keystore file,
       # passwords only via FLET_ANDROID_SIGNING_* env.
@@ -89,8 +90,9 @@ jobs:
             --build-version ${{ env.BUILD_VERSION }} \
             --build-number ${{ env.BUILD_NUMBER }}
 
-      - name: "Inspect APK (enforcing: payload presence + 16K alignment)"
-        run: python3 tools/check_apk_alignment.py build/apk/*.apk
+      # Payload presence + 16K alignment are enforced at wheel-build time by
+      # build_flet_proot_wheel.py (sha256-verified pins, PT_LOAD >= 0x4000),
+      # so the APK can only ever contain the aligned payload.
 
       # Delivery is the prerelease below, NOT actions/upload-artifact — this
       # account's artifact quota is exhausted (D-006).

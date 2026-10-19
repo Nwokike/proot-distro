@@ -1,8 +1,8 @@
 # Roadmap — proot-distro
 
-**Date:** 2026-10-16 (post-corpus synthesis; supersedes the pre-study milestone list) · **Status:** milestone breakdown, pre-plan-mode (M1 planning next)
+**Date:** 2026-10-19 (M3 done; device-spike era removed per owner ruling) · **Status:** M4 (terminal integration) planning next
 **Naming:** repo = `Nwokike/proot-distro` (renamed 2026-10-16, D-009). Local dir + uv project name stay `proot-distro-flet` (uv self-dependency rule). Product brand TBD (O-1).
-**Corpus this plan rests on:** `docs/dependency-studies/` (47 per-package exhaustive API files + INDEX — every claim source-verified against the 1.0.4 lockstep tree, anti-hallucination cited), `docs/compliance/` (licensing / distro-images / play-policy), `docs/reference/` (16 integration studies), `docs/decisions.md` (D-001…D-010), `docs/m0-checklist.md` (device evidence + apt investigation arc), `docs/testing-findings.md`, and the progressive harvest log `docs/roadmap-synthesis.md`. **Every milestone below cites the doc that carries the detail; nothing here is invented.**
+**Corpus this plan rests on:** `docs/dependency-studies/` (47 per-package exhaustive API files + INDEX — every claim source-verified against the 1.0.4 lockstep tree, anti-hallucination cited), `docs/compliance/` (licensing / distro-images / play-policy), `docs/reference/` (16 integration studies), `docs/decisions.md` (D-001…D-015), `docs/testing-findings.md`, and the progressive harvest log `docs/roadmap-synthesis.md`. **Every milestone below cites the doc that carries the detail; nothing here is invented.**
 
 ---
 
@@ -12,7 +12,7 @@ A Flet Android app that wraps upstream **`proot-distro` 5.10.0** (pure-Python, z
 
 **Owner constraints (non-negotiable):** dependencies = `flet`, `flet-ads`, `proot-distro`, `flet-terminal` (dev-only: `flet-cli`, `flet-desktop`, `pytest`, `pytest-timeout`, `ruff`); **no patching of upstream** (steer via env/config/CLI only — the corpus confirmed this suffices); no build complications (update path = bump a version); **no local `flet build`**; plan mode per milestone (this doc is the milestone index).
 
-## 1. Locked architecture (validated on hardware in M0 except where marked)
+## 1. Locked architecture (validated on hardware on the owner's phone except where marked)
 
 ```
 Flet app (src/)
@@ -46,7 +46,7 @@ Distro catalog: certified map (Phase 1: `ubuntu:24.04`, `debian:bookworm`, `alpi
 - `flet run` uses the PREBUILT desktop client; third-party extension Dart (flet-terminal, flet-ads) **never renders under `flet run`** (D-005). Fast local loop = `uv run pytest` (pure logic + fake-transport ProotSession tests) + `uv run flet run` for non-extension UI with platform-availability placeholders.
 - Device truth = CI release artifacts (D-006: `build-<sha>` / milestone prereleases; artifacts upload is blocked account-wide — releases only).
 - **Run-it-first rule**: `tools/check_flet_api.py` (AST guard vs the INSTALLED flet) + local `flet run` smoke BEFORE any APK handoff. CI runs the guard too.
-- The M0 device record is `docs/m0-checklist.md` (runs #1–#6 + CI alignment evidence). Extension + proot behavior can only be validated there.
+- Device truth comes from the CI-built app APKs installed on the owner's phone (the only gate for extension + proot behavior).
 
 ## 1c. Structured mode (CollabShell notebook I/O template)
 
@@ -56,15 +56,9 @@ Second highly-testable UX mode: input = command string (+ optional stdin modal v
 
 ## 2. Milestones
 
-### M0 — Phase-0 device spike (GO/NO-GO) → *architecture proven; device-retest loop DEFERRED (D-011)*
-Goal: prove the load-bearing mechanics on a real phone before any UI work. CI-built APK only.
-**Status 2026-10-16:** **G1 ✓✓** (exec from nativeLibraryDir), **G2 ✓** (in-process OCI install), **G3 ✓** (guest exec through loader), **G5 ✓** (interactive PTY shell on-device — O-3 closed: Python-side PTY), **G6 ✓** (export). **G4 = one open bug, upgrade-over-existing only**: fresh `apt install` paths work; dpkg chown ENOENT through link2symlink when upgrading existing packages (arc: `docs/m0-checklist.md` §"Device retests #4+", spikes 8/9/10). spike-10 (CI green) shipped the Termux device-truth argv + `--no-upgrade` workaround + G4b isolation probe; **owner retest: still failing, and the retest loop is closed by owner ruling (D-011) until after M1–M6**. Interim product behavior: `--no-upgrade` + guest copy note. **M0 is NON-BLOCKING for M1–M6** (the go/no-go claims are green; this is a package-manager edge bug, not an architecture risk).
-**Resume recipe (post-milestones, D-011):** install `spike-10` (or later) → Run ALL → capture G4 + G4b log text; owner Termux control #2 (`apt-get install --only-upgrade perl-base`) completes the matrix (same failure in Termux ⇒ upstream-wide, document; works ⇒ flag/env delta).
-**Still owed beyond the current device (gate 5):** one run on a second/older device (seccomp/OEM variance) — same spike APK; schedule when a second device is available (noted in `play-policy.md` §2.3).
-
 ### M1 — `flet-terminal` refactor (0.3.x → 0.4.0) → *DONE (2026-10-16)*
 Goal: the "perfect for this project" terminal package, house-extension standard. Full blueprint: `docs/reference/dep-flet-terminal.md` (the trio comparison + "do NOT copy" list included).
-**Status 2026-10-16:** **0.4.0 shipped** — construct-anywhere fix (modifier buttons de-componentized + `ExtraKeysBar.refresh_buttons()` implemented; the latent `AttributeError` in the `ctrl_active`/`alt_active` setters is gone) and `_mark_dart_ready` hardened for detached controls; MIT license metadata, `requires-python >=3.10`, bare `"flet"`, narrow Dart package-data, `__version__`, `.fvmrc`, `sync_versions.py`; 85-test contract suite; `compat.yml` matrix (flet 1.0.0→latest × py3.10/3.14 + Dart job), quality gate in build-all, idempotent publish; demo APKs (split-per-abi) published with the `v0.4.0` release. App + m0-spike now on `>=0.4.0` / `==0.4.0`. Rulings in D-012; owner device acceptance = the 0.4.0 release APK.
+**Status 2026-10-16:** **0.4.0 shipped** — construct-anywhere fix (modifier buttons de-componentized + `ExtraKeysBar.refresh_buttons()` implemented; the latent `AttributeError` in the `ctrl_active`/`alt_active` setters is gone) and `_mark_dart_ready` hardened for detached controls; MIT license metadata, `requires-python >=3.10`, bare `"flet"`, narrow Dart package-data, `__version__`, `.fvmrc`, `sync_versions.py`; 85-test contract suite; `compat.yml` matrix (flet 1.0.0→latest × py3.10/3.14 + Dart job), quality gate in build-all, idempotent publish; demo APKs (split-per-abi) published with the `v0.4.0` release. The app now on `>=0.4.0`. Rulings in D-012; owner device acceptance = the 0.4.0 release APK.
 - **Must-fix bugs (verified):** (1) `MobileTerminal()` raises `RuntimeError: No current renderer is set` when constructed OUTSIDE a `@ft.component` tree — owner requirement: give it a context-independent construction path (or at minimum a clear documented error + contract test; it works fine inside component trees — our M3 AppShell + owner's example + CollabShell all construct it there); (2) `ctrl_active`/`alt_active` setters call nonexistent `ExtraKeysBar.refresh_buttons` → latent `AttributeError`, fix.
 - **Owner parity requirement:** full mobile terminal (extra keys bar CTRL/ALT/arrows/ESC/TAB, search, themes, zoom) exactly as used in CollabShell, easily portable via the example.
 - **Metadata/packaging:** `flet>=1.0.1` → bare `"flet"` **after** tests + matrix exist (O-2; the drift risk is the unversioned `_c` wire name, not pip metadata — contract tests are the net); `requires-python ">=3.14"` → `">=3.10"`; add `license = "MIT"` + `license-files` (compliance A6 — the wheel currently ships NO license metadata); URLs → Homepage/Repository/Issues; package-data glob `"**/*"` → `["pubspec.yaml", "lib/**"]`.
@@ -81,7 +75,7 @@ Goal: `proot` binary reachable as a build-time dependency, zero app-side build h
 - Fallback (already proven end-to-end in the spike): our CI builds the `py3-none-any` payload wheel; additive `[tool.flet.android]` mechanism per `docs/dependency-studies/flet-cli.md` (`.so→jniLibs` machinery is serious_python Gradle-side; `legacy_packaging` + names must be `lib*.so`).
 - SDK/ABI: NDK r28+ 16 KB alignment (Play hard requirement — `play-policy.md` §2.2; current CI already *inspects* alignment, M2 makes the wheel *build* aligned); `target_arch` = exactly what the index ships (do not copy sibling ABI notes — FFmpeg lesson); x86_64 for emulator QA = O-6.
 - Version-tracking policy: termux/proot v5.1.107.96 + termux-packages build flags (`PROOT_WITH_LIBANDROID_SHMEM=true`, `PROOT_UNBUNDLE_LOADER`) pinned in the recipe; bump = one commit.
-Exit: CI APK contains `lib/arm64-v8a/libproot.so` + friends from the wheel (not hand-staged); M0 G1 re-verified from the wheel.
+Exit: CI APK contains `lib/arm64-v8a/libproot.so` + friends from the wheel (not hand-staged); exec from the wheel re-verified on-device.
 
 ### M3 — App scaffold + distro manager → *DONE (2026-10-19; rulings in D-015)*
 Goal: house-standard skeleton + container lifecycle UI. Architecture sources: `app-sherlock.md` (layout, controller bridge, keep-alive, render flusher), `app-data-formulator.md` (sole-importer facade), `app-ddgs.md` (guard tests), `app-collabshell.md` (test shapes), plus the per-dependency utilization sections of all 47 studies.
@@ -92,7 +86,8 @@ Goal: house-standard skeleton + container lifecycle UI. Architecture sources: `a
 - **Certified catalog:** YAML manifests (pyyaml; `safe_load` + stable dumps) with tag+digest+registry (`distro-images.md` §4); names via `slugify`; timestamps via arrow/dateutil/tzdata; optional Jinja2 profile templates with `StrictUndefined`.
 - **Probe-gating:** `core/proot_probe.py` (binary/loader presence, arch, rootfs writability) — screens refuse before start.
 
-**Status 2026-10-19 (D-015):** the whole scaffold + distro manager shipped and the owner's desktop `flet run` is clean. The first build had the "Frozen controls cannot be updated" crash (imperative screen mutation); the rework made the UI a pure function of `@ft.observable` state with a source-level regression guard (`tests/test_ui_reactive.py`). Delivered: Distros tab (install with A9 size-disclosure consent, Docker Hub search, container list with Remove/Reset confirms), Settings tab (light/dark/system theme with persistence, storage + cached-layer reclaim via `remove --image`, Docker Hub token on-device, probe re-check, guest-traffic copy), the §3.3 licenses screen (dynamic entries, source-offer block, Debian/Ubuntu attribution, scrollable texts), and the capability hints card. 19 tests + ruff + the flet API AST guard green locally and in CI. Exit criteria remaining: the owner's device run from the CI APK (install `debian:bookworm` from the UI, list, remove) — the last step of the run-it-first gate.
+**Status 2026-10-19 (D-015):** the whole scaffold + distro manager shipped and the owner's desktop `flet run` is clean. The first build had the "Frozen controls cannot be updated" crash (imperative screen mutation); the rework made the UI a pure function of `@ft.observable` state with a source-level regression guard (`tests/test_ui_reactive.py`). The CollabShell-style header/menu chrome is deliberately NOT in this milestone (owner: done properly in M4).
+Delivered: Distros tab (install with A9 size-disclosure consent, Docker Hub search, container list with Remove/Reset confirms), Settings tab (light/dark/system theme with persistence, storage + cached-layer reclaim via `remove --image`, Docker Hub token on-device, probe re-check, guest-traffic copy), the §3.3 licenses screen (dynamic entries, source-offer block, Debian/Ubuntu attribution, scrollable texts), and the capability hints card. 19 tests + ruff + the flet API AST guard green locally and in CI. Exit criteria remaining: the owner's device run from the CI APK (install `debian:bookworm` from the UI, list, remove) — the last step of the run-it-first gate.
 - **Bundled offline rootfs (D-2):** plan-mode decision — default runtime-pull; if bundled, byte-unmodified upstream image only (+ re-pack question flagged UNVERIFIED in `distro-images.md` §7).
 - **Licenses infrastructure:** `LICENSES/` notices file + the licenses-screen *content contract* (§3.3 wording of `licensing.md`; screen UI wires in M4/M6) — GPL source-offer mechanics are mandatory in every option world.
 - **GPL derivative question (A8) — M3 plan-mode agenda:** proceed as Option A (repo stays public, sources shippable) until counsel decides A vs B; the in-process `proot_distro` import is the strongest combination signal (`licensing.md` §2).
@@ -101,7 +96,7 @@ Exit: install/uninstall/list of all three certified distros from UI; offline fir
 
 ### M4 — Terminal integration
 Goal: full interactive sessions in `flet-terminal`.
-- Sessions via our proven PTY spawn (spike-10 argv baseline); NEVER call upstream `login` in-process (`os.execvpe`). `MobileTerminal` inside the AppShell component tree (owner's example + CollabShell pattern: handlers wired before the tree; `show_extra_keys`, themes, search).
+- **Header/menu design (owner correction 2026-10-19):** the M3 shell is a skeleton — it has no header at all. CollabShell DOES have a menu/header; study its actual header+menu design (and the icon placement inside it) and implement it properly in this milestone. The brand hero in the home body stays; the missing piece is the CollabShell-style menu chrome.; NEVER call upstream `login` in-process (`os.execvpe`). `MobileTerminal` inside the AppShell component tree (owner's example + CollabShell pattern: handlers wired before the tree; `show_extra_keys`, themes, search).
 - Session screen: reserved layout rows; stdin-hook dialog (CollabShell `stdin_hook.py` pattern) for first-login prompts; keep-alive + render flusher (~2 Hz + coalescing — Flet has zero batching); resize wiring (`on_resize` → TIOCSWINSZ); scrollback replay on mount.
 - **Dual-mode (O-4):** interactive console + structured command→outputs using the §1c mapping — plan-mode decision with the CollabShell mapping as the template.
 - **Ads:** interstitial at natural breaks only (install complete / removal / return-to-list; single live instance); **no banner on terminal screens** (AdMob placement policy — `play-policy.md` §4.2); consent flow already wired (M3).
@@ -156,8 +151,8 @@ Full per-package API references live in `docs/dependency-studies/` (INDEX.md is 
 ## 5. Open items (verify on device / upstream)
 
 1. Discussion 6979 outcome → M2 path decision (forge wheel vs own CI wheel).
-2. **M0 G4 retest (spike-10) + G4b probe result** — last M0 item (see `m0-checklist.md`).
-3. Owner Termux control #2 (upgrade path in Termux Debian) — completes the apt matrix.
+2. **Guest apt upgrade-over-existing remains open** (dpkg chown ENOENT through link2symlink — proven on-device during the original device spike): fresh installs work, upgrades over an existing package fail. Product behavior until resolved: `--no-upgrade` + a guest copy note in M4; the resume recipe is in `decisions.md` D-011.
+3. Owner Termux control #2 (upgrade path in Termux Debian) — completes the apt matrix (part of the same resume recipe).
 4. Play review behavior for OCI pulls (UserLAnd precedent live; mitigation prepared — `play-policy.md` §1.2).
 5. GPL derivative-work decision + counsel engagement (M3 plan-mode agenda — `licensing.md` A8).
 6. zstd probe in the bundled Python (O-7) — fold into M3 image work.
@@ -166,5 +161,5 @@ Full per-package API references live in `docs/dependency-studies/` (INDEX.md is 
 ## 6. Doc-integrity notes (2026-10-16, this synthesis pass)
 
 - `docs/compliance/distro-images.md` had a **write-tool truncation baked into the committed file** (literal `...[truncated 6154 chars]` at line 369; the tail after §3.2 item 2 was never generated — unrecoverable from any transcript). §3.2(2)–§7 were **reconstructed and re-grounded** in the surviving sources + `dep-proot-distro.md`; a repair note marks the seam in the file.
-- `docs/m0-checklist.md` was missing the apt-bug investigation (device retests #4–#6, spikes 8/9/10, Termux ground truth) — now recorded.
+- The device-spike era (M0) was removed from the repo on 2026-10-19 per owner ruling; its still-live rulings are preserved in `decisions.md` and the open items above.
 - All other 46 dependency docs + 15 reference docs + both remaining compliance docs verified complete (no truncation markers).

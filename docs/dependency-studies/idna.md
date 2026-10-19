@@ -269,7 +269,7 @@ but ships inside the APK as a hard dep.
 - No `os`/`sys.platform` branches in `core.py`/`codec.py`/`uts46data.py`
   (verified by reading); behaviour is platform-independent. `array` module
   use in `uts46data.py:5` is stdlib on Android CPython — **unverified** on the
-  Flet-bundled 3.14 interpreter until M0 device run, but no reason to doubt.
+  Flet-bundled 3.14 interpreter until the device run, but no reason to doubt.
 - Memory: ~283 KB of table source parsed at first `import idna`. First-use
   cost only; never imported on our app's launch path (no OAuth). No action.
 

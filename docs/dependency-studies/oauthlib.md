@@ -394,7 +394,7 @@ Verified from flet source: the only runtime importer is
 `authorization_service.py`, itself reachable only via `Page.login()` (deferred
 import, §3). Our app has NO login flow (roadmap: no auth screens through M3), and
 the repo contains zero oauthlib references — verified `grep -rn
-"oauthlib\|Page.login\|OAuthProvider" src/ tests/ m0-spike/` returns nothing.
+"oauthlib\|Page.login\|OAuthProvider" src/ tests/` returns nothing.
 Removing the directory therefore removes only dead code on our path. Failure mode
 if login were ever called without the package: `ModuleNotFoundError: No module
 named 'oauthlib'` inside `get_authorization_data` — loud, immediate, and confined
@@ -473,7 +473,7 @@ posture is **prune at packaging (`oauthlib/**`), keep the knowledge in this file
   `flet/__init__` provider re-exports; `flet-1.0.4.dist-info/METADATA:14-18`.
 - Cleanup: `flet_cli/commands/build_base.py:642-643,2770-2783,2925-2938`;
   Sherlock precedent `docs/reference/app-sherlock.md:31,34`; repo-zero-usage
-  grep over `src/ tests/ m0-spike/`; eager-import test
+  grep over `src/ tests/`; eager-import test
   (`import flet` → `oauthlib` absent from `sys.modules`).
 - **Unverified** (explicitly): function inventory of `oauth1/rfc5849/utils.py`;
   RSA/SHA-512 `signature.py` helpers past line 505; per-method behavior of

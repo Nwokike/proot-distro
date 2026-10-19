@@ -163,7 +163,7 @@ needs nothing like it either. Its value is exactly one level removed:
 - Reverse deps: `grep -rln "import six\|from six" site-packages/` (repath +
   9× dateutil); `grep -rn "import six" flet/` → zero; eager-import test
   (`import flet` → six absent from `sys.modules`).
-- Repo-zero-usage: `grep -rn "import six\|import repath" src/ tests/ m0-spike/`
+- Repo-zero-usage: `grep -rn "import six\|import repath" src/ tests/`
   → no hits.
 - **Unverified** (explicitly): `raise_from` def line; `six.moves` importer
   machinery (`_LazyDescr`, `_SixMetaPathImporter` internals); py2-branch

@@ -162,5 +162,5 @@ app the thing that turns a script collection into a real mobile app:
   `controls/template_route.py:3` (+1 at `:44`); `flet/__init__.py`
   re-exports (`:39-45, :1642-1812`); eager-import test (`import flet` →
   `repath`/`six`/`oauthlib` all absent from `sys.modules`).
-- Repo-zero-usage: `grep -rn "repath\|oauthlib" src/ tests/ m0-spike/` → no hits.
+- Repo-zero-usage: `grep -rn "repath\|oauthlib" src/ tests/` → no hits.
 - **Unverified**: none — the module is 296 lines and was read end-to-end.

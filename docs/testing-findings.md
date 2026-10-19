@@ -5,7 +5,7 @@ An APK must never be handed over before the app's code has been **executed once*
 1. `tools/check_flet_api.py src/main.py` green (AST guard: every `ft.*` chain verified against the INSTALLED flet; caught `ft.ElevatedButton` and `ft.border.all`, both removed in Flet 1.0 — `ft.Button` / `ft.Border.all` are the 1.0 forms).
 2. Local `uv run flet run` smoke passed (main() constructs; extension panes may be absent — that is expected). The owner may also run it.
 3. Only then: CI build → device.
-The first spike APK crashed on the owner's phone with `module 'flet' has no attribute 'ElevatedButton'` because step 1+2 were skipped. They now run in CI too (lint step of `.github/workflows/m0-spike.yml`).
+The first APK ever handed over crashed on the owner's phone with `module 'flet' has no attribute 'ElevatedButton'` because steps 1+2 were skipped. They now run in CI too (lint step of `.github/workflows/app.yml`).
 
 ## House activity-terminal log pattern (use in every device-facing app)
 From the owner's examples (flet-notifications / flet-yandex-ads):
@@ -20,9 +20,9 @@ log_terminal = ft.Container(content=log_col, bgcolor=TERMINAL_BG, padding=12,
 ```
 Fixed-height scroll container is the scroll fix; timestamps make device screenshots self-documenting.
 
-## Desktop-run platform notes (proot spike)
+## Desktop-run platform notes (the app)
 - `nativeLibraryDir` is None on desktop — gates must guard and say so (they do).
-- **proot-distro is Linux-only**: `proot_distro/dirfd.py` uses `os.O_DIRECTORY`, so importing it on Windows raises — the spike catches this with a friendly message. Device (Android/Linux) imports fine.
+- **proot-distro is Linux-only**: `proot_distro/dirfd.py` uses `os.O_DIRECTORY`, so importing it on Windows raises — the service catches this with a friendly message. Device (Android/Linux) imports fine.
 - `os.getuid`/`TracerPid`/`/proc` are POSIX-only — use guarded lookups (done).
 - `sys.executable -c` spawn works on desktop (G1b ✓) — still must be re-proven on Android.
 
@@ -39,11 +39,11 @@ Verified against installed `flet-cli` 1.0.4:
 1. **`uv run pytest` (offline, every change)** — the bulk: proot-distro argv/refs/storage/probe logic, and the `ProotSession` bridge against a fake process + mocked `MobileTerminal`. Template: CollabShell's suite (`reference/app-collabshell.md` §Tests).
 2. **`uv run flet run` (fast UI loop)** — all screens/UX except extension panes. Wrap terminal and ads in **platform-availability placeholders** so preview stays useful (ads would otherwise raise on desktop).
    - Note: `flet run` creates `.flet/storage/{data,cache,temp}` and exports `FLET_APP_STORAGE_*` (`run.py:283-320`) — our service storage logic behaves the same locally as in a packaged app.
-3. **CI artifacts (device truth)** — every push produces `build-<sha>` prerelease artifacts (house workflow pattern); installing those on the phone is the only gate for terminal/proot/ads behavior. M0's spike APK is the first dedicated device harness.
+3. **CI artifacts (device truth)** — every push produces `build-<sha>` prerelease artifacts (house workflow pattern); installing those on the phone is the only gate for terminal/proot/ads behavior.
 
 ## Owner-rule notes
 - No local `flet build` (release integrity) — the only lever that would show extensions locally is a local desktop build; recorded as open decision O-9 in `decisions.md`.
 - For M1 (flet-terminal refactor), the package's own example workflows produce installable artifacts, and CollabShell is the regression consumer to re-verify against.
 
-## M0 evidence protocol (what the spike must record)
-Per gate: pass/fail, exact command, output excerpt, device model + Android version, and `adb logcat` excerpts for any SELinux/exec denials. Results go into `docs/m0-checklist.md` (created by M0) with screenshot/log attachments kept in-repo while private.
+## Device evidence protocol (what every device run must record)
+Per action: pass/fail, exact command or UI taps, output excerpt, device model + Android version, and `adb logcat` excerpts for any SELinux/exec denials. Results go into the milestone's own checklist section (the app's M3 device-run protocol lives in the repo docs) — with screenshots/logs attached while the repo is private.

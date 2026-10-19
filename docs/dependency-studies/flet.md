@@ -300,7 +300,7 @@ each control module (e.g. `flet.controls.services.storage_paths`) loads on first
 
 ## 4. How this project uses flet today (spike + milestones)
 
-### 4.1 M0 spike — verified call sites (`m0-spike/src/main.py`)
+### 4.1 Device-verified call sites (the original device spike — closed, D-016)
 
 | Call | Spike line | flet API (§3 ref) |
 |---|---|---|
@@ -492,7 +492,7 @@ member iteration.
 | `Colors` 399 / `Icons` 8825 / `CupertinoIcons` 1322 / `CupertinoColors` 95 attrs | *(live)* `len([a for a in dir(...)])` |
 | `Theme` + 39 theme classes | `theme.py` class lines (§2.7) |
 | `Duration`, exceptions (4), `Tester`/`Finder`, `pytest_plugin`, `security` fns, `platform_utils` fns, `device_info` classes, `events.py` classes, `Ref`/`QueryString`, `Window`, `MultiView`, `View`, `FLET_*` env vars | lines cited inline in §§2–6 |
-| M0 spike call sites | `m0-spike/src/main.py:356-579` (spot lines in §4.1) |
+| Device-spike call sites (closed era, D-016) | spike `src/main.py:356-579` (spot lines in §4.1) |
 
 **Unverified / explicitly bounded:**
 - **U-1.** Exact constructor signatures of ~100 widgets are NOT all pasted here

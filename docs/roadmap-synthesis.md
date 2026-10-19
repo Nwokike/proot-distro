@@ -1,5 +1,7 @@
 # Roadmap synthesis — full corpus harvest → complete milestone plan (M1–M6)
 
+> **Note 2026-10-19:** the device-spike code, its workflow and `docs/m0-checklist.md` were removed
+> per owner ruling (D-016); this log stays as the historical harvest record.
 > **Status:** harvest **COMPLETE 2026-10-16** — all 47 dependency studies + 3 compliance docs + 16 reference studies + core docs read personally (owner-directed; no sub-agent) and harvested below. The synthesized M0–M6 milestone plan is **integrated into [roadmap.md](roadmap.md)** (superseding the pre-study milestone list); this file remains the append-only harvest/evidence log.
 > Method: every item cites its source document; nothing invented; corrections and open issues are tracked in dedicated sections.
 > Corpus: `docs/dependency-studies/` (47 files + INDEX) · `docs/compliance/` (3) · `docs/reference/` (16 integration studies) · `docs/roadmap.md` (superseded plan for M1–M6) · `docs/decisions.md` · `docs/m0-checklist.md` · `docs/testing-findings.md`.
