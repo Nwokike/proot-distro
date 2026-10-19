@@ -6,15 +6,15 @@
   "packages": {
     "proot": {
       "pool_dir": "p/proot",
-      "version": "5.1.107.96",
+      "version": "5.1.107.98",
       "debs": {
         "aarch64": {
-          "file": "proot_5.1.107.96_aarch64.deb",
-          "sha256": "8199dca06dccb693ec09fb1759e3e1ad08b4863f0c11c612f89c20bd9ecdc1a0"
+          "file": "proot_5.1.107.98_aarch64.deb",
+          "sha256": "29de40efea4daa2a6168b617915206511c63e8d46bf5f4b07d48723441ef7f3b"
         },
         "x86_64": {
-          "file": "proot_5.1.107.96_x86_64.deb",
-          "sha256": "77ea45540071ca543adda2b51aca2bc3761c52904d013fd0890682288eff9455"
+          "file": "proot_5.1.107.98_x86_64.deb",
+          "sha256": "1c31ad7e1046f4d418fef19b6dfaa9a14801d2047ade6ad0375b3f5501e3e227"
         }
       }
     },

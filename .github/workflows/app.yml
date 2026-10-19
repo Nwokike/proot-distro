@@ -89,7 +89,7 @@ jobs:
             --build-version ${{ env.BUILD_VERSION }} \
             --build-number ${{ env.BUILD_NUMBER }}
 
-      - name: Inspect APK (enforcing: payload presence + 16K alignment)
+      - name: "Inspect APK (enforcing: payload presence + 16K alignment)"
         run: python3 tools/check_apk_alignment.py build/apk/*.apk
 
       # Delivery is the prerelease below, NOT actions/upload-artifact — this

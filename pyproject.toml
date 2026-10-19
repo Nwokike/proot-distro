@@ -47,7 +47,7 @@ legacy_packaging = true
 target_arch = ["arm64-v8a", "x86_64"]
 # The sha256-pinned native payload wheel (M2) — resolved from the CI-provided
 # PIP_FIND_LINKS directory built by tools/build_flet_proot_wheel.py.
-dependencies = ["flet-proot==5.1.107.96"]
+dependencies = ["flet-proot==5.1.107.98"]
 
 # House signing: CI decodes KEYSTORE_BASE64 -> kiri_keystore.jks and overrides
 # via FLET_ANDROID_SIGNING_* env (alias "upload", D-008).
