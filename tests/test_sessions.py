@@ -22,6 +22,20 @@ GOLDEN_CMD = (
     "--bind=/sys /bin/bash -l"
 )
 
+# Upstream prints the command wrapped with backslash-newline continuations
+# (its _print_command joins them). The parser must fold them — shlex would
+# otherwise turn the escaped newline into a literal "n" token.
+GOLDEN_CMD_WRAPPED = (
+    'env -i TERM="xterm-256color" HOME="/root" '
+    + chr(92)
+    + chr(10)
+    + '  "/data/data/ng.kiri.prootdistro/files/usr/lib/libproot.so" '
+    + chr(92)
+    + chr(10)
+    + "  --change-id=0:0 --rootfs=. /bin/bash -l"
+    + chr(10)
+)
+
 
 def test_session_argv_parses_env_and_command(monkeypatch):
     monkeypatch.setattr(
@@ -129,3 +143,17 @@ def test_session_entry_replay_sends_the_buffer_in_order():
     sent: list[bytes] = []
     entry.replay(sent.append)
     assert sent == [b"a", b"b"]
+
+
+def test_session_argv_handles_upstreams_wrapped_output(monkeypatch):
+    """The real --get-proot-cmd format is backslash-newline wrapped."""
+    monkeypatch.setattr(
+        session_service.proot_service, "get_proot_cmd", lambda container: GOLDEN_CMD_WRAPPED
+    )
+    for key in session_service._HOST_ESSENTIALS:
+        monkeypatch.delenv(key, raising=False)
+    env, argv = session_service.session_argv("debian")
+    assert env["TERM"] == "xterm-256color"
+    assert "n" not in argv
+    assert argv[0].endswith("libproot.so")
+    assert argv[-2:] == ["/bin/bash", "-l"]

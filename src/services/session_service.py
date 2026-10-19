@@ -39,6 +39,10 @@ _HOST_ESSENTIALS = ("LD_LIBRARY_PATH", "PROOT_LOADER", "PROOT_TMP_DIR")
 def session_argv(container: str) -> tuple[Env, Argv]:
     """The guest session's (env, argv) exactly as upstream builds it."""
     line = proot_service.get_proot_cmd(container)
+    # Upstream prints the command wrapped with backslash-newline continuations;
+    # shlex would read the escaped newline as a literal "n", so the
+    # continuations are folded into spaces before splitting.
+    line = line.replace(chr(92) + "\r\n", " ").replace(chr(92) + "\n", " ")
     tokens = shlex.split(line)
     if not tokens or tokens[0] != "env":
         raise RuntimeError(
