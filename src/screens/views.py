@@ -8,7 +8,7 @@ from pathlib import Path
 import flet as ft
 
 from components import card, empty_state, hints_card, probe_banner, section_header
-from components.app_header import AppHeader
+from components.app_header import AppHeader, theme_button
 from components.banner_ad import pooled_banner_ad
 from components.brand_hero import build_brand_hero
 from core import theme
@@ -41,7 +41,11 @@ _PY_DISTS = (
 _TEXT_FILES = (
     ("GPL-2.0.txt", "GPL-2.0"),
     ("GPL-3.0.txt", "GPL-3.0"),
+    ("Apache-2.0.txt", "Apache-2.0"),
+    ("MIT.txt", "MIT"),
     ("BSD-3-Clause.txt", "BSD-3-Clause"),
+    ("MPL-2.0.txt", "MPL-2.0"),
+    ("PSF-2.0.txt", "PSF-2.0"),
 )
 
 
@@ -363,6 +367,7 @@ def DistroView() -> ft.Control:
         controls.append(ft.Text(st.data_note, size=10, color=theme.AppColors.WARN, selectable=True))
 
     controls.append(pooled_banner_ad("distros-1", page))
+    controls.append(ft.Container(height=88))
     return ft.Column(controls=controls, spacing=4, expand=True, scroll=ft.ScrollMode.AUTO)
 
 
@@ -375,11 +380,6 @@ def SettingsView() -> ft.Control:
     methods = ft.use_context(ControllerMethodsCtx)
     page = ft.context.page
     token, set_token = ft.use_state(st.docker_token)
-
-    def _cycle_theme() -> None:
-        # The one cycle definition lives in the controller (the header button
-        # calls the same method) so the two entry points cannot diverge.
-        page.run_task(methods.cycle_theme_mode)
 
     def _save_token() -> None:
         page.run_task(methods.set_docker_token, token)
@@ -425,8 +425,8 @@ def SettingsView() -> ft.Control:
             card(
                 ft.Row(
                     controls=[
-                        ft.Text(f"Theme: {mode_label}", size=12, color=theme.text()),
-                        ft.TextButton("Change", on_click=lambda _e: _cycle_theme()),
+                        ft.Text(f"Theme: {mode_label}", size=12, color=theme.text(), expand=True),
+                        theme_button(lambda: page.run_task(methods.cycle_theme_mode)),
                     ],
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 )
@@ -519,6 +519,7 @@ def SettingsView() -> ft.Control:
                 )
             ),
             pooled_banner_ad("settings-1", page),
+            ft.Container(height=88),
         ],
         spacing=4,
         expand=True,
@@ -635,6 +636,20 @@ def licenses_view() -> ft.Control:
                 "Ubuntu and Canonical are registered trademarks of Canonical "
                 "Ltd. This app is not affiliated with, endorsed by, or "
                 "sponsored by Canonical.",
+                size=10,
+                color=theme.text_dim(),
+            ),
+            ft.Text(
+                "Alpine Linux is a registered trademark of the Alpine Linux "
+                "Foundation. This app is not affiliated with, endorsed by, or "
+                "sponsored by the Alpine Linux project.",
+                size=10,
+                color=theme.text_dim(),
+            ),
+            ft.Text(
+                "This is an unofficial Flet-based Android client. It is not "
+                "affiliated with, endorsed by, or sponsored by the Termux "
+                "project or the PRoot-Distro project.",
                 size=10,
                 color=theme.text_dim(),
             ),

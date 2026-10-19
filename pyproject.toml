@@ -23,6 +23,8 @@ org = "ng.kiri"
 product = "Proot Distro"
 company = "Kiri Research Labs"
 build_number = 1
+# The brand icon the platform-assets pipeline derives every OS icon set from.
+icon = "src/assets/icon.png"
 
 [tool.flet.app]
 path = "src"
@@ -53,6 +55,11 @@ dependencies = ["flet-proot==5.1.107.98"]
 # FLET_ANDROID_SIGNING_* variables. flet-cli prefers a pyproject key_store over
 # the env var and resolves it relative to the generated Flutter module — which
 # is the complexity that broke the build; the env path is absolute and correct.
+
+# oauthlib is pulled by flet for Page.login() only — we ship no login flow
+# (licensing A4). ~1 MB saved; breaks only Page.login().
+[tool.flet.cleanup]
+package_files = ["oauthlib/**"]
 
 [tool.flet.android.permission]
 "android.permission.INTERNET" = true

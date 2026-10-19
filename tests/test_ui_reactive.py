@@ -85,15 +85,15 @@ def test_white_icon_variant_is_gone():
 
 
 def test_theme_toggle_button_matches_mode():
-    from components.brand_hero import theme_toggle_button
+    from components.app_header import theme_button
     from core.state import state
 
     state.theme_mode = "system"
-    assert theme_toggle_button(lambda: None).icon == ft.Icons.BRIGHTNESS_AUTO_ROUNDED
+    assert theme_button(lambda: None).icon == ft.Icons.BRIGHTNESS_AUTO_ROUNDED
     state.theme_mode = "light"
-    assert theme_toggle_button(lambda: None).icon == ft.Icons.LIGHT_MODE_ROUNDED
+    assert theme_button(lambda: None).icon == ft.Icons.LIGHT_MODE_ROUNDED
     state.theme_mode = "dark"
-    assert theme_toggle_button(lambda: None).icon == ft.Icons.DARK_MODE_ROUNDED
+    assert theme_button(lambda: None).icon == ft.Icons.DARK_MODE_ROUNDED
 
 
 def test_state_changes_rerender_without_frozen_errors():
@@ -163,6 +163,45 @@ def test_screens_contain_no_imperative_mutation():
 
 
 def _walk(control):
+    """Every control in the tree — Container content counts as a child."""
     yield control
+    content = getattr(control, "content", None)
+    if (content is not None and hasattr(content, "controls")) or isinstance(content, ft.Control):
+        yield from _walk(content)
     for child in getattr(control, "controls", []) or []:
         yield from _walk(child)
+
+
+def test_license_texts_are_present_and_shipped():
+    """The GPL texts must ship with the app and match the repo's notices file."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    app_dir = root / "src" / "LICENSES"
+    repo_dir = root / "LICENSES"
+    assert app_dir.is_dir(), "src/LICENSES is missing — the texts would not ship"
+    names = {p.name for p in app_dir.glob("*.txt")}
+    assert {
+        "GPL-2.0.txt",
+        "GPL-3.0.txt",
+        "Apache-2.0.txt",
+        "MIT.txt",
+        "BSD-3-Clause.txt",
+        "MPL-2.0.txt",
+        "PSF-2.0.txt",
+    } <= names
+    for path in app_dir.glob("*.txt"):
+        assert path.stat().st_size > 500, f"{path.name} looks truncated"
+        twin = repo_dir / path.name
+        assert twin.is_file(), f"{path.name} missing from the repo notices file"
+        assert twin.read_bytes() == path.read_bytes(), f"{path.name} drifted"
+
+
+def test_licenses_view_carries_real_text():
+    """The expansion tiles must hold the actual license text, not a placeholder."""
+    import screens
+
+    view = screens.licenses_view()
+    bodies = [t.value for t in _walk(view) if isinstance(t, ft.Text) and isinstance(t.value, str)]
+    assert "(text missing)" not in "\n".join(bodies)
+    assert any("GNU GENERAL PUBLIC LICENSE" in body for body in bodies)

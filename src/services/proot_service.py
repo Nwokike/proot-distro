@@ -421,3 +421,24 @@ def friendly_job_error(outcome: Outcome) -> str:
         )
     tail = outcome.output.strip().splitlines()[-3:]
     return f"{detail}" + (f" — {tail[-1]}" if tail and tail[-1] != detail else "")
+
+
+PULL_LIMIT_COPY = (
+    "Docker Hub pull limit reached. This is a Docker Hub rate limit, not an app "
+    "error — wait a few hours and retry, or add an optional Docker Hub token in "
+    "Settings to raise your limit."
+)
+
+_LIMIT_MARKERS = (
+    "toomanyrequests",
+    "rate limit",
+    "too many requests",
+    "429",
+    "pull rate",
+)
+
+
+def is_pull_limit(outcome: Outcome) -> bool:
+    """True when upstream's failure is Docker Hub's pull limit."""
+    haystack = (outcome.detail + "\n" + outcome.output).lower()
+    return any(marker in haystack for marker in _LIMIT_MARKERS)

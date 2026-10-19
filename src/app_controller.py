@@ -178,7 +178,11 @@ class AppController:
             if outcome.ok:
                 state.install_stage = f"installed {state.installing}"
             else:
-                state.install_stage = self.proot.friendly_job_error(outcome)
+                state.install_stage = (
+                    self.proot.PULL_LIMIT_COPY
+                    if self.proot.is_pull_limit(outcome)
+                    else self.proot.friendly_job_error(outcome)
+                )
                 self.show_snack(state.install_stage)
         except Exception as exc:
             state.install_stage = f"install failed: {exc!r}"

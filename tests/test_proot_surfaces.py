@@ -128,3 +128,29 @@ def test_available_is_false_off_device(monkeypatch):
     monkeypatch.setitem(sys.modules, "proot_distro", None)  # poison the import
     assert proot_service.available() is False
     monkeypatch.delitem(sys.modules, "proot_distro", raising=False)
+
+
+def test_dev_only_packages_are_not_imported_from_src():
+    """The build-host tree must never reach the app (licensing A4)."""
+    dev_only = {
+        "chardet",
+        "cookiecutter",
+        "pytest",
+        "ruff",
+        "flet_cli",
+        "flet_desktop",
+        "binaryornot",
+        "jinja2",
+        "requests",
+    }
+    for path in sorted((ROOT / "src").rglob("*.py")):
+        found = _imports_of(path) & dev_only
+        assert not found, f"{path.relative_to(ROOT)} imports dev-only {sorted(found)}"
+
+
+def test_pull_limit_is_reported_as_policy():
+    from services.proot_service import Outcome, is_pull_limit
+
+    limited = Outcome(ok=False, detail="failed", output="HTTP 429 Too Many Requests")
+    assert is_pull_limit(limited) is True
+    assert is_pull_limit(Outcome(ok=False, detail="boom", output="")) is False

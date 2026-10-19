@@ -9,12 +9,9 @@ with the color mode.
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 import flet as ft
 
 from core import theme
-from core.state import state
 
 
 def app_icon_svg() -> bytes:
@@ -62,22 +59,4 @@ def build_brand_hero(tagline: str | None = None) -> ft.Control:
             spacing=8,
         ),
         padding=ft.Padding.only(top=16, bottom=8),
-    )
-
-
-def theme_toggle_button(on_click: Callable[[], None]) -> ft.Control:
-    """The shared theme-cycle button (CollabShell's round icon set)."""
-    icon = {
-        "light": ft.Icons.LIGHT_MODE_ROUNDED,
-        "dark": ft.Icons.DARK_MODE_ROUNDED,
-    }.get(state.theme_mode, ft.Icons.BRIGHTNESS_AUTO_ROUNDED)
-    tooltip = {
-        "light": "Light Theme",
-        "dark": "Dark Theme",
-    }.get(state.theme_mode, "System Theme")
-    return ft.IconButton(
-        icon=icon,
-        icon_size=20,
-        tooltip=f"{tooltip} — tap to switch",
-        on_click=lambda _e: on_click(),
     )
