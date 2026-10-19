@@ -94,7 +94,7 @@ Delivered: Distros tab (install with A9 size-disclosure consent, Docker Hub sear
 - **Tests:** fake-transport `ProotSession`, fake rootfs trees (`tmp_path`), hermetic env-import tests (`monkeypatch.setenv` + fresh import), CollabShell-shaped wiring tests; CI gains the **Android compile proof** (`uv pip compile --python-platform aarch64-linux-android --extra-index-url https://pypi.flet.dev/`).
 Exit: install/uninstall/list of all three certified distros from UI; offline first-boot if bundled-rootfs chosen; all guard tests green.
 
-### M4 — Terminal integration
+### M4 — Terminal integration → *DONE (2026-10-19; rulings in D-017)*
 Goal: full interactive sessions in `flet-terminal`.
 - **Header/menu design (owner correction 2026-10-19 — the exact pattern to build):** CollabShell's menu is a slim header-bar Container (SURFACE background, small padding) holding a Row: the CURRENT TAB'S NAME as a bold text on the left, a spacer, then an action cluster on the right (theme IconButton, help IconButton, version chip that flips to an Update pill, history IconButton on the home tab). No `ft.AppBar`, and no brand mark in the bar — the brand hero stays in the home body. Build exactly that for the Distros/Settings tabs; the M3 shell is a skeleton by design.; NEVER call upstream `login` in-process (`os.execvpe`). `MobileTerminal` inside the AppShell component tree (owner's example + CollabShell pattern: handlers wired before the tree; `show_extra_keys`, themes, search).
 - Session screen: reserved layout rows; stdin-hook dialog (CollabShell `stdin_hook.py` pattern) for first-login prompts; keep-alive + render flusher (~2 Hz + coalescing — Flet has zero batching); resize wiring (`on_resize` → TIOCSWINSZ); scrollback replay on mount.
@@ -104,6 +104,8 @@ Goal: full interactive sessions in `flet-terminal`.
 - **Foreground service (O-5/A-11):** default NO (`flet-notifications` patcher complication); revisit only from on-device background-kill evidence.
 - **Optional Track-Bs (plan-mode, each with an APK-size measurement):** pygments syntax-highlighted guest-file preview; markdown-it-py offline README viewer (`docs/dependency-studies/pygments.md` §9, `markdown-it-py.md` §8). Termux-mode env masquerade (O-8) also decided here (whether to unlock upstream's own Termux flag path vs our manual argv).
 Exit: `apt install` inside a session from UI; keyboard/toolbar usable on phone; no ANRs.
+
+**Status 2026-10-19 (D-017):** shipped — the guest argv comes from upstream's own `login --get-proot-cmd` (no reimplementation), the PTY is the flet-terminal example's shape, sessions live on observable entries so they survive screen switches (cap 4), the terminal wires both input paths and replays scrollback on mount, the menu is CollabShell's bar, and the ads are Sherlock's `AdService` (test ids until a production account exists). The container backlog (rename/backup/restore/copy/sessions/force-stop) landed as thin wraps. 45 tests green; the desktop smoke is clean. **Remaining: the owner's device run** (open a shell from the UI, type, resize, extra keys, tab-switch replay) and M5 (production AdMob id + CI guard, store plumbing, structured dual-mode O-4, the image bakery).
 
 ### M5 — Packaging, CI, release ritual
 Goal: house-standard multi-target CI (`app-ffmpeg.md` skeleton, fixes for its drifts).

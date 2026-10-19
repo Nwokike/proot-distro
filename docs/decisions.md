@@ -87,3 +87,50 @@ recorded here (the old D-011/D-011-addendum/D-014 entries are superseded by this
    distro. Any duplicated near-identical code path is a defect class — one shared
    definition per behavior (the Run-ALL divergence that hid the apt bug for weeks).
 
+
+## D-017 · 2026-10-19 · M4 executed — terminal sessions, the CollabShell menu, Sherlock's ads
+M4 shipped (owner-approved plan: full terminal parity, the CollabShell header, the whole ads flow). Rulings:
+
+1. **The guest argv comes from upstream, never from us.** `session_service.session_argv` runs
+   `proot-distro login <c> --get-proot-cmd` IN-PROCESS (a subprocess is impossible on Android —
+   `sys.executable` is the Flutter host, M0 G1b) and parses the printed `env -i …` line. Nothing
+   about `build_proot_args` is reimplemented or hardcoded, so an upstream bump flows through; the
+   parser is pinned by a golden-string test and fails loudly (never silently) on a format change.
+2. **The PTY is the flet-terminal example's shape**: `openpty` + `Popen` on the slave fd with
+   `start_new_session`, a blocking read thread, `TIOCSWINSZ` resize, close-master → terminate.
+   That shape was proven on-device in the M0 spike, so M4 ports it instead of inventing one.
+3. **Sessions live on observable entries, not on widgets** (CollabShell's `TerminalEntry`): the
+   process and a 2000-chunk scrollback live on the entry, so switching tabs re-renders the widget
+   and replays the buffer instead of killing the shell. Concurrency is capped at 4 shells.
+4. **Both input paths are wired**: `set_on_bytes` (binary DataChannel) AND `on_data` (the string
+   path Android's soft keyboard uses). Missing the second path is why characters silently vanish
+   on a phone while delete still works — the example's note is now ours.
+5. **The menu is CollabShell's**: a slim bar with the current tab's name left and the action
+   cluster right (theme cycle; help/version slots built in). No `ft.AppBar`, and no brand mark in
+   the bar — the hero stays in the home body. (Owner correction: the M3 shell had no header and
+   that was wrong; the pattern is in `docs/reference/house-ui-design.md`.)
+6. **Ads follow Sherlock's `AdService` exactly** — UMP flow at launch, preload → show with a
+   30-second minimum-interval guard, service release on close, privacy-options probe, pooled
+   banners per slot. TEST ids only for now (the owner has no production AdMob account yet); the
+   production id + the CI production-id guard land with the account (M5).
+7. **The banner on the terminal screen sits ABOVE the app chrome, never next to the input.** The
+   owner's brief was "best money and not be banned": the app's own header row stays between the
+   ad and the terminal, the ad is nowhere near the extra-keys bar, the row is permanent (no
+   layout jump), and it disappears in full-screen mode. Residual exposure is invalid traffic
+   (accidental clicks) — accepted knowingly, recorded here. CollabShell itself keeps its terminal
+   screen banner-free; we deviate deliberately, and only there.
+8. **The flet-ads crash lesson (app-5)**: depending on `flet-ads` is enough to kill the app at
+   launch on Android — its Dart extension initializes the Mobile Ads SDK before any UI exists, so
+   `com.google.android.gms.ads.APPLICATION_ID` is mandatory. The owner's ruling was the test id,
+   not removing the dependency. The correct test app id is
+   `ca-app-pub-3940256099942544~3347511713` (Google's public sample — the first attempt was
+   missing digits and would not have loaded).
+9. **No swallowed bugs (owner ruling).** The service no longer logs-and-returns-empty: it raises
+   with the real reason and the controller surfaces it in the UI (`state.data_note`), so an empty
+   container list or a failed search says why. Comment noise across the app was cut to constraint-
+   stating comments only, and the `copyright` key was removed from pyproject (no app carries one).
+10. **Container actions are thin one-to-one wraps** — rename, backup, restore, copy, running
+    sessions, force stop — each with the upstream namespace built in one place.
+
+**Deferred to M5:** the production AdMob id + the CI production-id guard, the structured
+dual-mode (O-4), the image bakery/push (`command_build`), and the store/release plumbing.
