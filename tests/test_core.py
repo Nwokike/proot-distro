@@ -45,16 +45,32 @@ def test_ensure_only_shims_what_is_missing():
     assert shimmed == missing
 
 
-def test_grp_shim_shapes_when_active():
+def test_grp_shim_shapes():
+    """The shim's shapes are a platform-independent contract (Termux parity).
+
+    Called on the factories directly so the contract is covered everywhere —
+    on Android these are what `ensure()` installs; on desktop the real module
+    is used instead (test_ensure_only_shims_what_is_missing covers that).
+    """
     from core import posixdb
 
-    if posixdb._module_present("grp") and "grp" not in sys.modules:
-        pytest.skip("real grp module present (desktop)")
-    posixdb.ensure()
-    grp = sys.modules["grp"]
+    grp = posixdb._shim_grp()
     entry = grp.getgrgid(3003)
-    assert entry.gr_name == "3003" and entry.gr_gid == 3003
-    assert grp.getgrall() == []  # Termux parity
+    assert entry.gr_name == "3003" and entry.gr_gid == 3003 and entry.gr_mem == []
+    assert grp.getgrall() == []  # Termux parity: their stub returns NULL too
+    with pytest.raises(KeyError):
+        grp.getgrnam("root")
+
+
+def test_pwd_shim_shapes():
+    from core import posixdb
+
+    pwd = posixdb._shim_pwd()
+    entry = pwd.getpwuid(10315)
+    assert entry.pw_name == "u0_a315" and entry.pw_uid == 10315
+    assert entry.pw_shell == "/sbin/nologin"
+    with pytest.raises(KeyError):
+        pwd.getpwnam("definitely-not-a-name")
 
 
 # ── probe ────────────────────────────────────────────────────────────────────
