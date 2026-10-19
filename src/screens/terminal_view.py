@@ -5,6 +5,7 @@ inset, scrollback replay on mount, theme following the app.
 
 from __future__ import annotations
 
+import contextlib
 import json
 
 import flet as ft
@@ -110,6 +111,14 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
         entry.wired = True
 
     theme_btn = theme_button(lambda: page.run_task(methods.cycle_theme_mode))
+
+    # A theme flip repaints the terminal palette (CollabShell's effect).
+    def _apply_theme() -> None:
+        name = _theme_name()
+        with contextlib.suppress(Exception):
+            mt.set_theme(name)
+
+    ft.use_effect(lambda: state.theme_revision, _apply_theme)
 
     def _quick(label: str, command: str) -> ft.Control:
         def _send(_e) -> None:
