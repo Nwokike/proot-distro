@@ -17,18 +17,17 @@ logging.basicConfig(
 
 
 def main(page) -> None:
-    import threading
-
     from app_controller import AppController
 
     controller = AppController(page)
 
-    def _shutdown(_e=None) -> None:
-        if threading.current_thread() is threading.main_thread():
-            controller.session_manager.close_all()
+    def _on_close(_e=None) -> None:
+        controller.session_manager.close_all()
 
-    page.on_disconnect = _shutdown
-    page.on_close = _shutdown
+    # A disconnect is not a shutdown: the app may just be backgrounded, and the
+    # shells (with their scrollback) must survive the resume.
+    page.on_disconnect = lambda _e=None: None
+    page.on_close = _on_close
     atexit.register(controller.session_manager.close_all)
     page.run_task(controller.init)
 
