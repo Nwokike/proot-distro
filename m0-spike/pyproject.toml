@@ -44,7 +44,7 @@ split_per_abi = true
 # the only SELinux-allowed execve path for bundled binaries (see docs/reference/dep-flet-cli.md).
 legacy_packaging = true
 target_arch = ["arm64-v8a"]
-dependencies = ["flet-proot==5.1.107.96"]
+dependencies = ["flet-proot==5.1.107.98"]
 
 # House signing convention: the CI decodes KEYSTORE_BASE64 -> kiri_keystore.jks
 # and overrides this via FLET_ANDROID_SIGNING_* env (see workflow).

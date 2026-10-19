@@ -85,7 +85,7 @@ jobs:
             Throwaway M0 device-spike APK — proves proot mechanics on Android (go/no-go).
 
             Native payload comes from the sha256-pinned `flet-proot` wheel set
-            (proot 5.1.107.96 + libtalloc 2.5.0 + libandroid-shmem 0.7; ABI: ${{ matrix.arch }}).
+            (proot 5.1.107.98 + libtalloc 2.5.0 + libandroid-shmem 0.7; ABI: ${{ matrix.arch }}).
             Device protocol: `docs/m0-checklist.md` · commit `${{ github.sha }}`
           prerelease: true
           make_latest: false
