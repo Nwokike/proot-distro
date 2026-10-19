@@ -337,9 +337,7 @@ def get_proot_cmd(container: str) -> str:
             if code != 0:
                 reason = errors.getvalue().strip().splitlines()
                 detail = reason[-1][:200] if reason else "no output"
-                raise RuntimeError(
-                    f"login --get-proot-cmd exited {code} — {detail}"
-                ) from exc
+                raise RuntimeError(f"login --get-proot-cmd exited {code} — {detail}") from exc
     finally:
         sys.stdout = stdout_backup
         sys.stderr = stderr_backup

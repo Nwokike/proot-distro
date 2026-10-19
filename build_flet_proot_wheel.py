@@ -172,6 +172,7 @@ def unmet_needed(info: dict, shipped_sonames: set[str]) -> list[str]:
         and n not in SYSTEM_SONAMES
     ]
 
+
 # architecture -> Android wheel platform tag (mirrors flet-libffmpeg)
 ARCH_TAGS = {
     "aarch64": "py3-none-android_24_arm64_v8a",
@@ -242,9 +243,7 @@ def deb_payloads(deb_blob: bytes) -> dict[str, bytes]:
 def pick_suffix(files: dict[str, bytes], suffix: str) -> tuple[str, bytes]:
     hits = [(p, b) for p, b in files.items() if p.endswith(suffix)]
     if len(hits) != 1:
-        raise SystemExit(
-            f"expected exactly one {suffix!r} in deb, found {[h[0] for h in hits]}"
-        )
+        raise SystemExit(f"expected exactly one {suffix!r} in deb, found {[h[0] for h in hits]}")
     return hits[0]
 
 
@@ -301,9 +300,7 @@ def collect_payloads(lock: dict, arch: str, downloaded: dict[str, bytes]) -> lis
             lpath, lblob = pick_suffix(files, "files/usr/libexec/proot/loader")
             add("libproot-loader.so", lblob, f"{url} :: {lpath}", pkg)
             if hashlib.sha256(blob).digest() == hashlib.sha256(lblob).digest():
-                raise SystemExit(
-                    "loader and main binary are identical — layout assumption broken"
-                )
+                raise SystemExit("loader and main binary are identical — layout assumption broken")
         else:
             stem = "libtalloc" if pkg == "libtalloc" else "libandroid-shmem"
             try:
@@ -315,15 +312,12 @@ def collect_payloads(lock: dict, arch: str, downloaded: dict[str, bytes]) -> lis
                 raise
             add(f"{stem}.so", blob, f"{url} :: {path}", pkg)
 
-    shipped = {p["jni"] for p in payloads} | {
-        p["soname"] for p in payloads if p["soname"]
-    }
+    shipped = {p["jni"] for p in payloads} | {p["soname"] for p in payloads if p["soname"]}
     for p in payloads:
         missing = unmet_needed(p, shipped)
         if missing:
             raise SystemExit(
-                f"{p['jni']} needs {missing} but they are not shipped — "
-                "extend the lock/payload set"
+                f"{p['jni']} needs {missing} but they are not shipped — extend the lock/payload set"
             )
     return payloads
 
@@ -424,11 +418,7 @@ def build_wheel(
 
     lines = []
     for name, blob in entries.items():
-        digest = (
-            base64.urlsafe_b64encode(hashlib.sha256(blob).digest())
-            .rstrip(b"=")
-            .decode()
-        )
+        digest = base64.urlsafe_b64encode(hashlib.sha256(blob).digest()).rstrip(b"=").decode()
         lines.append(f"{name},sha256={digest},{len(blob)}")
     lines.append(f"{dist_info}/RECORD,,")
     entries[f"{dist_info}/RECORD"] = ("\n".join(lines) + "\n").encode()

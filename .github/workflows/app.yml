@@ -45,7 +45,7 @@ jobs:
       - name: Ruff
         run: |
           uv run ruff check src tests build_flet_proot_wheel.py
-          uv run ruff format --check src tests
+          uv run ruff format --check src tests build_flet_proot_wheel.py
       - name: Flet API guard (AST, installed flet)
         run: |
           for f in $(find src -name "*.py"); do
