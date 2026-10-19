@@ -12,7 +12,7 @@ import flet as ft
 from app_shell import AppShell
 from core import proot_probe, shared_services, theme
 from core.state import state
-from services import proot_service
+from services import ad_service, proot_service, session_manager
 from state.controller_ctx import ControllerMethods, ControllerMethodsCtx
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,8 @@ class AppController:
     def __init__(self, page: ft.Page):
         self.page = page
         self.proot = proot_service
+        self.session_manager = session_manager.SessionManager()
+        self.ad_service = ad_service.AdService(page)
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
@@ -65,15 +67,37 @@ class AppController:
             cycle_theme_mode=self.cycle_theme_mode,
             check_probe=self.check_probe,
             show_snack=self.show_snack,
+            show_privacy_options=self.show_privacy_options,
+            rename_container=self.rename_container,
+            backup_container=self.backup_container,
+            restore_container=self.restore_container,
+            copy_path=self.copy_path,
+            list_sessions=self.list_sessions,
+            kill_session=self.kill_session,
+            open_session=self.open_session,
+            leave_session=self.leave_session,
+            close_session=self.close_session,
         )
         self.page._controller = self
         self.page.render(lambda: ControllerMethodsCtx(methods, lambda: AppShell()))
 
+        # UMP consent then preload the first interstitial (Sherlock pattern).
+        async def _consent_and_preload() -> None:
+            await self.ad_service.gather_consent()
+            await self.ad_service.preload_interstitial()
+
+        self.page.run_task(_consent_and_preload)
         await self.refresh_containers()
 
     def _mount_services(self) -> None:
         mounted = shared_services.mount_shared_services(self.page)
         self.prefs = mounted.get("prefs")
+        try:
+            self.file_picker = ft.FilePicker()
+            self.page.services.append(self.file_picker)
+        except Exception as exc:
+            logger.debug("file picker unavailable: %s", exc)
+            self.file_picker = None
         try:
             self.connectivity = ft.Connectivity()
             self.connectivity.on_change = self._on_connectivity
@@ -160,13 +184,18 @@ class AppController:
             state.install_stage = f"install failed: {exc!r}"
             self.show_snack(state.install_stage)
         finally:
+            installed_now = state.installing
             state.installing = None
             await self.refresh_containers()
+            if installed_now and outcome is not None and outcome.ok:
+                await self.ad_service.show_interstitial()
 
     async def remove_container(self, name: str) -> None:
         outcome = await asyncio.to_thread(self.proot.remove_container, name)
         self.show_snack(f"removed {name}" if outcome.ok else self.proot.friendly_job_error(outcome))
         await self.refresh_containers()
+        if outcome.ok:
+            await self.ad_service.show_interstitial()
 
     async def reset_container(self, name: str) -> None:
         outcome = await asyncio.to_thread(self.proot.reset_container, name)
@@ -249,3 +278,104 @@ class AppController:
     def show_snack(self, message: str) -> None:
         with contextlib.suppress(Exception):
             self.page.show_dialog(ft.SnackBar(ft.Text(message)))
+
+    async def show_privacy_options(self) -> None:
+        outcome = await self.ad_service.show_privacy_options()
+        if outcome == "form_shown":
+            self.show_snack("Privacy options updated")
+        elif outcome == "not_required":
+            self.show_snack("Privacy options are not required in your region")
+        elif outcome == "no_manager":
+            self.show_snack("Privacy options are unavailable in this build")
+        else:
+            self.show_snack(f"Privacy options failed: {outcome}")
+
+    # ── container actions ─────────────────────────────────────────────────────
+
+    async def rename_container(self, orig: str, new: str) -> None:
+        new = new.strip()
+        if not new:
+            return
+        outcome = await asyncio.to_thread(self.proot.rename_container, orig, new)
+        self.show_snack(
+            f"renamed to {new}" if outcome.ok else self.proot.friendly_job_error(outcome)
+        )
+        await self.refresh_containers()
+
+    async def backup_container(self, container: str) -> None:
+        if self.file_picker is None:
+            self.show_snack("file picker unavailable on this build")
+            return
+        target = await self.file_picker.save_file(
+            dialog_title=f"Backup {container}", file_name=f"{container}.tar.gz"
+        )
+        if not target:
+            return
+        outcome = await asyncio.to_thread(self.proot.backup_container, container, target)
+        self.show_snack(
+            f"backup written to {target}" if outcome.ok else self.proot.friendly_job_error(outcome)
+        )
+
+    async def restore_container(self) -> None:
+        if self.file_picker is None:
+            self.show_snack("file picker unavailable on this build")
+            return
+        picked = await self.file_picker.pick_files(
+            dialog_title="Restore a container archive", allow_multiple=False
+        )
+        if not picked:
+            return
+        path = picked[0].path
+        outcome = await asyncio.to_thread(self.proot.restore_container, path)
+        self.show_snack(
+            "container restored" if outcome.ok else self.proot.friendly_job_error(outcome)
+        )
+        await self.refresh_containers()
+
+    async def copy_path(self, source: str, destination: str) -> None:
+        source = source.strip()
+        destination = destination.strip()
+        if not source or not destination:
+            self.show_snack("copy needs a source and a destination")
+            return
+        outcome = await asyncio.to_thread(self.proot.copy_path, source, destination)
+        self.show_snack(
+            f"copied {source} -> {destination}"
+            if outcome.ok
+            else self.proot.friendly_job_error(outcome)
+        )
+
+    async def list_sessions(self) -> None:
+        rows = await asyncio.to_thread(self.proot.active_sessions)
+        if not rows:
+            self.show_snack("no running sessions")
+            return
+        lines = [
+            f"pid {row.get('pid')} · {row.get('container')} · {row.get('kind')}" for row in rows
+        ]
+        self.show_snack(" · ".join(lines[:4]))
+
+    async def kill_session(self, pid: str) -> None:
+        outcome = await asyncio.to_thread(self.proot.kill_session, str(pid))
+        self.show_snack(
+            f"stopped session {pid}" if outcome.ok else self.proot.friendly_job_error(outcome)
+        )
+
+    # ── sessions ──────────────────────────────────────────────────────────────
+
+    async def open_session(self, container: str) -> None:
+        state.session_error = ""
+        try:
+            await asyncio.to_thread(self.session_manager.open, container)
+        except Exception as exc:
+            state.session_error = f"could not open {container}: {_reason(exc)}"
+            return
+        state.active_session = container
+
+    async def leave_session(self) -> None:
+        state.active_session = None
+
+    async def close_session(self, container: str) -> None:
+        await asyncio.to_thread(self.session_manager.close, container)
+        if state.active_session == container:
+            state.active_session = None

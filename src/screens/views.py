@@ -8,7 +8,9 @@ from pathlib import Path
 import flet as ft
 
 from components import card, empty_state, hints_card, probe_banner, section_header
-from components.brand_hero import build_brand_hero, theme_action_row
+from components.app_header import AppHeader
+from components.banner_ad import pooled_banner_ad
+from components.brand_hero import build_brand_hero
 from core import theme
 from core.state import state
 from state.controller_ctx import ControllerMethodsCtx
@@ -157,6 +159,71 @@ def DistroView() -> ft.Control:
     def _container_row(row: dict) -> ft.Control:
         cname = row.get("name", "?")
 
+        def _menu_items(container: str) -> list[ft.PopupMenuItem]:
+            def _rename(_e) -> None:
+                _ask_rename(container)
+
+            def _backup(_e) -> None:
+                page.run_task(methods.backup_container, container)
+
+            def _copy(_e) -> None:
+                _ask_copy(container)
+
+            def _sessions(_e) -> None:
+                page.run_task(methods.list_sessions)
+
+            def _restore(_e) -> None:
+                page.run_task(methods.restore_container)
+
+            return [
+                ft.PopupMenuItem(content=ft.Text("Rename"), on_click=_rename),
+                ft.PopupMenuItem(content=ft.Text("Backup to a file"), on_click=_backup),
+                ft.PopupMenuItem(content=ft.Text("Restore from an archive"), on_click=_restore),
+                ft.PopupMenuItem(content=ft.Text("Copy a path"), on_click=_copy),
+                ft.PopupMenuItem(content=ft.Text("Running sessions"), on_click=_sessions),
+            ]
+
+        def _ask_rename(container: str) -> None:
+            field = ft.TextField(hint_text="new name", value=container, text_size=12)
+
+            def _save(_e) -> None:
+                page.pop_dialog()
+                page.run_task(methods.rename_container, container, field.value or "")
+
+            page.show_dialog(
+                ft.AlertDialog(
+                    title=ft.Text(f"Rename {container}"),
+                    content=field,
+                    actions=[
+                        ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
+                        ft.TextButton("Rename", on_click=_save),
+                    ],
+                )
+            )
+
+        def _ask_copy(container: str) -> None:
+            source = ft.TextField(hint_text="source (container:/path)", text_size=12)
+            destination = ft.TextField(hint_text="destination (container:/path)", text_size=12)
+
+            def _save(_e) -> None:
+                page.pop_dialog()
+                page.run_task(
+                    methods.copy_path,
+                    source.value or "",
+                    destination.value or "",
+                )
+
+            page.show_dialog(
+                ft.AlertDialog(
+                    title=ft.Text("Copy a path"),
+                    content=ft.Column(controls=[source, destination], spacing=4),
+                    actions=[
+                        ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
+                        ft.TextButton("Copy", on_click=_save),
+                    ],
+                )
+            )
+
         def _remove(_e) -> None:
             def _yes(_e) -> None:
                 page.pop_dialog()
@@ -213,8 +280,19 @@ def DistroView() -> ft.Control:
                         spacing=0,
                         expand=True,
                     ),
+                    ft.Button(
+                        "Open shell",
+                        on_click=lambda _e: page.run_task(methods.open_session, cname),
+                        height=32,
+                    ),
                     ft.Button("Reset", on_click=_reset, height=32),
                     ft.Button("Remove", on_click=_remove, height=32),
+                    ft.PopupMenuButton(
+                        icon=ft.Icons.MORE_VERT,
+                        icon_size=18,
+                        tooltip="More actions",
+                        items=_menu_items(cname),
+                    ),
                 ],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
@@ -225,7 +303,7 @@ def DistroView() -> ft.Control:
 
     controls: list[ft.Control] = [
         build_brand_hero("Linux on Android — no root, no Termux"),
-        theme_action_row(lambda: page.run_task(methods.cycle_theme_mode)),
+        AppHeader("Distros", lambda: page.run_task(methods.cycle_theme_mode)),
         hints_card(st.hints_dismissed, lambda _e: setattr(state, "hints_dismissed", True)),
         section_header("Install", "Any Docker image — search, or type a reference"),
     ]
@@ -284,6 +362,7 @@ def DistroView() -> ft.Control:
     if st.data_note:
         controls.append(ft.Text(st.data_note, size=10, color=theme.AppColors.WARN, selectable=True))
 
+    controls.append(pooled_banner_ad("distros-1", page))
     return ft.Column(controls=controls, spacing=4, expand=True, scroll=ft.ScrollMode.AUTO)
 
 
@@ -341,7 +420,7 @@ def SettingsView() -> ft.Control:
 
     return ft.Column(
         controls=[
-            theme_action_row(lambda: page.run_task(methods.cycle_theme_mode)),
+            AppHeader("Settings", lambda: page.run_task(methods.cycle_theme_mode)),
             section_header("Appearance", "Theme follows the system unless you pick one"),
             card(
                 ft.Row(
@@ -439,6 +518,7 @@ def SettingsView() -> ft.Control:
                     spacing=2,
                 )
             ),
+            pooled_banner_ad("settings-1", page),
         ],
         spacing=4,
         expand=True,

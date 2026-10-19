@@ -36,9 +36,23 @@ class ControllerMethods:
     set_theme_mode: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     cycle_theme_mode: Callable[[], Awaitable[None]] = field(default=_noop_async)
     check_probe: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    show_privacy_options: Callable[[], Awaitable[None]] = field(default=_noop_async)
 
     # Shell-level
     show_snack: Callable[[str], None] = field(default=_noop)
+
+    # Container actions
+    rename_container: Callable[[str, str], Awaitable[None]] = field(default=_noop_async)
+    backup_container: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    restore_container: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    copy_path: Callable[[str, str], Awaitable[None]] = field(default=_noop_async)
+    list_sessions: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    kill_session: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+
+    # Terminal sessions
+    open_session: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    leave_session: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    close_session: Callable[[str], Awaitable[None]] = field(default=_noop_async)
 
 
 ControllerMethodsCtx = ft.create_context(ControllerMethods())

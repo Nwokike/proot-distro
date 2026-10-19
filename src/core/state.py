@@ -32,6 +32,12 @@ class AppState:
 
     # Distro screen hints card (CollabShell-style; dismissible)
     hints_dismissed: bool = False
+    apt_note_dismissed: bool = False
+    terminal_fullscreen: bool = False
+
+    # Terminal sessions (M4): the container whose shell is open, or None.
+    active_session: str | None = None
+    session_error: str = ""
 
     def __init__(self):
         self.containers = []

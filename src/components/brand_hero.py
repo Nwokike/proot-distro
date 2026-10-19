@@ -81,11 +81,3 @@ def theme_toggle_button(on_click: Callable[[], None]) -> ft.Control:
         tooltip=f"{tooltip} — tap to switch",
         on_click=lambda _e: on_click(),
     )
-
-
-def theme_action_row(on_click: Callable[[], None]) -> ft.Control:
-    """Right-aligned row carrying the theme toggle (subview chrome)."""
-    return ft.Row(
-        controls=[theme_toggle_button(on_click)],
-        alignment=ft.MainAxisAlignment.END,
-    )

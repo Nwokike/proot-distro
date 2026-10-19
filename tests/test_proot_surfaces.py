@@ -44,7 +44,10 @@ def test_only_proot_service_imports_proot_distro():
 
 def test_screens_never_import_proot_distro_directly():
     # The transfer boundary is plain data — screens call the facade only.
-    for path in (ROOT / "src" / "screens.py", ROOT / "src" / "app_controller.py"):
+    for path in (
+        *sorted((ROOT / "src" / "screens").rglob("*.py")),
+        ROOT / "src" / "app_controller.py",
+    ):
         assert "proot_distro" not in _imports_of(path)
 
 

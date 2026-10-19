@@ -64,7 +64,7 @@ dependencies = ["flet-proot==5.1.107.98"]
 # public TEST id — safe for dev builds; M5 swaps in the production id and the
 # CI gains the production-id guard (FFmpeg precedent).
 [tool.flet.android.meta_data]
-"com.google.android.gms.ads.APPLICATION_ID" = "ca-app-pub-3940256099944~3347511713"
+"com.google.android.gms.ads.APPLICATION_ID" = "ca-app-pub-3940256099942544~3347511713"
 
 [dependency-groups]
 dev = [

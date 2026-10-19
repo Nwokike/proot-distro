@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import logging
 import sys
 from pathlib import Path
@@ -16,18 +17,20 @@ logging.basicConfig(
 
 
 def main(page) -> None:
+    import threading
+
     from app_controller import AppController
 
-    async def _run() -> None:
-        controller = AppController(page)
-        await controller.init()
+    controller = AppController(page)
 
-    def _flush(_e=None) -> None:
-        pass
+    def _shutdown(_e=None) -> None:
+        if threading.current_thread() is threading.main_thread():
+            controller.session_manager.close_all()
 
-    page.on_disconnect = _flush
-    page.on_close = _flush
-    page.run_task(_run)
+    page.on_disconnect = _shutdown
+    page.on_close = _shutdown
+    atexit.register(controller.session_manager.close_all)
+    page.run_task(controller.init)
 
 
 if __name__ == "__main__":

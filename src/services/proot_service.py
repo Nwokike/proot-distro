@@ -134,6 +134,41 @@ def _ns_reset(name: str) -> SimpleNamespace:
     )
 
 
+def _ns_rename(orig: str, new: str) -> SimpleNamespace:
+    return SimpleNamespace(orig_name=orig, new_name=new)
+
+
+def _ns_backup(container: str, output: str, compression: str | None = None) -> SimpleNamespace:
+    return SimpleNamespace(
+        container_name=container,
+        output=output,
+        compression=compression,
+        verbose=False,
+        quiet=False,
+    )
+
+
+def _ns_restore(archive: str) -> SimpleNamespace:
+    return SimpleNamespace(archive=archive, verbose=False)
+
+
+def _ns_copy(
+    source: str, destination: str, move: bool = False, recursive: bool = True
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        source=source,
+        destination=destination,
+        verbose=False,
+        quiet=False,
+        move=move,
+        recursive=recursive,
+    )
+
+
+def _ns_kill(target: str, all_sessions: bool = False, signal: str | None = None) -> SimpleNamespace:
+    return SimpleNamespace(target=target, all=all_sessions, signal=signal)
+
+
 # ── public API (plain data) ──────────────────────────────────────────────────
 
 
@@ -271,6 +306,105 @@ def busy_locks() -> list[str]:
 
         return [hint for _path, hint in locking.busy_locks()]
     except Exception:
+        return []
+
+
+def get_proot_cmd(container: str) -> str:
+    """Upstream's own session command line: `pd login <c> --get-proot-cmd`.
+
+    It prints `env -i K=V … <proot args> … <inner>` and exits 0. Run
+    in-process because on Android `sys.executable` is the Flutter host (M0
+    G1b). Returns the raw line; parsing lives in session_service.
+    """
+    bootstrap()
+    import sys
+
+    from proot_distro import cli
+
+    argv_backup = sys.argv[:]
+    stdout_backup = sys.stdout
+    sys.argv = ["proot-distro", "login", container, "--get-proot-cmd"]
+    buffer = io.StringIO()
+    try:
+        sys.stdout = buffer
+        try:
+            cli.main()
+        except SystemExit as exc:
+            code = exc.code if isinstance(exc.code, int) else 1
+            if code != 0:
+                raise RuntimeError(
+                    f"login --get-proot-cmd exited {code} — is {container!r} installed?"
+                ) from exc
+    finally:
+        sys.stdout = stdout_backup
+        sys.argv = argv_backup
+    return buffer.getvalue()
+
+
+def rename_container(orig: str, new: str) -> Outcome:
+    """Rename a container (upstream also rewrites its l2s symlinks)."""
+    return _run_command(
+        "proot_distro.commands.rename",
+        "command_rename",
+        _ns_rename(orig, new),
+    )
+
+
+def backup_container(container: str, output: str, compression: str | None = None) -> Outcome:
+    """Write a container's tree to a tar archive (compression from the suffix)."""
+    return _run_command(
+        "proot_distro.commands.backup",
+        "command_backup",
+        _ns_backup(container, output, compression),
+    )
+
+
+def restore_container(archive: str) -> Outcome:
+    """Restore a container tree from a tar archive (destroys the target)."""
+    return _run_command(
+        "proot_distro.commands.restore",
+        "command_restore",
+        _ns_restore(archive),
+    )
+
+
+def copy_path(source: str, destination: str, move: bool = False) -> Outcome:
+    """Copy (or move) a path between containers / host ('name:/path')."""
+    return _run_command(
+        "proot_distro.commands.copy",
+        "command_copy",
+        _ns_copy(source, destination, move=move),
+    )
+
+
+def kill_session(target: str, all_sessions: bool = False) -> Outcome:
+    """Stop a running session (SIGTERM, then SIGKILL escalation upstream)."""
+    return _run_command(
+        "proot_distro.commands.kill",
+        "command_kill",
+        _ns_kill(target, all_sessions),
+    )
+
+
+def active_sessions() -> list[dict]:
+    """Live sessions as upstream sees them (read-only; we never register)."""
+    bootstrap()
+    try:
+        from proot_distro import session
+
+        return [
+            {
+                "pid": record.get("pid"),
+                "container": record.get("container"),
+                "kind": record.get("kind"),
+                "user": record.get("user"),
+                "command": record.get("command"),
+                "start_time": record.get("start_time"),
+            }
+            for record in session.active_sessions()
+        ]
+    except Exception as exc:
+        logger.warning("active_sessions failed: %r", exc)
         return []
 
 

@@ -151,7 +151,8 @@ def test_theme_modes_resolve():
 
 def test_screens_contain_no_imperative_mutation():
     """The frozen-controls bug class, guarded at source level (house grep style)."""
-    src = (ROOT / "src" / "screens.py").read_text(encoding="utf-8")
+    for path in sorted((ROOT / "src" / "screens").rglob("*.py")):
+        src = path.read_text(encoding="utf-8")
     for pattern in (
         r"\.value\s*=",
         r"page\.update\(",
