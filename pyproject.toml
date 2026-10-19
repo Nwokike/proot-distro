@@ -16,6 +16,49 @@ dependencies = [
 [tool.uv]
 package = false
 
+[tool.flet]
+org = "ng.kiri"
+# Product name is the placeholder (O-1: brand decision pending); the bundle id
+# follows the same placeholder and renames as one line when decided.
+product = "Proot Distro"
+company = "Kiri Research Labs"
+copyright = "Copyright © 2026 Kiri Research Labs. All rights reserved."
+build_number = 1
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.boot_screen]
+name = "flet"
+
+[tool.flet.boot_screen.flet]
+startup_message = "Starting the container engine…"
+
+[tool.flet.splash]
+color = "#121218"
+dark_color = "#121218"
+
+[tool.flet.android]
+bundle_id = "ng.kiri.prootdistro"
+split_per_abi = true
+# Native libs must extract from the APK (SELinux allows execve only from
+# nativeLibraryDir); shipping x86_64 covers emulator QA.
+legacy_packaging = true
+target_arch = ["arm64-v8a", "x86_64"]
+# The sha256-pinned native payload wheel (M2) — resolved from the CI-provided
+# PIP_FIND_LINKS directory built by tools/build_flet_proot_wheel.py.
+dependencies = ["flet-proot==5.1.107.96"]
+
+# House signing: CI decodes KEYSTORE_BASE64 -> kiri_keystore.jks and overrides
+# via FLET_ANDROID_SIGNING_* env (alias "upload", D-008).
+[tool.flet.android.signing]
+key_store = "../../kiri_keystore.jks"
+key_alias = "upload"
+
+[tool.flet.android.permission]
+"android.permission.INTERNET" = true
+"android.permission.ACCESS_NETWORK_STATE" = true
+
 [dependency-groups]
 dev = [
     "flet-cli>=1.0.4",
@@ -24,3 +67,27 @@ dev = [
     "pytest-timeout>=2.4.0",
     "ruff>=0.17.1",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+addopts = ["-ra", "-q"]
+timeout = 60
+strict_markers = true
+strict_config = true
+markers = [
+    "live: hits the real device or network (deselected on desktop CI)",
+]
+filterwarnings = [
+    "error::Warning:^(services|screens|components|core|state|hooks|tests)(\\.|$)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "UP", "B", "Q", "C4", "PERF", "ERA", "I", "T20", "DTZ", "RUF", "S", "TRY", "BLE", "EM", "A", "SIM", "RET", "RSE"]
+ignore = ["E501", "EM101", "EM102", "EM103", "TRY003", "BLE001", "S110", "SIM105", "TRY300", "TRY301"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]

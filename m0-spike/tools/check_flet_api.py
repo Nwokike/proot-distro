@@ -49,6 +49,7 @@ def chains(tree: ast.AST) -> set[tuple[str, ...]]:
     walk(tree)
     return out
 
+
 def main() -> int:
     target = Path(sys.argv[1] if len(sys.argv) > 1 else "src/main.py")
     if not target.exists():
@@ -61,20 +62,30 @@ def main() -> int:
     refs = sorted(chains(tree))
 
     missing: list[str] = []
+    runtime_bound: list[str] = []
     for chain in refs:
         obj = flet
         for i, part in enumerate(chain):
-            if not hasattr(obj, part):
-                missing.append(".".join(("ft", *chain[: i + 1])))
+            try:
+                if not hasattr(obj, part):
+                    missing.append(".".join(("ft", *chain[: i + 1])))
+                    break
+                obj = getattr(obj, part)
+            except RuntimeError:
+                # Runtime-context access (e.g. ft.context.page) — the API
+                # exists but only resolves inside a running Flet app. The
+                # chain prefix up to here is verified; accept it.
+                runtime_bound.append(".".join(("ft", *chain[: i + 1])))
                 break
-            obj = getattr(obj, part)
 
     print(f"flet {getattr(flet, '__version__', '?')} — {len(refs)} chain(s) referenced in {target}")
     bad = set(missing)
     for chain in refs:
         dotted = ".".join(("ft", *chain))
         prefix_missing = any(dotted == m or dotted.startswith(m + ".") for m in bad)
-        print(f"  {'MISSING' if prefix_missing else 'ok     '}  {dotted}")
+        is_runtime = any(dotted == r or dotted.startswith(r + ".") for r in runtime_bound)
+        status = "MISSING" if prefix_missing else ("ok*  " if is_runtime else "ok   ")
+        print(f"  {status}  {dotted}" + ("  (runtime-context)" if is_runtime and " " else ""))
 
     if missing:
         print("\nFAIL: referenced flet API does not exist in the installed version:")
