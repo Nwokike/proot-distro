@@ -29,6 +29,12 @@ Argv = list[str]
 
 _ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
+# Proot's own host-side essentials. Upstream's printed env is a clean `env -i`
+# set (it inherits only Android system vars, and only on Termux), so the loader
+# paths our probe staged would be dropped. The M0 spike merged them the same
+# way; without them proot cannot find libtalloc/libandroid-shmem or its loader.
+_HOST_ESSENTIALS = ("LD_LIBRARY_PATH", "PROOT_LOADER", "PROOT_TMP_DIR")
+
 
 def session_argv(container: str) -> tuple[Env, Argv]:
     """The guest session's (env, argv) exactly as upstream builds it."""
@@ -52,6 +58,10 @@ def session_argv(container: str) -> tuple[Env, Argv]:
     argv = rest[split_at:]
     if not argv:
         raise RuntimeError(f"--get-proot-cmd printed no command: {line[:200]!r}")
+    for key in _HOST_ESSENTIALS:
+        value = os.environ.get(key)
+        if value:
+            env[key] = value
     return env, argv
 
 

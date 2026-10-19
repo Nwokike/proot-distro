@@ -38,6 +38,18 @@ def test_session_argv_parses_env_and_command(monkeypatch):
     assert argv[-2:] == ["/bin/bash", "-l"]
 
 
+def test_session_argv_merges_the_host_essentials(monkeypatch):
+    """Proot needs LD_LIBRARY_PATH/PROOT_LOADER; upstream's env is clean."""
+    monkeypatch.setattr(
+        session_service.proot_service, "get_proot_cmd", lambda container: GOLDEN_CMD
+    )
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/data/data/app/files/usr/lib")
+    monkeypatch.setenv("PROOT_LOADER", "/data/data/app/files/usr/lib/libproot-loader.so")
+    env, _argv = session_service.session_argv("debian")
+    assert env["LD_LIBRARY_PATH"] == "/data/data/app/files/usr/lib"
+    assert env["PROOT_LOADER"].endswith("libproot-loader.so")
+
+
 def test_session_argv_rejects_garbage(monkeypatch):
     monkeypatch.setattr(
         session_service.proot_service, "get_proot_cmd", lambda container: "not-a-command"

@@ -323,20 +323,26 @@ def get_proot_cmd(container: str) -> str:
 
     argv_backup = sys.argv[:]
     stdout_backup = sys.stdout
+    stderr_backup = sys.stderr
     sys.argv = ["proot-distro", "login", container, "--get-proot-cmd"]
     buffer = io.StringIO()
+    errors = io.StringIO()
     try:
         sys.stdout = buffer
+        sys.stderr = errors
         try:
             cli.main()
         except SystemExit as exc:
             code = exc.code if isinstance(exc.code, int) else 1
             if code != 0:
+                reason = errors.getvalue().strip().splitlines()
+                detail = reason[-1][:200] if reason else "no output"
                 raise RuntimeError(
-                    f"login --get-proot-cmd exited {code} — is {container!r} installed?"
+                    f"login --get-proot-cmd exited {code} — {detail}"
                 ) from exc
     finally:
         sys.stdout = stdout_backup
+        sys.stderr = stderr_backup
         sys.argv = argv_backup
     return buffer.getvalue()
 
