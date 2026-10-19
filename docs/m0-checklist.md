@@ -100,3 +100,25 @@ CI run **38953589146** (`M0 Spike`, dual-ABI matrix legs: arm64-v8a + x86_64) �
 - Release **`spike-13`**: `m0-spike-arm64-v8a.apk` (27.7 MB) + `m0-spike-x86_64.apk` (28.1 MB).
 - The spike's **G0 gate now logs the payload provenance line** (`payload provenance: flet-proot 5.1.107.96 build 1 [proot …, libtalloc …, libandroid-shmem …]`) — device screenshots will carry the wheel-source evidence when the deferred D-011 loop resumes.
 - Consumed via `PIP_FIND_LINKS` + `[tool.flet.android].dependencies = ["flet-proot==5.1.107.96"]` (per-ABI tag resolution confirmed working in CI, including a **py3-none-any legacy mode** kept for single-arch device builds).
+
+---
+
+## M3 checklist — the app itself (owner device run, gate 3 of the run-it-first rule)
+
+**Build:** `.github/workflows/app.yml` → prerelease `app-<run#>` (signed split-per-ABI APKs). The APK carries the same sha256-pinned `flet-proot` wheel payload as the spike plus the full app (`src/`).
+**Install:** sideload `proot-distro-flet-arm64-v8a.apk` (or whatever the artifact is named) — same device as the spike runs.
+**What was already proven before handover:** all gates green locally (22 tests, ruff, flet-API AST guard), a clean desktop `flet run` (no frozen-controls error; only the two expected POSIX-degradation warnings), and the CI quality job green.
+
+| Step | What to do | Expected | Result / evidence |
+|---|---|---|---|
+| 1 | Open the app | Header shows the brand icon + "Proot Distro"; Distros tab renders the hints card, install form, empty container state | |
+| 2 | Watch the probe line (Settings → About, or the banner on Distros) | "payload flet-proot <ver> [proot …, libtalloc …, libandroid-shmem …] · f2fs bug NOT present in …" — the same provenance line the spike's G0 prints | |
+| 3 | Theme: tap the icon button in the header | Light → Dark → System cycle; the whole UI + header icon repaint in the new palette | |
+| 4 | Type `debian:bookworm` in the image field → Install | Consent dialog with the size-disclosure text; tap Install; live stage lines appear ("preparing" → download/extract stages) | |
+| 5 | Wait for completion | Snackbar + state line "installed debian"; the container row appears with image, size, arch | |
+| 6 | Container actions | Reset (confirm) wipes + reinstalls from cache; Remove (confirm) deletes it | |
+| 7 | Search tab flow | Type "ubuntu" → Search → result rows → tap one fills the fields | |
+| 8 | Settings | Storage line + cached-image count; "Clear cached downloads" (confirm); Docker Hub token save (optional); licenses dialog renders the full §3.3 content | |
+| 9 | Repeat step 4 once (second container) | A second container installs without touching the first (one install at a time — D-014) | |
+
+**Report back:** screenshots of steps 1/4/5 + any red banner or failed action. Terminal sessions are M4 — the app has no terminal yet, by design.
