@@ -27,6 +27,10 @@ def test_session_argv_parses_env_and_command(monkeypatch):
     monkeypatch.setattr(
         session_service.proot_service, "get_proot_cmd", lambda container: GOLDEN_CMD
     )
+    # The host essentials are merged over the guest env — clear them so the
+    # parse is deterministic (CI runners set LD_LIBRARY_PATH themselves).
+    for key in session_service._HOST_ESSENTIALS:
+        monkeypatch.delenv(key, raising=False)
     env, argv = session_service.session_argv("debian")
 
     assert env["TERM"] == "xterm-256color"
