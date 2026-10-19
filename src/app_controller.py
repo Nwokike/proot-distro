@@ -28,6 +28,9 @@ _THEME_MODES = {
     "light": ft.ThemeMode.LIGHT,
     "dark": ft.ThemeMode.DARK,
 }
+# The ONE theme cycle definition (house order: Light → Dark → System); the
+# header button and the Settings row both call it so they cannot diverge.
+_THEME_ORDER = ("light", "dark", "system")
 
 
 class AppController:
@@ -62,6 +65,7 @@ class AppController:
             clear_cache=self.clear_cache,
             set_docker_token=self.set_docker_token,
             set_theme_mode=self.set_theme_mode,
+            cycle_theme_mode=self.cycle_theme_mode,
             check_probe=self.check_probe,
             show_snack=self.show_snack,
         )
@@ -206,6 +210,12 @@ class AppController:
         if self.prefs is not None:
             with contextlib.suppress(Exception):
                 await self.prefs.set("theme_mode", mode)
+
+    async def cycle_theme_mode(self) -> None:
+        current = state.theme_mode if state.theme_mode in _THEME_ORDER else "system"
+        await self.set_theme_mode(
+            _THEME_ORDER[(_THEME_ORDER.index(current) + 1) % len(_THEME_ORDER)]
+        )
 
     async def check_probe(self) -> None:
         state.probe_running = True

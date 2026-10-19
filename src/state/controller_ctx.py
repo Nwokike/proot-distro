@@ -34,6 +34,7 @@ class ControllerMethods:
     clear_cache: Callable[[], Awaitable[None]] = field(default=_noop_async)
     set_docker_token: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     set_theme_mode: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    cycle_theme_mode: Callable[[], Awaitable[None]] = field(default=_noop_async)
     check_probe: Callable[[], Awaitable[None]] = field(default=_noop_async)
 
     # Shell-level

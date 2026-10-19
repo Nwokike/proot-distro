@@ -300,9 +300,9 @@ def SettingsView() -> ft.Control:
     token, set_token = ft.use_state(st.docker_token)
 
     def _cycle_theme() -> None:
-        order = ("system", "light", "dark")
-        nxt = order[(order.index(st.theme_mode) + 1) % len(order)]
-        page.run_task(methods.set_theme_mode, nxt)
+        # The one cycle definition lives in the controller (the header button
+        # calls the same method) so the two entry points cannot diverge.
+        page.run_task(methods.cycle_theme_mode)
 
     def _save_token() -> None:
         page.run_task(methods.set_docker_token, token)

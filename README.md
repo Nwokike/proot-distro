@@ -1,8 +1,16 @@
 # proot-distro
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="src/assets/icon_white.svg">
+    <source media="(prefers-color-scheme: light)" srcset="src/assets/icon.svg">
+    <img src="src/assets/icon.svg" alt="Proot Distro" width="140" />
+  </picture>
+</p>
+
 **Linux on Android without root or Termux** — run Debian, Ubuntu, Alpine and any Docker/OCI image on your phone. A [Flet](https://flet.dev) app wrapping [proot-distro](https://github.com/termux/proot-distro) (PRoot containers), with a native xterm-style terminal.
 
-> **Status:** pre-M0 (device-spike planning) · private during development.
+> **Status:** M3 shipped (app scaffold + distro manager; terminal sessions land in M4) · milestones tracked in `docs/roadmap.md`.
 
 ## Start here
 - [docs/roadmap.md](docs/roadmap.md) — milestones M0–M6

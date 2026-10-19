@@ -55,6 +55,38 @@ def test_views_construct_in_renderer_context():
     assert _render(screens.SettingsView) is not None
 
 
+def test_app_header_builds_and_tints_per_theme():
+    """AppHeader is a plain function: it executes fully offline (house pattern)."""
+    from components.app_header import AppHeader, app_icon_svg, theme_icon
+    from core.state import state
+
+    svg = app_icon_svg()
+    assert b"<svg" in svg[:256]  # the real brand asset, not a placeholder
+
+    state.theme_mode = "dark"
+    dark = AppHeader(title="Proot Distro", subtitle="Linux containers")
+    assert isinstance(dark, ft.Container)
+    icon = dark.content.controls[0].controls[0]  # brand mark inside the left row
+    assert isinstance(icon, ft.Image) and icon.color == ft.Colors.WHITE
+    assert theme_icon() == ft.Icons.DARK_MODE
+
+    state.theme_mode = "light"
+    light = AppHeader(title="Proot Distro")
+    icon = light.content.controls[0].controls[0]
+    assert icon.color is None  # artwork keeps its own colors on light
+    assert theme_icon() == ft.Icons.LIGHT_MODE
+
+
+def test_white_icon_variant_is_white():
+    """The README dark-swap asset must be a real white-on-transparent SVG."""
+    from components.app_header import app_icon_svg
+
+    src = (ROOT / "src" / "assets" / "icon_white.svg").read_text(encoding="utf-8")
+    assert 'fill="#2e343a"' not in src
+    assert 'fill="#ffffff"' in src
+    assert app_icon_svg()  # the light variant still loads
+
+
 def test_state_changes_rerender_without_frozen_errors():
     import screens
     from core.state import state
