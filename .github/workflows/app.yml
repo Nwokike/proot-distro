@@ -233,15 +233,19 @@ jobs:
           target=$(grep -o 'android:targetSdkVersion="[0-9]*"' "$manifest" | grep -o '[0-9]*' | head -1 || true)
           min=$(grep -o 'android:minSdkVersion="[0-9]*"' "$manifest" | grep -o '[0-9]*' | head -1 || true)
           echo "targetSdkVersion=${target:-unknown} minSdkVersion=${min:-unknown}"
-          if [ -n "${target:-}" ] && [ "$target" -lt 34 ]; then
-            echo "::warning::targetSdkVersion $target is below API 35+"
+          # Play requires API 36+ for new submissions (play-policy.md 2.1).
+          if [ -z "${target:-}" ] || [ "$target" -lt 36 ]; then
+            echo "::error::targetSdkVersion ${target:-unknown} < 36 (Play requires 36 for new apps)"
+            exit 1
           fi
 
-          # The permission set must stay exactly INTERNET + ACCESS_NETWORK_STATE.
-          perms=$(grep -o 'android:name="android.permission.[A-Z_]*"' "$manifest" | sed 's/android:name="//;s/"//' | sort -u || true)
+          # Ours + the ones google_mobile_ads contributes (ACCESS_ADSERVICES_AD_ID
+          # is the SDK's advertising-id permission; the data-safety form declares
+          # it). Anything else — any install-related permission — fails the build.
+          perms=$(grep -o 'android:name="android.permission.[A-Z_0-9]*"' "$manifest" | sed 's/android:name="//;s/"//' | sort -u || true)
           echo "Permissions found:"
           echo "$perms"
-          for allowed in "android.permission.INTERNET" "android.permission.ACCESS_NETWORK_STATE"; do
+          for allowed in "android.permission.INTERNET" "android.permission.ACCESS_NETWORK_STATE" "android.permission.ACCESS_ADSERVICES_AD_ID"; do
             case "$perms" in
               *"$allowed"*) ;;
               *) echo "::error::$allowed missing from the manifest"; exit 1;;
@@ -249,7 +253,7 @@ jobs:
           done
           for perm in $perms; do
             case "$perm" in
-              "android.permission.INTERNET"|"android.permission.ACCESS_NETWORK_STATE") ;;
+              "android.permission.INTERNET"|"android.permission.ACCESS_NETWORK_STATE"|"android.permission.ACCESS_ADSERVICES_AD_ID") ;;
               *) echo "::error::unexpected permission $perm (A-12: no install permissions)"; exit 1;;
             esac
           done
