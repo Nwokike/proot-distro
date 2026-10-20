@@ -11,6 +11,7 @@ import flet as ft
 
 from app_shell import AppShell
 from core import proot_probe, shared_services, theme
+from core.constants import STORAGE_ONBOARDING_DONE
 from core.state import state
 from services import ad_service, proot_service, session_manager
 from state.controller_ctx import ControllerMethods, ControllerMethodsCtx
@@ -53,6 +54,7 @@ class AppController:
         self.page.theme = light
         self.page.dark_theme = dark
         await self._restore_prefs()
+        await self._restore_onboarding()
 
         methods = ControllerMethods(
             refresh_containers=self.refresh_containers,
@@ -80,6 +82,9 @@ class AppController:
         )
         self.page._controller = self
         self.page.render(lambda: ControllerMethodsCtx(methods, lambda: AppShell()))
+
+        # The update check runs in the background and only flips state.
+        self.page.run_task(self._check_for_updates)
 
         # UMP consent then preload the first interstitial (Sherlock pattern).
         async def _consent_and_preload() -> None:
@@ -282,6 +287,32 @@ class AppController:
     def show_snack(self, message: str) -> None:
         with contextlib.suppress(Exception):
             self.page.show_dialog(ft.SnackBar(ft.Text(message)))
+
+    async def _restore_onboarding(self) -> None:
+        """The deck shows until it is dismissed once."""
+        if self.prefs is None:
+            return
+        try:
+            done = await self.prefs.get(STORAGE_ONBOARDING_DONE)
+            state.onboarding_done = done == "true"
+        except Exception as exc:
+            logger.debug("onboarding restore failed: %r", exc)
+
+    async def finish_onboarding(self) -> None:
+        state.onboarding_done = True
+        if self.prefs is not None:
+            with contextlib.suppress(Exception):
+                await self.prefs.set(STORAGE_ONBOARDING_DONE, "true")
+
+    async def _check_for_updates(self) -> None:
+        """Silent background check; a newer build flips the header chip."""
+        from services.update_service import check_for_update
+
+        data = await check_for_update()
+        if not data:
+            return
+        state.update_available = True
+        state.update_data = data
 
     async def show_privacy_options(self) -> None:
         outcome = await self.ad_service.show_privacy_options()

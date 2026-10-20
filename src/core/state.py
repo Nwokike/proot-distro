@@ -35,6 +35,13 @@ class AppState:
     apt_note_dismissed: bool = False
     terminal_fullscreen: bool = False
 
+    # First run: the onboarding deck shows until it is dismissed once.
+    onboarding_done: bool = False
+
+    # Update feed (M5): the version chip flips when the feed is ahead.
+    update_available: bool = False
+    update_data: dict | None = None
+
     # Terminal sessions (M4): the container whose shell is open, or None.
     active_session: str | None = None
     session_error: str = ""

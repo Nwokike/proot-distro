@@ -1,70 +1,62 @@
-"""Shared UI pieces."""
+"""Shared UI pieces — thin wrappers over the house styles."""
 
 from __future__ import annotations
 
 import flet as ft
 
-from core import theme
+from core import styles, theme, tokens
 
 
-def card(content: ft.Control, padding: int = 8) -> ft.Container:
-    return ft.Container(
-        content=content,
-        bgcolor=theme.surface(),
-        padding=padding,
-        border_radius=8,
-    )
+def card(content: ft.Control, padding: int | ft.Padding = tokens.SPACE_MD) -> ft.Control:
+    """The house surface (glass card)."""
+    return styles.glass_card(content, padding)
 
 
-def section_header(title: str, subtitle: str | None = None) -> ft.Control:
-    controls = [ft.Text(title, size=16, weight=ft.FontWeight.BOLD, color=theme.text())]
-    if subtitle:
-        controls.append(ft.Text(subtitle, size=11, color=theme.text_dim()))
-    return ft.Container(
-        content=ft.Column(controls=controls, spacing=2),
-        padding=ft.Padding.only(left=8, right=8, top=8),
-    )
+def section_header(title: str, action: ft.Control | None = None) -> ft.Control:
+    """The house section label."""
+    return styles.section_header(title, action)
 
 
-def empty_state(title: str, hint: str) -> ft.Control:
-    return ft.Container(
-        content=ft.Column(
-            controls=[
-                ft.Text(title, size=13, color=theme.text_dim()),
-                ft.Text(hint, size=11, color=theme.text_dim()),
-            ],
-            spacing=2,
-        ),
-        padding=16,
-    )
+def empty_state(title: str, message: str = "", icon: str = ft.Icons.INBOX) -> ft.Control:
+    """The house empty state."""
+    return styles.empty_state(icon, title, message)
 
 
 def probe_banner(summary: str) -> ft.Control:
+    """A warning strip for a failed probe."""
     return ft.Container(
-        content=ft.Text(f"⚠ {summary}", size=12, color=theme.AppColors.WARN),
-        bgcolor=theme.surface(),
-        padding=4,
+        content=ft.Row(
+            controls=[
+                ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, size=14, color=theme.AppColors.WARN),
+                ft.Text(summary, size=tokens.FONT_SM, color=theme.AppColors.WARN, expand=True),
+            ],
+            spacing=tokens.SPACE_XS,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        bgcolor=ft.Colors.with_opacity(0.10, theme.AppColors.WARN),
+        border_radius=tokens.RADIUS_SM,
+        padding=ft.Padding.symmetric(horizontal=tokens.SPACE_MD, vertical=tokens.SPACE_SM),
     )
 
 
 def hints_card(dismissed: bool, on_dismiss) -> ft.Control:
-    """CollabShell-style capability hints; every line is a real app ability."""
-    items = [
-        "Everything here runs the real proot-distro — the same engine Termux uses, without Termux.",
-        "Install any Docker image: type a reference (e.g. debian:bookworm, alpine:3.21) or search Docker Hub.",
-        "Installed containers can be removed or reset any time; cached downloads are reclaimed in Settings.",
-    ]
+    """The capability hints: what this app can do, dismissible."""
     if dismissed:
         return ft.Container()
+    items = [
+        "Runs real Linux containers on your phone — the same proot-distro engine Termux uses, without Termux.",
+        "Install any Docker image: type a reference (debian:bookworm, ubuntu:24.04, alpine:3.21) or search Docker Hub.",
+        "Open a shell in any container, and manage it: rename, back up, restore, copy, reset or remove.",
+    ]
     return ft.Container(
         content=ft.Column(
             controls=[
                 ft.Row(
                     controls=[
-                        ft.Icon(ft.Icons.INFO, size=14, color=theme.primary()),
+                        ft.Icon(ft.Icons.INFO_OUTLINE, size=14, color=theme.primary()),
                         ft.Text(
                             "How this works",
-                            size=12,
+                            size=tokens.FONT_MD,
                             weight=ft.FontWeight.BOLD,
                             color=theme.text(),
                             expand=True,
@@ -72,11 +64,15 @@ def hints_card(dismissed: bool, on_dismiss) -> ft.Control:
                         ft.TextButton("Got it", on_click=on_dismiss),
                     ]
                 ),
-                *[ft.Text(f"• {line}", size=11, color=theme.text_dim()) for line in items],
+                *[
+                    ft.Text(f"• {line}", size=tokens.FONT_SM, color=theme.text_dim())
+                    for line in items
+                ],
             ],
-            spacing=2,
+            spacing=tokens.SPACE_XS,
         ),
-        bgcolor=theme.surface(),
-        padding=8,
-        border_radius=8,
+        bgcolor=theme.glass_bg(),
+        border=ft.Border.all(1, theme.glass_border()),
+        border_radius=tokens.RADIUS_LG,
+        padding=ft.Padding.symmetric(horizontal=tokens.SPACE_MD, vertical=tokens.SPACE_SM),
     )

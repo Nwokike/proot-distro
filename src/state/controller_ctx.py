@@ -49,6 +49,9 @@ class ControllerMethods:
     list_sessions: Callable[[], Awaitable[None]] = field(default=_noop_async)
     kill_session: Callable[[str], Awaitable[None]] = field(default=_noop_async)
 
+    # Onboarding
+    finish_onboarding: Callable[[], Awaitable[None]] = field(default=_noop_async)
+
     # Terminal sessions
     open_session: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     leave_session: Callable[[], Awaitable[None]] = field(default=_noop_async)

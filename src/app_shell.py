@@ -9,7 +9,13 @@ import flet as ft
 
 from core import theme
 from core.state import state
-from screens import DistroView, SessionSelectorView, SettingsView, TerminalView
+from screens import (
+    DistroView,
+    OnboardingView,
+    SessionSelectorView,
+    SettingsView,
+    TerminalView,
+)
 
 TAB_DISTRO = 0
 TAB_TERMINAL = 1
@@ -41,6 +47,9 @@ def AppShell() -> ft.Control:
 
     def _on_change(e):
         set_active_tab(int(e.data))
+
+    if not state.onboarding_done:
+        return OnboardingView()
 
     entry = _session_entry(controller)
     if entry is not None:

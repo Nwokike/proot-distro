@@ -11,7 +11,8 @@ from components import card, empty_state, hints_card, probe_banner, section_head
 from components.app_header import AppHeader, theme_button
 from components.banner_ad import pooled_banner_ad
 from components.brand_hero import build_brand_hero
-from core import theme
+from core import theme, tokens
+from core.constants import PRIVACY_POLICY_URL
 from core.state import state
 from state.controller_ctx import ControllerMethodsCtx
 
@@ -307,9 +308,9 @@ def DistroView() -> ft.Control:
 
     controls: list[ft.Control] = [
         build_brand_hero("Linux on Android — no root, no Termux"),
-        AppHeader("Distros", lambda: page.run_task(methods.cycle_theme_mode)),
+        AppHeader("Distros", lambda: page.run_task(methods.cycle_theme_mode), page=page),
         hints_card(st.hints_dismissed, lambda _e: setattr(state, "hints_dismissed", True)),
-        section_header("Install", "Any Docker image — search, or type a reference"),
+        section_header("Install"),
     ]
     if not st.probe_passed:
         controls.append(probe_banner(st.probe_summary))
@@ -358,11 +359,17 @@ def DistroView() -> ft.Control:
         progress = ""
     controls.append(ft.Text(progress, size=11, color=theme.AppColors.ACCENT))
 
-    controls.append(section_header("Containers", ""))
+    controls.append(section_header("Containers"))
     if st.containers:
         controls.append(ft.Column(controls=[_container_row(r) for r in st.containers], spacing=4))
     else:
-        controls.append(empty_state("No containers yet", "Install any Docker image to begin."))
+        controls.append(
+            empty_state(
+                "No containers yet",
+                "Install any Docker image to begin.",
+                icon=ft.Icons.INVENTORY_2_OUTLINED,
+            )
+        )
     if st.data_note:
         controls.append(ft.Text(st.data_note, size=10, color=theme.AppColors.WARN, selectable=True))
 
@@ -420,18 +427,33 @@ def SettingsView() -> ft.Control:
 
     return ft.Column(
         controls=[
-            AppHeader("Settings", lambda: page.run_task(methods.cycle_theme_mode)),
-            section_header("Appearance", "Theme follows the system unless you pick one"),
+            AppHeader("Settings", lambda: page.run_task(methods.cycle_theme_mode), page=page),
+            section_header("Appearance"),
             card(
-                ft.Row(
+                ft.Column(
                     controls=[
-                        ft.Text(f"Theme: {mode_label}", size=12, color=theme.text(), expand=True),
-                        theme_button(lambda: page.run_task(methods.cycle_theme_mode)),
+                        ft.Text(
+                            "Theme follows the system unless you pick one.",
+                            size=tokens.FONT_SM,
+                            color=theme.text_dim(),
+                        ),
+                        ft.Row(
+                            controls=[
+                                ft.Text(
+                                    f"Theme: {mode_label}",
+                                    size=tokens.FONT_MD,
+                                    color=theme.text(),
+                                    expand=True,
+                                ),
+                                theme_button(lambda: page.run_task(methods.cycle_theme_mode)),
+                            ],
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
                     ],
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=tokens.SPACE_XS,
                 )
             ),
-            section_header("Storage", "Proot state lives in this app's private files"),
+            section_header("Storage"),
             card(
                 ft.Column(
                     controls=[
@@ -465,7 +487,7 @@ def SettingsView() -> ft.Control:
                     spacing=4,
                 )
             ),
-            section_header("Docker Hub", "Optional — a token raises your pull limits"),
+            section_header("Docker Hub"),
             card(
                 ft.Column(
                     controls=[
@@ -491,13 +513,26 @@ def SettingsView() -> ft.Control:
                     spacing=4,
                 )
             ),
-            section_header("About", ""),
+            section_header("About"),
             card(
                 ft.Column(
                     controls=[
                         ft.ListTile(
                             title=ft.Text("Open-source licenses", size=13),
                             on_click=_licenses,
+                        ),
+                        ft.ListTile(
+                            title=ft.Text("Privacy policy", size=13),
+                            on_click=lambda _e: (
+                                page.launch_url(PRIVACY_POLICY_URL)
+                                if hasattr(page, "launch_url")
+                                else None
+                            ),
+                        ),
+                        ft.ListTile(
+                            title=ft.Text("Privacy options", size=13),
+                            subtitle=ft.Text("Manage advertising consent preferences", size=10),
+                            on_click=lambda _e: page.run_task(methods.show_privacy_options),
                         ),
                         ft.Text(
                             "Unofficial Flet-based Android client. Not affiliated "

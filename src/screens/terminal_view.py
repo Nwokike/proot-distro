@@ -14,8 +14,9 @@ from flet_terminal import BUILTIN_THEMES, MobileTerminal
 from components.app_header import theme_button
 from components.banner_ad import pooled_banner_ad
 from components.ui import card, empty_state, section_header
-from core import theme
+from core import theme, tokens
 from core.state import state
+from core.styles import status_dot
 from services.session_manager import SessionEntry
 from state.controller_ctx import ControllerMethodsCtx
 
@@ -255,9 +256,10 @@ def SessionSelectorView() -> ft.Control:
                                 color=theme.AppColors.OK if entry.ready else theme.text_dim(),
                             ),
                             ft.Text(entry.title, size=13, expand=True),
+                            status_dot(entry.ready),
                             ft.Text(
                                 "live" if entry.ready else (entry.error or "idle"),
-                                size=10,
+                                size=tokens.FONT_SM,
                                 color=theme.text_dim(),
                             ),
                             ft.TextButton("Resume", on_click=_resume),
@@ -271,7 +273,7 @@ def SessionSelectorView() -> ft.Control:
             )
         sections.append(
             ft.Column(
-                controls=[section_header("Open shells", ""), *rows],
+                controls=[section_header("Open shells"), *rows],
                 spacing=4,
             )
         )
@@ -303,12 +305,18 @@ def SessionSelectorView() -> ft.Control:
             )
         sections.append(
             ft.Column(
-                controls=[section_header("Installed containers", ""), *rows],
+                controls=[section_header("Installed containers"), *rows],
                 spacing=4,
             )
         )
     else:
-        sections.append(empty_state("No containers yet", "Install one from the Distros tab first."))
+        sections.append(
+            empty_state(
+                "No containers yet",
+                "Install one from the Distros tab first.",
+                icon=ft.Icons.INVENTORY_2_OUTLINED,
+            )
+        )
     if state.session_error:
         sections.append(
             ft.Text(state.session_error, size=10, color=theme.AppColors.WARN, selectable=True)

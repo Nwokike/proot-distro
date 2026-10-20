@@ -581,12 +581,13 @@ wheels = [
 
 [[package]]
 name = "proot-distro-flet"
-version = "0.1.0"
+version = "1.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "flet" },
     { name = "flet-ads" },
     { name = "flet-terminal" },
+    { name = "httpx" },
     { name = "proot-distro" },
 ]
 
@@ -604,6 +605,7 @@ requires-dist = [
     { name = "flet", specifier = ">=1.0.4" },
     { name = "flet-ads", specifier = ">=1.0.4" },
     { name = "flet-terminal", specifier = ">=0.4.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "proot-distro", specifier = ">=5.10.0" },
 ]
 

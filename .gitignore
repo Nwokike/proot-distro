@@ -12,6 +12,12 @@ wheels/
 # Flet dev state (flet run storage)
 .flet/
 
+# Release-notes feed: the in-app update check reads it from the repo's main
+# branch. It goes live only when a release does — a feed ahead of the
+# shipped build would tell every installed app to update to a version
+# that does not exist yet.
+version.json
+
 # Signing material — NEVER commit (house rule)
 kiri-signing.json
 *.jks

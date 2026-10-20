@@ -21,6 +21,12 @@ class AppColors:
     DARK_TEXT_DIM = "#A6ADC8"
     DARK_PRIMARY = "#89B4FA"
 
+    # Glass surfaces (the house card treatment).
+    LIGHT_GLASS_BG = "#FFFFFF"
+    LIGHT_GLASS_BORDER = "#E4E4EA"
+    DARK_GLASS_BG = "#1E1E2E"
+    DARK_GLASS_BORDER = "#313244"
+
     ACCENT = "#89B4FA"
     WARN = "#F38BA8"
     OK = "#A6E3A1"
@@ -116,3 +122,11 @@ def build_theme() -> tuple[ft.Theme, ft.Theme]:
         )
     )
     return light, dark
+
+
+def glass_bg() -> str:
+    return AppColors.LIGHT_GLASS_BG if is_light_theme() else AppColors.DARK_GLASS_BG
+
+
+def glass_border() -> str:
+    return AppColors.LIGHT_GLASS_BORDER if is_light_theme() else AppColors.DARK_GLASS_BORDER

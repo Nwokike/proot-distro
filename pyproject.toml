@@ -2,13 +2,14 @@
 # The uv project name must differ from the wrapped dependency "proot-distro"
 # (uv rejects self-dependencies); the repo itself is Nwokike/proot-distro.
 name = "proot-distro-flet"
-version = "0.1.0"
+version = "1.0.0"
 description = "Run Debian, Ubuntu, Alpine and any Docker image on your phone — no root, no Termux. Built with Flet."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "flet>=1.0.4",
     "flet-ads>=1.0.4",
+    "httpx>=0.28.1",
     "flet-terminal>=0.4.0",
     "proot-distro>=5.10.0",
 ]
@@ -109,6 +110,8 @@ ignore = ["E501", "EM101", "EM102", "EM103", "TRY003", "BLE001", "S110", "SIM105
 # it with the current interpreter.
 "tests/check_flet_api.py" = ["T201"]
 "tests/test_flet_api_guard.py" = ["S603"]
-# The wheel builder is a host-side CLI: progress output and its pinned-URL
-# fetch are its job.
+# The wheel builder and build/inspection tools are host-side CLIs: progress
+# output and pinned-URL fetches are their job.
 "build_flet_proot_wheel.py" = ["T201", "S310"]
+"check_elf_alignment.py" = ["T201"]
+"generate_third_party_sources.py" = ["T201", "E402"]
