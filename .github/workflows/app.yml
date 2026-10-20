@@ -245,18 +245,25 @@ jobs:
           perms=$(grep -o 'android:name="android.permission.[A-Z_0-9]*"' "$manifest" | sed 's/android:name="//;s/"//' | sort -u || true)
           echo "Permissions found:"
           echo "$perms"
-          for allowed in "android.permission.INTERNET" "android.permission.ACCESS_NETWORK_STATE" "android.permission.ACCESS_ADSERVICES_AD_ID"; do
+          for allowed in "android.permission.INTERNET" "android.permission.ACCESS_NETWORK_STATE"; do
             case "$perms" in
               *"$allowed"*) ;;
               *) echo "::error::$allowed missing from the manifest"; exit 1;;
             esac
           done
+          # The ads SDK contributes the ACCESS_ADSERVICES_* advertising-id and
+          # attribution permissions (AD_ID / ATTRIBUTION, play-services); the
+          # data-safety form declares them. Nothing outside ours + that family.
           for perm in $perms; do
             case "$perm" in
-              "android.permission.INTERNET"|"android.permission.ACCESS_NETWORK_STATE"|"android.permission.ACCESS_ADSERVICES_AD_ID") ;;
+              "android.permission.INTERNET"|"android.permission.ACCESS_NETWORK_STATE"|android.permission.ACCESS_ADSERVICES_*) ;;
               *) echo "::error::unexpected permission $perm (A-12: no install permissions)"; exit 1;;
             esac
           done
+          if [ -z "$admob" ]; then
+            echo "::error::com.google.android.gms.ads.APPLICATION_ID missing — flet-ads needs it or the app dies at launch"
+            exit 1
+          fi
           if grep -q "REQUEST_INSTALL_PACKAGES" "$manifest"; then
             echo "::error::REQUEST_INSTALL_PACKAGES present"
             exit 1
