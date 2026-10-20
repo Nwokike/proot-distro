@@ -253,10 +253,12 @@ jobs:
           done
           # The ads SDK contributes the ACCESS_ADSERVICES_* advertising-id and
           # attribution permissions (AD_ID / ATTRIBUTION, play-services); the
-          # data-safety form declares them. Nothing outside ours + that family.
+          # data-safety form declares them. The build template's baseline carries
+          # FOREGROUND_SERVICE (no FGS type, no service — O-5 stays NO). Anything
+          # else, and above all any install permission, fails the build.
           for perm in $perms; do
             case "$perm" in
-              "android.permission.INTERNET"|"android.permission.ACCESS_NETWORK_STATE"|android.permission.ACCESS_ADSERVICES_*) ;;
+              "android.permission.INTERNET"|"android.permission.ACCESS_NETWORK_STATE"|android.permission.ACCESS_ADSERVICES_*|"android.permission.FOREGROUND_SERVICE") ;;
               *) echo "::error::unexpected permission $perm (A-12: no install permissions)"; exit 1;;
             esac
           done
