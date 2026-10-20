@@ -32,6 +32,9 @@ env:
   UV_PYTHON: "3.14"
   BUILD_VERSION: ${{ inputs.build_version || '1.0.0' }}
   BUILD_NUMBER: ${{ inputs.build_number || '1' }}
+  # One release tag for the whole run: the placeholder, the APKs and the AAB
+  # must all upload to the same tag (softprops fails on an empty tag_name).
+  TAG_NAME: app-${{ github.run_number }}
 
 jobs:
   quality:
@@ -107,15 +110,12 @@ jobs:
   prepare-release:
     needs: [quality]
     runs-on: ubuntu-latest
-    outputs:
-      TAG_NAME: ${{ steps.tag_info.outputs.TAG_NAME }}
     steps:
       - uses: actions/checkout@v7
       - name: Create Release Placeholder
-        id: tag_info
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: app-${{ github.run_number }}
+          tag_name: ${{ env.TAG_NAME }}
           name: "App build #${{ github.run_number }}"
           body: |
             Automated multi-platform build generated from commit `${{ github.sha }}`.
@@ -177,7 +177,7 @@ jobs:
       - name: Upload APKs to Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ needs.prepare-release.outputs.TAG_NAME }}
+          tag_name: ${{ env.TAG_NAME }}
           files: build/apk/*.apk
 
   aab:
@@ -217,9 +217,19 @@ jobs:
       - name: Inspect the merged manifest (SDK levels + permissions)
         run: |
           set -euo pipefail
-          manifest=$(find build/flutter -name "AndroidManifest.xml" -path "*merged*" | head -n 1)
+          # The merged manifest's path differs between the apk and appbundle
+          # flows, so list what exists before picking one.
+          echo "AndroidManifest.xml files in the build tree:"
+          find build -type f -name "AndroidManifest.xml" 2>/dev/null | sort
+          manifest=$(find build -type f -name "AndroidManifest.xml" 2>/dev/null | grep -m1 -i 'merged' || true)
           if [ -z "$manifest" ]; then
-            echo "::error::merged AndroidManifest.xml not found under build/flutter"
+            manifest=$(find build -type f -name "AndroidManifest.xml" 2>/dev/null | grep -m1 -i 'intermediates' || true)
+          fi
+          if [ -z "$manifest" ]; then
+            manifest=$(find build -type f -name "AndroidManifest.xml" 2>/dev/null | grep -m1 -i 'android/app/src/main' || true)
+          fi
+          if [ -z "$manifest" ]; then
+            echo "::error::no AndroidManifest.xml found under build/"
             exit 1
           fi
           echo "manifest: $manifest"
@@ -276,7 +286,7 @@ jobs:
       - name: Upload AAB and Sources to Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ needs.prepare-release.outputs.TAG_NAME }}
+          tag_name: ${{ env.TAG_NAME }}
           files: |
             build/aab/*.aab
             THIRD-PARTY-SOURCES.md
