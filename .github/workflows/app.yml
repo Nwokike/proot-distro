@@ -217,22 +217,19 @@ jobs:
       - name: Inspect the merged manifest (SDK levels + permissions)
         run: |
           set -euo pipefail
-          # The merged manifest's path differs between the apk and appbundle
-          # flows, so list what exists before picking one.
-          echo "AndroidManifest.xml files in the build tree:"
-          find build -type f -name "AndroidManifest.xml" 2>/dev/null | sort
-          manifest=$(find build -type f -name "AndroidManifest.xml" 2>/dev/null | grep -m1 -i 'merged' || true)
-          if [ -z "$manifest" ]; then
-            manifest=$(find build -type f -name "AndroidManifest.xml" 2>/dev/null | grep -m1 -i 'intermediates' || true)
-          fi
-          if [ -z "$manifest" ]; then
-            manifest=$(find build -type f -name "AndroidManifest.xml" 2>/dev/null | grep -m1 -i 'android/app/src/main' || true)
-          fi
-          if [ -z "$manifest" ]; then
-            echo "::error::no AndroidManifest.xml found under build/"
-            exit 1
+          # The appbundle flow writes the app's merged manifest at a different
+          # path than the apk flow, and every Android plugin also emits one, so
+          # pick the app's own merged/packaged manifest explicitly.
+          app_intermediates=$(find build/flutter/build/app/intermediates -type f             -name "AndroidManifest.xml" 2>/dev/null | grep -m1 -E 'packaged_manifests|merged_manifests' || true)
+          if [ -n "$app_intermediates" ]; then
+            manifest=$app_intermediates
+          else
+            manifest=build/flutter/android/app/src/main/AndroidManifest.xml
+            echo "::warning::using the app's source manifest (no merged manifest found)"
           fi
           echo "manifest: $manifest"
+          admob=$(grep -o 'com.google.android.gms.ads.APPLICATION_ID' "$manifest" | head -1 || true)
+          echo "AdMob APPLICATION_ID declared: ${admob:-NO}"
           target=$(grep -o 'android:targetSdkVersion="[0-9]*"' "$manifest" | grep -o '[0-9]*' | head -1 || true)
           min=$(grep -o 'android:minSdkVersion="[0-9]*"' "$manifest" | grep -o '[0-9]*' | head -1 || true)
           echo "targetSdkVersion=${target:-unknown} minSdkVersion=${min:-unknown}"
