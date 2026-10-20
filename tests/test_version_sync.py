@@ -7,6 +7,8 @@ import json
 import tomllib
 from pathlib import Path
 
+import pytest
+
 from core.changelog import CHANGELOG, notes_for
 from core.constants import APP_BUILD_NUMBER, APP_VERSION
 
@@ -30,7 +32,10 @@ def test_changelog_has_an_entry_for_the_current_version():
 
 
 def test_feed_never_leads_the_shipped_build():
-    feed = json.loads((ROOT / "version.json").read_text(encoding="utf-8"))
+    feed_path = ROOT / "version.json"
+    if not feed_path.exists():
+        pytest.skip("version.json absent in clean clone (held back per house policy)")
+    feed = json.loads(feed_path.read_text(encoding="utf-8"))
     assert int(feed["build_number"]) <= APP_BUILD_NUMBER
     assert len(feed["release_notes"]) > 80
 

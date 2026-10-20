@@ -50,9 +50,20 @@ def mount_shared_services(page: ft.Page) -> dict[str, Any]:
     return mounted
 
 
-def shared_haptics() -> ft.HapticFeedback | None:
-    page = _current_page()
-    return getattr(page, "haptics", None) if page else None
+def shared_url_launcher(page: ft.Page | None = None) -> ft.UrlLauncher | None:
+    p = page or _current_page()
+    return getattr(p, "url_launcher", None) if p else None
+
+
+async def launch_url(url: str, page: ft.Page | None = None) -> bool:
+    launcher = shared_url_launcher(page)
+    if launcher is not None:
+        try:
+            await launcher.launch_url(url)
+            return True
+        except Exception as exc:
+            logger.debug("launch_url failed for %s: %s", url, exc)
+    return False
 
 
 def _current_page() -> ft.Page | None:

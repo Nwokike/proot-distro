@@ -81,8 +81,8 @@ async def check_for_update(config_url: str = UPDATE_CONFIG_URL) -> dict | None:
         if not isinstance(data, dict):
             return None
 
-        server_build = data.get("build_number", 0)
-        if not isinstance(server_build, int) or not is_newer(server_build, data.get("version")):
+        server_build = data.get("build_number") or 0
+        if not is_newer(server_build, data.get("version")):
             return None
 
         raw_type = data.get("type")

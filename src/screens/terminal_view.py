@@ -119,7 +119,7 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
         with contextlib.suppress(Exception):
             mt.set_theme(name)
 
-    ft.use_effect(lambda: state.theme_revision, _apply_theme)
+    ft.use_effect(_apply_theme, [state.theme_revision])
 
     def _quick(label: str, command: str) -> ft.Control:
         def _send(_e) -> None:
@@ -195,7 +195,7 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
     controls.append(mt)
     if not fullscreen:
         controls.append(quick_strip)
-    if not note_dismissed:
+    if not fullscreen and not note_dismissed:
         controls.insert(
             1,
             card(

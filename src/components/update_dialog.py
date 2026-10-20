@@ -14,6 +14,7 @@ import flet as ft
 from core import theme, tokens
 from core.changelog import notes_for
 from core.constants import APP_NAME, APP_VERSION, GITHUB_RELEASES_URL
+from core.shared_services import launch_url
 from services.update_service import is_allowed_launch_url
 
 logger = logging.getLogger(__name__)
@@ -22,10 +23,7 @@ logger = logging.getLogger(__name__)
 def _launch(page: ft.Page, url: str) -> None:
     if not is_allowed_launch_url(url):
         return
-    try:
-        page.launch_url(url)
-    except Exception as exc:
-        logger.debug("could not open %s: %s", url, exc)
+    page.run_task(launch_url, url, page)
 
 
 def _dialog_width(page: ft.Page) -> int:

@@ -42,7 +42,6 @@ def _session_entry(controller) -> object | None:
 def AppShell() -> ft.Control:
     page = ft.context.page
     active_tab, set_active_tab = ft.use_state(TAB_DISTRO)
-    _st, _ = ft.use_state(state)
     controller = getattr(page, "_controller", None)
 
     def _on_change(e):

@@ -79,6 +79,7 @@ class AppController:
             open_session=self.open_session,
             leave_session=self.leave_session,
             close_session=self.close_session,
+            finish_onboarding=self.finish_onboarding,
         )
         self.page._controller = self
         self.page.render(lambda: ControllerMethodsCtx(methods, lambda: AppShell()))
@@ -178,6 +179,7 @@ class AppController:
         def _run():
             return self.proot.install(image, name, on_line=_on_line)
 
+        outcome = None
         try:
             outcome = await asyncio.to_thread(_run)
             if outcome.ok:

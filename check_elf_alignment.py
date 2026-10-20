@@ -32,14 +32,20 @@ def check_artifact(artifact: Path) -> bool:
             return False
         for name in sorted(names):
             blob = archive.read(name)
+            abi = next((a for a in ABI_64_BIT if f"/{a}/" in name), None)
+            if not abi and len(blob) >= 5 and blob[:4] == b"\x7fELF" and blob[4] != 2:
+                print(f"warn {artifact.name}: {name} (32-bit ABI, exempt)")
+                continue
             try:
                 info = elf_info(blob, name)
             except SystemExit as exc:
+                if not abi:
+                    print(f"warn {artifact.name}: {name}: {exc} (32-bit ABI, exempt)")
+                    continue
                 print(f"FAIL {artifact.name}: {name}: {exc}")
                 ok = False
                 continue
             align = info.get("align") or 0
-            abi = next((a for a in ABI_64_BIT if f"/{a}/" in name), None)
             if abi and align < ALIGN_16K:
                 print(f"FAIL {artifact.name}: {name} p_align={align:#x} (< 16 KB)")
                 ok = False

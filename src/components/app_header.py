@@ -90,8 +90,9 @@ def _open_update_dialog(page: ft.Page | None) -> None:
     if page is None:
         return
     from components.update_dialog import show_update_dialog
+    from core.state import state as core_state
 
-    show_update_dialog(page)
+    show_update_dialog(page, core_state.update_data if core_state.update_available else None)
 
 
 def AppHeader(

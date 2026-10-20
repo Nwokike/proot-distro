@@ -13,6 +13,7 @@ from components.banner_ad import pooled_banner_ad
 from components.brand_hero import build_brand_hero
 from core import theme, tokens
 from core.constants import PRIVACY_POLICY_URL
+from core.shared_services import launch_url
 from core.state import state
 from state.controller_ctx import ControllerMethodsCtx
 
@@ -523,11 +524,7 @@ def SettingsView() -> ft.Control:
                         ),
                         ft.ListTile(
                             title=ft.Text("Privacy policy", size=13),
-                            on_click=lambda _e: (
-                                page.launch_url(PRIVACY_POLICY_URL)
-                                if hasattr(page, "launch_url")
-                                else None
-                            ),
+                            on_click=lambda _e: page.run_task(launch_url, PRIVACY_POLICY_URL, page),
                         ),
                         ft.ListTile(
                             title=ft.Text("Privacy options", size=13),

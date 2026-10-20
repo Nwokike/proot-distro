@@ -124,7 +124,7 @@ class ProotSession:
                     break
                 if data:
                     self._on_bytes(data)
-                elif process.poll() is not None:
+                else:
                     break
             self.returncode = process.poll() if process else None
             if self._on_exit is not None:

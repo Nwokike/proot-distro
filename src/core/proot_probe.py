@@ -29,20 +29,14 @@ def _native_library_dir() -> Path | None:
     if native and Path(native).is_dir():
         return Path(native)
     # Dev fallback: an emulator/edge layout, glob the well-known pattern.
-    for hit in sorted(Path("/data/app").glob("*/ng.kiri.prootdistro-*/lib/arm64")):
+    for hit in sorted(Path("/data/app").glob("*/ng.kiri.prootdistro-*/lib/*")):
         if hit.is_dir():
             return hit
     return None
 
 
 def _f2fs_probe(base_dir: Path) -> str:
-    """Replicate proot's own f2fs-bug probe (src/path/f2fs-bug.c).
-
-    Creates aa/Aa and checks whether the kernel's case-insensitive lookup
-    lies (access("aA") succeeds for a non-existent file). Device-verified on
-    the owner's phone: "bug NOT present" — recorded per run so later failures
-    reason from data.
-    """
+    """Replicate proot's f2fs-bug probe (src/path/f2fs-bug.c)."""
     try:
         d = Path(tempfile.mkdtemp(prefix="proot_f2fsbug_", dir=str(base_dir)))
     except Exception as exc:
