@@ -294,8 +294,9 @@ class AppController:
     # ── misc ──────────────────────────────────────────────────────────────────
 
     def show_snack(self, message: str) -> None:
-        with contextlib.suppress(Exception):
-            self.page.show_dialog(ft.SnackBar(ft.Text(message)))
+        from components.snack import show_snack as _show
+
+        _show(self.page, message)
 
     async def _restore_onboarding(self) -> None:
         """The deck shows until it is dismissed once."""

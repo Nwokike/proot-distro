@@ -24,16 +24,17 @@ def empty_state(title: str, message: str = "", icon: str = ft.Icons.INBOX) -> ft
 
 def probe_banner(summary: str) -> ft.Control:
     """A warning strip for a failed probe."""
+    warn_color = theme.warn()
     return ft.Container(
         content=ft.Row(
             controls=[
-                ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, size=14, color=theme.AppColors.WARN),
-                ft.Text(summary, size=tokens.FONT_SM, color=theme.AppColors.WARN, expand=True),
+                ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, size=tokens.ICON_XS, color=warn_color),
+                ft.Text(summary, size=tokens.FONT_SM, color=warn_color, expand=True),
             ],
             spacing=tokens.SPACE_XS,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
-        bgcolor=ft.Colors.with_opacity(0.10, theme.AppColors.WARN),
+        bgcolor=ft.Colors.with_opacity(0.10, warn_color),
         border_radius=tokens.RADIUS_SM,
         padding=ft.Padding.symmetric(horizontal=tokens.SPACE_MD, vertical=tokens.SPACE_SM),
     )
@@ -53,7 +54,7 @@ def hints_card(dismissed: bool, on_dismiss) -> ft.Control:
             controls=[
                 ft.Row(
                     controls=[
-                        ft.Icon(ft.Icons.INFO_OUTLINE, size=14, color=theme.primary()),
+                        ft.Icon(ft.Icons.INFO_OUTLINE, size=tokens.ICON_XS, color=theme.primary()),
                         ft.Text(
                             "How this works",
                             size=tokens.FONT_MD,

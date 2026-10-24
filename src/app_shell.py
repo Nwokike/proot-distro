@@ -1,12 +1,13 @@
-"""AppShell — navigation over the views, and the session subview when a shell
-is open. CollabShell's shape: tabs on the bottom bar, the session takes over
-the screen with a back button.
+"""AppShell — CollabShell's shape: SafeArea, a FIXED header bar at shell
+level (title = the active tab), the screen body scrolling beneath it, and a
+NavigationBar that steps aside while a shell is open or fullscreen.
 """
 
 from __future__ import annotations
 
 import flet as ft
 
+from components.app_header import AppHeader
 from core import theme
 from core.state import state
 from screens import (
@@ -54,6 +55,7 @@ def AppShell() -> ft.Control:
         return OnboardingView()
 
     entry = _session_entry(controller, st.active_session)
+    fullscreen = st.terminal_fullscreen
     if entry is not None:
         body = TerminalView(entry)
     elif active_tab == TAB_DISTRO:
@@ -63,9 +65,22 @@ def AppShell() -> ft.Control:
     else:
         body = SettingsView()
 
-    return ft.Column(
-        controls=[
-            ft.Container(content=body, expand=True, bgcolor=theme.bg()),
+    chrome: list[ft.Control] = []
+    if entry is None:
+        # CollabShell: one fixed bar for every tab; the session screen has
+        # its own header, so the shell bar steps aside while it is open.
+        chrome.append(
+            AppHeader(
+                _TABS[active_tab][0],
+                lambda: page.run_task(controller.cycle_theme_mode),
+                page=page,
+            )
+        )
+    chrome.append(ft.Container(content=body, expand=True, bgcolor=theme.bg()))
+    if entry is None and not fullscreen:
+        # The session owns the whole screen (true full screen, extra room
+        # for the keyboard) — the nav bar hides while a shell is open.
+        chrome.append(
             ft.NavigationBar(
                 destinations=[
                     ft.NavigationBarDestination(icon=icon, label=label) for label, icon in _TABS
@@ -73,8 +88,12 @@ def AppShell() -> ft.Control:
                 selected_index=active_tab,
                 on_change=_on_change,
                 bgcolor=theme.surface(),
-            ),
-        ],
-        spacing=0,
+                indicator_color=ft.Colors.with_opacity(0.12, theme.primary()),
+                label_behavior=ft.NavigationBarLabelBehavior.ALWAYS_SHOW,
+            )
+        )
+
+    return ft.SafeArea(
+        content=ft.Column(controls=chrome, spacing=0, expand=True),
         expand=True,
     )

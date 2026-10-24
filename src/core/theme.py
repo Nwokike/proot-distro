@@ -21,16 +21,24 @@ class AppColors:
     DARK_TEXT_DIM = "#A6ADC8"
     DARK_PRIMARY = "#89B4FA"
 
-    # Glass surfaces (the house card treatment).
+    # Glass surfaces (the house card treatment): each must be visually
+    # distinct from the surface behind it or cards lose their elevation.
     LIGHT_GLASS_BG = "#FFFFFF"
     LIGHT_GLASS_BORDER = "#E4E4EA"
-    DARK_GLASS_BG = "#1E1E2E"
-    DARK_GLASS_BORDER = "#313244"
+    DARK_GLASS_BG = "#26263A"
+    DARK_GLASS_BORDER = "#3E415C"
 
     ACCENT = "#89B4FA"
     WARN = "#F38BA8"
     OK = "#A6E3A1"
     TERMINAL_BG = "#0D0D0D"
+
+    # Light-mode status colors — the dark pastels fail 3:1 on white
+    # (measured 1.49/2.32 in the design-system audit); these are the ≥3:1
+    # equivalents for the light palette.
+    LIGHT_OK = "#1B7F3B"
+    LIGHT_WARN = "#B3261E"
+    LIGHT_ACCENT = "#1E66F5"
 
 
 def _page() -> ft.Page | None:
@@ -92,16 +100,49 @@ def primary() -> str:
     return AppColors.LIGHT_PRIMARY if is_light_theme() else AppColors.DARK_PRIMARY
 
 
-def build_theme() -> tuple[ft.Theme, ft.Theme]:
-    """(light_theme, dark_theme) — installed on the page at boot."""
+def ok() -> str:
+    """Status green with ≥3:1 contrast in the active palette."""
+    return AppColors.LIGHT_OK if is_light_theme() else AppColors.OK
 
-    def scheme(primary_c, surface_c, on_surface_c, on_surface_variant_c) -> ft.ColorScheme:
+
+def warn() -> str:
+    """Status red/warn with ≥3:1 contrast in the active palette."""
+    return AppColors.LIGHT_WARN if is_light_theme() else AppColors.WARN
+
+
+def accent() -> str:
+    """Accent with ≥3:1 contrast in the active palette."""
+    return AppColors.LIGHT_ACCENT if is_light_theme() else AppColors.ACCENT
+
+
+FONT_FAMILY = "Outfit"
+FONT_FILES = {"Outfit": "fonts/Outfit-Variable.ttf"}
+
+
+def build_theme() -> tuple[ft.Theme, ft.Theme]:
+    """(light_theme, dark_theme) — installed on the page at boot.
+
+    The ColorScheme carries enough roles that Material surfaces (SnackBars,
+    dialogs, the NavigationBar) never fall back to an uncontrolled inverse
+    color — the black-on-black snack trap from the CollabShell audit.
+    """
+
+    def scheme(primary_c, surface_c, on_surface_c, on_surface_variant_c, warn_c) -> ft.ColorScheme:
         return ft.ColorScheme(
             primary=primary_c,
+            on_primary="#FFFFFF",
+            primary_container=ft.Colors.with_opacity(0.14, primary_c),
+            on_primary_container=primary_c,
+            secondary=primary_c,
+            on_secondary="#FFFFFF",
             surface=surface_c,
             on_surface=on_surface_c,
+            surface_container=AppColors.LIGHT_SURFACE_ALT
+            if surface_c == AppColors.LIGHT_SURFACE
+            else AppColors.DARK_SURFACE_ALT,
             on_surface_variant=on_surface_variant_c,
-            error=AppColors.WARN,
+            error=warn_c,
+            on_error="#FFFFFF",
             outline=on_surface_variant_c,
         )
 
@@ -111,7 +152,9 @@ def build_theme() -> tuple[ft.Theme, ft.Theme]:
             AppColors.LIGHT_SURFACE,
             AppColors.LIGHT_TEXT,
             AppColors.LIGHT_TEXT_DIM,
-        )
+            AppColors.LIGHT_WARN,
+        ),
+        font_family=FONT_FAMILY,
     )
     dark = ft.Theme(
         color_scheme=scheme(
@@ -119,7 +162,9 @@ def build_theme() -> tuple[ft.Theme, ft.Theme]:
             AppColors.DARK_SURFACE,
             AppColors.DARK_TEXT,
             AppColors.DARK_TEXT_DIM,
-        )
+            AppColors.WARN,
+        ),
+        font_family=FONT_FAMILY,
     )
     return light, dark
 

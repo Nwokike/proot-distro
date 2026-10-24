@@ -30,33 +30,45 @@ def app_icon_svg() -> bytes:
 
 
 def build_brand_hero(tagline: str | None = None) -> ft.Control:
-    """The home hero: large centered brand icon (+ optional tagline)."""
+    """The home hero: large centered brand icon (+ optional tagline).
+
+    CollabShell's geometry: token spacers around an ICON_XXXL (80) icon,
+    tagline at FONT_SM. The tint needs SRC_IN to actually recolor the
+    artwork (color alone is not a guaranteed recolor in flet 1.0.4).
+    """
+    from core import tokens
+
     controls: list[ft.Control] = [
+        ft.Container(height=tokens.SPACE_LG),
         ft.Image(
             src=app_icon_svg(),
-            width=96,
-            height=96,
+            width=tokens.HERO_ICON_SIZE,
+            height=tokens.HERO_ICON_SIZE,
             fit=ft.BoxFit.CONTAIN,
             # Color-invert with the theme: white on dark, artwork's own
             # colors on light (the owner's requested behavior).
             color=None if theme.is_light_theme() else ft.Colors.WHITE,
-            error_content=ft.Icon(ft.Icons.TERMINAL, size=64),
+            color_blend_mode=ft.BlendMode.SRC_IN,
+            error_content=ft.Icon(ft.Icons.TERMINAL, size=tokens.ICON_HERO),
         ),
     ]
     if tagline:
-        controls.append(
-            ft.Text(
-                tagline,
-                size=12,
-                color=theme.text_dim(),
-                text_align=ft.TextAlign.CENTER,
-            )
+        controls.extend(
+            [
+                ft.Container(height=tokens.SPACE_SM),
+                ft.Text(
+                    tagline,
+                    size=tokens.FONT_SM,
+                    color=theme.text_dim(),
+                    text_align=ft.TextAlign.CENTER,
+                ),
+            ]
         )
+    controls.append(ft.Container(height=tokens.SPACE_XL))
     return ft.Container(
         content=ft.Column(
             controls=controls,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=8,
+            spacing=0,
         ),
-        padding=ft.Padding.only(top=16, bottom=8),
     )

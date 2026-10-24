@@ -95,9 +95,30 @@ def _open_update_dialog(page: ft.Page | None) -> None:
     show_update_dialog(page, core_state.update_data if core_state.update_available else None)
 
 
+def _open_help_dialog(page: ft.Page | None) -> None:
+    """The header Help slot: the capability hints in a dialog."""
+    if page is None:
+        return
+    from components.ui import hints_card
+
+    page.show_dialog(
+        ft.AlertDialog(
+            title=ft.Text("How this works", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
+            content=ft.Container(
+                content=hints_card(False, lambda _e: page.pop_dialog()),
+                width=tokens.DIALOG_MIN_WIDTH,
+            ),
+            actions=[ft.TextButton("Got it", on_click=lambda _e: page.pop_dialog())],
+        )
+    )
+
+
 def AppHeader(
     title: str, on_cycle_theme: Callable[[], None], page: ft.Page | None = None
 ) -> ft.Control:
+    # CollabShell's bar: one flat Row — title left, expand spacer, action
+    # cluster right. No scroll (a header never scrolls horizontally), no
+    # SPACE_BETWEEN (the spacer owns the alignment), token padding.
     return ft.Container(
         content=ft.Row(
             controls=[
@@ -108,19 +129,18 @@ def AppHeader(
                     color=theme.text(),
                 ),
                 ft.Container(expand=True),
-                ft.Row(
-                    controls=[
-                        version_chip(page),
-                        theme_button(on_cycle_theme),
-                    ],
-                    spacing=tokens.SPACE_XS,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                version_chip(page),
+                ft.IconButton(
+                    icon=ft.Icons.HELP_OUTLINE_ROUNDED,
+                    icon_size=tokens.ICON_MD,
+                    tooltip="How this works",
+                    on_click=lambda _e: _open_help_dialog(page),
                 ),
+                theme_button(on_cycle_theme),
             ],
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            scroll=ft.ScrollMode.AUTO,
+            spacing=tokens.SPACE_XS,
         ),
         bgcolor=theme.surface(),
-        padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+        padding=ft.Padding(tokens.SPACE_LG, tokens.SPACE_SM, tokens.SPACE_MD, tokens.SPACE_SM),
     )

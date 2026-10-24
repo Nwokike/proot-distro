@@ -21,6 +21,11 @@ def main(page) -> None:
 
     controller = AppController(page)
 
+    # Register the house font once (Outfit variable — all weights).
+    from core.theme import FONT_FILES
+
+    page.fonts = FONT_FILES
+
     def _on_close(_e=None) -> None:
         controller.session_manager.close_all()
 

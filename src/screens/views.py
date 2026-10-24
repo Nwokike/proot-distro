@@ -9,7 +9,7 @@ from pathlib import Path
 import flet as ft
 
 from components import card, empty_state, hints_card, probe_banner, section_header
-from components.app_header import AppHeader, theme_button
+from components.app_header import theme_button
 from components.banner_ad import pooled_banner_ad
 from components.brand_hero import build_brand_hero
 from core import theme, tokens
@@ -83,10 +83,13 @@ def DistroView() -> ft.Control:
         return ft.TextField(
             hint_text="docker image ref (e.g. debian:bookworm)",
             value=query,
-            text_size=12,
-            height=40,
+            text_size=tokens.FONT_SM,
+            height=44,
             expand=True,
-            border=ft.OutlineInputBorder(side=ft.BorderSide(1, theme.surface_alt())),
+            border=ft.OutlineInputBorder(
+                border_radius=tokens.RADIUS_MD,
+                side=ft.BorderSide(1, theme.surface_alt()),
+            ),
             on_change=lambda e: set_query(e.control.value),
             on_submit=lambda _e: _consent_install(),
         )
@@ -102,30 +105,38 @@ def DistroView() -> ft.Control:
 
         page.show_dialog(
             ft.AlertDialog(
-                title=ft.Text("Download and install"),
+                title=ft.Text(
+                    "Download and install", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
+                ),
                 content=ft.Column(
                     controls=[
-                        ft.Text(image, size=12, weight=ft.FontWeight.BOLD),
+                        ft.Text(image, size=tokens.FONT_SM, weight=ft.FontWeight.BOLD),
                         ft.Text(
                             "Download size is not known until the registry responds. "
                             "Typical base images: Alpine ~8 MB, Debian ~30 MB, "
                             "Ubuntu ~75 MB — an estimate, not a measurement.",
-                            size=11,
+                            size=tokens.FONT_XS,
                             color=theme.text_dim(),
                         ),
                         ft.Text(
                             "The download starts only after you tap Install. "
                             "Package downloads inside the container happen only "
                             "when you run commands.",
-                            size=11,
+                            size=tokens.FONT_XS,
                             color=theme.text_dim(),
                         ),
                     ],
-                    spacing=4,
+                    spacing=tokens.SPACE_XS,
                 ),
                 actions=[
                     ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
-                    ft.TextButton("Install", on_click=_confirm),
+                    ft.FilledButton(
+                        "Install",
+                        on_click=_confirm,
+                        style=ft.ButtonStyle(
+                            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
+                        ),
+                    ),
                 ],
             )
         )
@@ -151,16 +162,18 @@ def DistroView() -> ft.Control:
                 controls=[
                     ft.Text(
                         f"{label}{official}  ★{stars} ⤓{pulls}",
-                        size=12,
+                        size=tokens.FONT_SM,
                         color=theme.text(),
+                        weight=ft.FontWeight.W_500,
                     ),
-                    ft.Text(desc, size=10, color=theme.text_dim()),
+                    ft.Text(desc, size=tokens.FONT_XS, color=theme.text_dim()),
                 ],
-                spacing=0,
+                spacing=tokens.SPACE_XXS,
             ),
             on_click=_pick,
             ink=True,
-            padding=4,
+            padding=tokens.SPACE_XS,
+            border_radius=tokens.RADIUS_SM,
         )
 
     def _container_row(row: dict) -> ft.Control:
@@ -183,15 +196,33 @@ def DistroView() -> ft.Control:
                 page.run_task(methods.restore_container)
 
             return [
-                ft.PopupMenuItem(content=ft.Text("Rename"), on_click=_rename),
-                ft.PopupMenuItem(content=ft.Text("Backup to a file"), on_click=_backup),
-                ft.PopupMenuItem(content=ft.Text("Restore from an archive"), on_click=_restore),
-                ft.PopupMenuItem(content=ft.Text("Copy a path"), on_click=_copy),
-                ft.PopupMenuItem(content=ft.Text("Running sessions"), on_click=_sessions),
+                ft.PopupMenuItem(content=ft.Text("Rename", size=tokens.FONT_SM), on_click=_rename),
+                ft.PopupMenuItem(
+                    content=ft.Text("Backup to a file", size=tokens.FONT_SM), on_click=_backup
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Text("Restore from an archive", size=tokens.FONT_SM),
+                    on_click=_restore,
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Text("Copy a path", size=tokens.FONT_SM), on_click=_copy
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Text("Running sessions", size=tokens.FONT_SM), on_click=_sessions
+                ),
             ]
 
         def _ask_rename(container: str) -> None:
-            field = ft.TextField(hint_text="new name", value=container, text_size=12)
+            field = ft.TextField(
+                hint_text="new name",
+                value=container,
+                text_size=tokens.FONT_SM,
+                height=44,
+                border=ft.OutlineInputBorder(
+                    border_radius=tokens.RADIUS_MD,
+                    side=ft.BorderSide(1, theme.surface_alt()),
+                ),
+            )
 
             def _save(_e) -> None:
                 page.pop_dialog()
@@ -199,18 +230,42 @@ def DistroView() -> ft.Control:
 
             page.show_dialog(
                 ft.AlertDialog(
-                    title=ft.Text(f"Rename {container}"),
+                    title=ft.Text(
+                        f"Rename {container}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
+                    ),
                     content=field,
                     actions=[
                         ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
-                        ft.TextButton("Rename", on_click=_save),
+                        ft.FilledButton(
+                            "Rename",
+                            on_click=_save,
+                            style=ft.ButtonStyle(
+                                shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
+                            ),
+                        ),
                     ],
                 )
             )
 
         def _ask_copy(container: str) -> None:
-            source = ft.TextField(hint_text="source (container:/path)", text_size=12)
-            destination = ft.TextField(hint_text="destination (container:/path)", text_size=12)
+            source = ft.TextField(
+                hint_text="source (container:/path)",
+                text_size=tokens.FONT_SM,
+                height=44,
+                border=ft.OutlineInputBorder(
+                    border_radius=tokens.RADIUS_MD,
+                    side=ft.BorderSide(1, theme.surface_alt()),
+                ),
+            )
+            destination = ft.TextField(
+                hint_text="destination (container:/path)",
+                text_size=tokens.FONT_SM,
+                height=44,
+                border=ft.OutlineInputBorder(
+                    border_radius=tokens.RADIUS_MD,
+                    side=ft.BorderSide(1, theme.surface_alt()),
+                ),
+            )
 
             def _save(_e) -> None:
                 page.pop_dialog()
@@ -222,11 +277,17 @@ def DistroView() -> ft.Control:
 
             page.show_dialog(
                 ft.AlertDialog(
-                    title=ft.Text("Copy a path"),
-                    content=ft.Column(controls=[source, destination], spacing=4),
+                    title=ft.Text("Copy a path", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
+                    content=ft.Column(controls=[source, destination], spacing=tokens.SPACE_XS),
                     actions=[
                         ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
-                        ft.TextButton("Copy", on_click=_save),
+                        ft.FilledButton(
+                            "Copy",
+                            on_click=_save,
+                            style=ft.ButtonStyle(
+                                shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
+                            ),
+                        ),
                     ],
                 )
             )
@@ -238,14 +299,23 @@ def DistroView() -> ft.Control:
 
             page.show_dialog(
                 ft.AlertDialog(
-                    title=ft.Text(f"Remove {cname}?"),
+                    title=ft.Text(
+                        f"Remove {cname}?", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
+                    ),
                     content=ft.Text(
                         "The container's files are deleted. Cached downloads stay.",
-                        size=12,
+                        size=tokens.FONT_SM,
                     ),
                     actions=[
                         ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
-                        ft.TextButton("Remove", on_click=_yes),
+                        ft.FilledButton(
+                            "Remove",
+                            on_click=_yes,
+                            style=ft.ButtonStyle(
+                                shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
+                                bgcolor=theme.warn(),
+                            ),
+                        ),
                     ],
                 )
             )
@@ -257,15 +327,23 @@ def DistroView() -> ft.Control:
 
             page.show_dialog(
                 ft.AlertDialog(
-                    title=ft.Text(f"Reset {cname}?"),
+                    title=ft.Text(
+                        f"Reset {cname}?", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
+                    ),
                     content=ft.Text(
                         "The container is wiped and reinstalled from the cached "
                         "image — no re-download when the layers are cached.",
-                        size=12,
+                        size=tokens.FONT_SM,
                     ),
                     actions=[
                         ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
-                        ft.TextButton("Reset", on_click=_yes),
+                        ft.FilledButton(
+                            "Reset",
+                            on_click=_yes,
+                            style=ft.ButtonStyle(
+                                shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
+                            ),
+                        ),
                     ],
                 )
             )
@@ -275,42 +353,50 @@ def DistroView() -> ft.Control:
                 controls=[
                     ft.Column(
                         controls=[
-                            ft.Text(cname, size=13, weight=ft.FontWeight.BOLD, color=theme.text()),
+                            ft.Text(
+                                cname,
+                                size=tokens.FONT_MD,
+                                weight=ft.FontWeight.BOLD,
+                                color=theme.text(),
+                            ),
                             ft.Text(
                                 f"{row.get('image', '')} · "
                                 f"{_fmt_size(row.get('size_bytes', 0))} · "
                                 f"{row.get('arch', '')}",
-                                size=11,
+                                size=tokens.FONT_XS,
                                 color=theme.text_dim(),
                             ),
                         ],
                         spacing=0,
                         expand=True,
                     ),
-                    ft.Button(
+                    ft.FilledButton(
                         "Open shell",
                         on_click=lambda _e: page.run_task(methods.open_session, cname),
-                        height=32,
+                        height=36,
+                        style=ft.ButtonStyle(
+                            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
+                        ),
                     ),
-                    ft.Button("Reset", on_click=_reset, height=32),
-                    ft.Button("Remove", on_click=_remove, height=32),
+                    ft.Button("Reset", on_click=_reset, height=36),
+                    ft.Button("Remove", on_click=_remove, height=36),
                     ft.PopupMenuButton(
                         icon=ft.Icons.MORE_VERT,
-                        icon_size=18,
+                        icon_size=tokens.ICON_MD,
                         tooltip="More actions",
                         items=_menu_items(cname),
                     ),
                 ],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            bgcolor=theme.surface(),
-            padding=4,
-            border_radius=8,
+            bgcolor=theme.glass_bg(),
+            border=ft.Border.all(1, theme.glass_border()),
+            padding=tokens.SPACE_SM,
+            border_radius=tokens.RADIUS_MD,
         )
 
     controls: list[ft.Control] = [
         build_brand_hero("Linux on Android — no root, no Termux"),
-        AppHeader("Distros", lambda: page.run_task(methods.cycle_theme_mode), page=page),
         hints_card(st.hints_dismissed, lambda _e: page.run_task(methods.dismiss_hints)),
         section_header("Install"),
     ]
@@ -323,32 +409,42 @@ def DistroView() -> ft.Control:
                     ft.Row(
                         controls=[
                             _field(),
-                            ft.Button("Install", on_click=lambda _e: _consent_install(), height=40),
-                        ]
+                            ft.FilledButton(
+                                "Install",
+                                on_click=lambda _e: _consent_install(),
+                                height=44,
+                                style=ft.ButtonStyle(
+                                    shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
+                                ),
+                            ),
+                        ],
+                        spacing=tokens.SPACE_SM,
                     ),
                     ft.Row(
                         controls=[
                             ft.TextField(
                                 hint_text="name (optional)",
                                 value=name,
-                                width=150,
-                                text_size=12,
-                                height=40,
+                                width=160,
+                                text_size=tokens.FONT_SM,
+                                height=44,
                                 border=ft.OutlineInputBorder(
-                                    side=ft.BorderSide(1, theme.surface_alt())
+                                    border_radius=tokens.RADIUS_MD,
+                                    side=ft.BorderSide(1, theme.surface_alt()),
                                 ),
                                 on_change=lambda e: set_name(e.control.value),
                             ),
-                            ft.Button("Search", on_click=lambda _e: _search(), height=40),
-                        ]
+                            ft.Button("Search", on_click=lambda _e: _search(), height=44),
+                        ],
+                        spacing=tokens.SPACE_SM,
                     ),
-                    ft.Text(st.search_status, size=11, color=theme.text_dim()),
+                    ft.Text(st.search_status, size=tokens.FONT_XS, color=theme.text_dim()),
                     ft.Column(
                         controls=[_hit_row(hit) for hit in st.search_results[:12]],
-                        spacing=2,
+                        spacing=tokens.SPACE_XXS,
                     ),
                 ],
-                spacing=4,
+                spacing=tokens.SPACE_SM,
             )
         )
     )
@@ -359,11 +455,14 @@ def DistroView() -> ft.Control:
         progress = st.busy_note
     else:
         progress = ""
-    controls.append(ft.Text(progress, size=11, color=theme.AppColors.ACCENT))
+    if progress:
+        controls.append(ft.Text(progress, size=tokens.FONT_SM, color=theme.accent()))
 
     controls.append(section_header("Containers"))
     if st.containers:
-        controls.append(ft.Column(controls=[_container_row(r) for r in st.containers], spacing=4))
+        controls.append(
+            ft.Column(controls=[_container_row(r) for r in st.containers], spacing=tokens.SPACE_SM)
+        )
     else:
         controls.append(
             empty_state(
@@ -373,11 +472,15 @@ def DistroView() -> ft.Control:
             )
         )
     if st.data_note:
-        controls.append(ft.Text(st.data_note, size=10, color=theme.AppColors.WARN, selectable=True))
+        controls.append(
+            ft.Text(st.data_note, size=tokens.FONT_XS, color=theme.warn(), selectable=True)
+        )
 
     controls.append(pooled_banner_ad("distros-1", page))
-    controls.append(ft.Container(height=88))
-    return ft.Column(controls=controls, spacing=4, expand=True, scroll=ft.ScrollMode.AUTO)
+    controls.append(ft.Container(height=tokens.NAV_BAR_CLEARANCE))
+    return ft.Column(
+        controls=controls, spacing=tokens.SPACE_SM, expand=True, scroll=ft.ScrollMode.AUTO
+    )
 
 
 # ── settings ─────────────────────────────────────────────────────────────────
@@ -400,15 +503,24 @@ def SettingsView() -> ft.Control:
 
         page.show_dialog(
             ft.AlertDialog(
-                title=ft.Text("Clear cached downloads?"),
+                title=ft.Text(
+                    "Clear cached downloads?", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
+                ),
                 content=ft.Text(
                     "Removes the downloaded image layers. Installed containers "
                     "keep working; a later reinstall re-downloads.",
-                    size=12,
+                    size=tokens.FONT_SM,
                 ),
                 actions=[
                     ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
-                    ft.TextButton("Clear", on_click=_yes),
+                    ft.FilledButton(
+                        "Clear",
+                        on_click=_yes,
+                        style=ft.ButtonStyle(
+                            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
+                            bgcolor=theme.warn(),
+                        ),
+                    ),
                 ],
             )
         )
@@ -419,7 +531,9 @@ def SettingsView() -> ft.Control:
 
         page.show_dialog(
             ft.AlertDialog(
-                title=ft.Text("Open-source licenses"),
+                title=ft.Text(
+                    "Open-source licenses", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
+                ),
                 content=licenses_view(),
                 actions=[ft.TextButton("Close", on_click=_close)],
             )
@@ -429,7 +543,6 @@ def SettingsView() -> ft.Control:
 
     return ft.Column(
         controls=[
-            AppHeader("Settings", lambda: page.run_task(methods.cycle_theme_mode), page=page),
             section_header("Appearance"),
             card(
                 ft.Column(
@@ -462,15 +575,15 @@ def SettingsView() -> ft.Control:
                         ft.Text(
                             f"containers + cache: {_fmt_size(st.storage_bytes)}"
                             + (f" · {st.cached_count} cached image(s)" if st.cached_count else ""),
-                            size=12,
+                            size=tokens.FONT_SM,
                             color=theme.text_dim(),
                         ),
                         *(
                             [
                                 ft.Text(
                                     st.data_note,
-                                    size=10,
-                                    color=theme.AppColors.WARN,
+                                    size=tokens.FONT_XS,
+                                    color=theme.warn(),
                                     selectable=True,
                                 )
                             ]
@@ -482,11 +595,11 @@ def SettingsView() -> ft.Control:
                             "Package downloads happen inside your container, from "
                             "the distro's own mirrors, only when you run a command "
                             "or tap an update action.",
-                            size=10,
+                            size=tokens.FONT_XS,
                             color=theme.text_dim(),
                         ),
                     ],
-                    spacing=4,
+                    spacing=tokens.SPACE_XS,
                 )
             ),
             section_header("Docker Hub"),
@@ -497,22 +610,23 @@ def SettingsView() -> ft.Control:
                             hint_text="Docker Hub token (optional)",
                             value=token,
                             password=True,
-                            text_size=12,
-                            height=40,
+                            text_size=tokens.FONT_SM,
+                            height=44,
                             border=ft.OutlineInputBorder(
-                                side=ft.BorderSide(1, theme.surface_alt())
+                                border_radius=tokens.RADIUS_MD,
+                                side=ft.BorderSide(1, theme.surface_alt()),
                             ),
                             on_change=lambda e: set_token(e.control.value),
                         ),
                         ft.Text(
                             "Stored on this device only. It lifts you from the "
                             "anonymous pull limit to your account's limit.",
-                            size=10,
+                            size=tokens.FONT_XS,
                             color=theme.text_dim(),
                         ),
                         ft.TextButton("Save token", on_click=lambda _e: _save_token()),
                     ],
-                    spacing=4,
+                    spacing=tokens.SPACE_XS,
                 )
             ),
             section_header("About"),
@@ -520,27 +634,29 @@ def SettingsView() -> ft.Control:
                 ft.Column(
                     controls=[
                         ft.ListTile(
-                            title=ft.Text("Open-source licenses", size=13),
+                            title=ft.Text("Open-source licenses", size=tokens.FONT_MD),
                             on_click=_licenses,
                         ),
                         ft.ListTile(
-                            title=ft.Text("Privacy policy", size=13),
+                            title=ft.Text("Privacy policy", size=tokens.FONT_MD),
                             on_click=lambda _e: page.run_task(launch_url, PRIVACY_POLICY_URL, page),
                         ),
                         ft.ListTile(
-                            title=ft.Text("Privacy options", size=13),
-                            subtitle=ft.Text("Manage advertising consent preferences", size=10),
+                            title=ft.Text("Privacy options", size=tokens.FONT_MD),
+                            subtitle=ft.Text(
+                                "Manage advertising consent preferences", size=tokens.FONT_XS
+                            ),
                             on_click=lambda _e: page.run_task(methods.show_privacy_options),
                         ),
                         ft.Text(
                             "Unofficial Flet-based Android client. Not affiliated "
                             "with the Termux project.",
-                            size=10,
+                            size=tokens.FONT_XS,
                             color=theme.text_dim(),
                         ),
                         ft.Text(
                             f"Runtime probe: {st.probe_summary or '—'}",
-                            size=10,
+                            size=tokens.FONT_XS,
                             color=theme.text_dim(),
                         ),
                         ft.TextButton(
@@ -548,13 +664,13 @@ def SettingsView() -> ft.Control:
                             on_click=lambda _e: page.run_task(methods.check_probe),
                         ),
                     ],
-                    spacing=2,
+                    spacing=tokens.SPACE_XXS,
                 )
             ),
             pooled_banner_ad("settings-1", page),
-            ft.Container(height=88),
+            ft.Container(height=tokens.NAV_BAR_CLEARANCE),
         ],
-        spacing=4,
+        spacing=tokens.SPACE_SM,
         expand=True,
         scroll=ft.ScrollMode.AUTO,
     )

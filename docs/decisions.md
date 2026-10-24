@@ -189,3 +189,39 @@ Exit state: 79 tests green (was 53; +26 regression tests), ruff clean,
 `flet run` smoke clean (session starts, consent gate logs, feed check silent).
 Remaining R1 exit step: the owner's device run from a CI APK (onboarding →
 install debian:bookworm → open shell → SEE OUTPUT → type → backup → re-check).
+
+## D-019 · 2026-10-24 · Milestone R2 executed — CollabShell design parity & house design system
+
+Following the owner's design mandate, R2 brings UI parity with CollabShell
+while integrating DDGS house polish (11pt type floor, 8-pt grid, Outfit typeface):
+
+1. **Fixed shell-level header:** `AppHeader` moved out of the scrolling view
+   columns to the `AppShell` root, directly beneath `ft.SafeArea`. Title derives
+   dynamically from active tab; header bar stays pinned while content scrolls.
+   Suppressed while an active terminal session owns the screen.
+2. **NavigationBar isolation:** `NavigationBar` rendered conditionally
+   (`if entry is None and not fullscreen:`), resolving the tab-trapping bug and
+   granting the terminal true full-screen space (~80px reclaimed on mobile).
+3. **Brand Hero in home body:** Rendered as the top child of `DistroView`,
+   centered, 80px icon (`tokens.HERO_ICON_SIZE`, matching CollabShell's
+   `ICON_XXXL`), `color_blend_mode=ft.BlendMode.SRC_IN`, `FONT_SM` tagline, token
+   spacers. The logo is strictly absent from the header bar.
+4. **House typography & spacing tokens:** 11pt legibility floor enforced
+   (`FONT_XXS/XS=11, SM=12, MD=14, LG=16, XL=20, XXL=24, HERO=32`), 8-pt spacing
+   grid (`4/8/12/16/24/32/40`). Outfit variable font bundled in `src/assets/fonts/`
+   under SIL OFL and wired into both `ft.Theme`s.
+5. **Surfaces & contrast:** `DARK_GLASS_BG` set to `#26263A` restoring card
+   elevation over `#1E1E2E` surface. Theme-aware `theme.ok()`, `theme.warn()`,
+   `theme.accent()` provide ≥3:1 contrast in both light and dark modes. Central
+   `components/snack.py` provides readable, FLOATING, backstopped SnackBars.
+6. **Terminal chrome parity:** Flat full-width header (`ARROW_BACK_ROUNDED`,
+   `status_dot` + `ProgressRing(14)` connecting spinner, search/close/fullscreen
+   buttons); quick commands append `\n` to execute immediately; default
+   `show_search=False` with header toggle; dead `bottom_inset` parsing purged;
+   `SessionSelectorView` rows upgraded to full-surface interactive glass cards.
+7. **Onboarding polish:** Full-screen `GestureDetector(expand=True)` eliminates
+   swipe dead zones; 120px circular icon backdrops with 64px glyphs; animated
+   width-morphing dots (200ms `EASE_OUT`); `error_content` fallback on brand icon.
+
+Exit state: 85 tests green (+6 design-parity guard tests), ruff clean, `flet run`
+smoke clean.

@@ -58,6 +58,7 @@ def test_views_construct_in_renderer_context():
 def test_brand_hero_builds_and_tints_per_theme():
     """The hero icon lives in the home body (CollabShell pattern)."""
     from components.brand_hero import app_icon_svg, build_brand_hero
+    from core import tokens
     from core.state import state
 
     svg = app_icon_svg()
@@ -66,14 +67,16 @@ def test_brand_hero_builds_and_tints_per_theme():
     state.theme_mode = "dark"
     dark = build_brand_hero("Linux on Android — no root, no Termux")
     assert isinstance(dark, ft.Container)
-    icon = dark.content.controls[0]
-    assert isinstance(icon, ft.Image) and icon.color == ft.Colors.WHITE
-    assert icon.width == 96  # hero-sized, not a toolbar glyph
+    images = [c for c in _walk(dark) if isinstance(c, ft.Image)]
+    assert images, "brand hero must contain an Image"
+    icon = images[0]
+    assert icon.color == ft.Colors.WHITE
+    assert icon.width == tokens.HERO_ICON_SIZE  # CollabShell's ICON_XXXL (80px)
 
     state.theme_mode = "light"
     light = build_brand_hero()
-    icon = light.content.controls[0]
-    assert icon.color is None  # artwork keeps its own colors on light
+    images_light = [c for c in _walk(light) if isinstance(c, ft.Image)]
+    assert images_light[0].color is None  # artwork keeps its own colors on light
 
 
 def test_white_icon_variant_is_gone():
@@ -254,3 +257,57 @@ def test_update_dialog_recheck_button_schedules_the_coroutine():
     assert scheduled, "the button must page.run_task(...) — not call the coroutine"
     handler, _args = scheduled[0]
     assert inspect.iscoroutinefunction(handler)
+
+
+# ── CollabShell design-parity guards (Milestone R2) ──────────────────────────
+
+
+def test_shell_renders_header_outside_scroll_and_in_safe_area():
+    """Header must be fixed at shell level inside SafeArea, never inside view scroll columns."""
+    source = (ROOT / "src" / "app_shell.py").read_text(encoding="utf-8")
+    assert "ft.SafeArea(" in source
+    assert "AppHeader(" in source
+    # Must derive title from active tab
+    assert "_TABS[active_tab]" in source
+
+
+def test_views_contain_no_app_header():
+    """In-view AppHeader calls caused header inversion and scrolling away; must remain removed."""
+    source = (ROOT / "src" / "screens" / "views.py").read_text(encoding="utf-8")
+    assert "AppHeader(" not in source
+
+
+def test_navigation_bar_hidden_during_session():
+    """NavigationBar must step aside while a session is open or in full screen."""
+    source = (ROOT / "src" / "app_shell.py").read_text(encoding="utf-8")
+    assert "if entry is None and not fullscreen:" in source
+
+
+def test_quick_commands_end_with_newline():
+    """Quick commands must append newline so tapping them executes immediately."""
+    from screens import terminal_view
+
+    for label, cmd in terminal_view._QUICK_COMMANDS:
+        if label.strip() in ("ls", "top", "clear", "exit"):
+            assert cmd.endswith("\n"), f"{label!r} command must end with newline"
+
+
+def test_tokens_enforce_legibility_floor():
+    """No user-facing typography token below 11pt (house legibility floor)."""
+    from core import tokens
+
+    for name in dir(tokens):
+        if name.startswith("FONT_"):
+            val = getattr(tokens, name)
+            if isinstance(val, (int, float)):
+                assert val >= 11, f"token {name}={val} is below the 11pt legibility floor"
+
+
+def test_theme_provides_readable_status_colors_and_outfit_family():
+    from core import theme
+
+    assert theme.FONT_FAMILY == "Outfit"
+    assert "Outfit" in theme.FONT_FILES
+    assert theme.ok().startswith("#")
+    assert theme.warn().startswith("#")
+    assert theme.accent().startswith("#")

@@ -62,7 +62,7 @@ def status_dot(is_running: bool = True, size: int = tokens.STATUS_DOT) -> ft.Con
         width=size,
         height=size,
         border_radius=tokens.RADIUS_PILL,
-        bgcolor=theme.AppColors.OK if is_running else theme.text_dim(),
+        bgcolor=theme.ok() if is_running else theme.text_dim(),
     )
 
 
