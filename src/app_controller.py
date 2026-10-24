@@ -367,7 +367,11 @@ class AppController:
         """Silent background check; a newer build flips the header chip."""
         from services.update_service import check_for_update
 
-        data = await check_for_update()
+        try:
+            data = await check_for_update()
+        except Exception as exc:
+            logger.debug("Startup update check skipped: %s", exc)
+            return
         if not data:
             return
         state.update_available = True

@@ -1,20 +1,23 @@
 """Update service — checks the release feed and reports a newer build.
 
 Sherlock's shape with ffmpeg's hardening: https-only URLs, length caps,
-silent failure, and a comparison by build number OR version. Delivery is
-browser-based: the dialog opens the release page; nothing is downloaded
-in-app.
+retry with backoff over transient network failures, and comparison by
+build number OR version. Delivery is browser-based: the dialog opens
+the release page; nothing is downloaded in-app.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
+from urllib.parse import urlsplit
 
 from core.constants import (
     APP_BUILD_NUMBER,
     APP_VERSION,
     GITHUB_RELEASES_URL,
+    PLAY_STORE_URL,
     UPDATE_CONFIG_URL,
 )
 
@@ -31,8 +34,6 @@ def is_allowed_launch_url(url: str) -> bool:
     thing that actually opens the URL) reads host `evil.com` — without the
     normalization the allow-list is bypassable.
     """
-    from urllib.parse import urlsplit
-
     if not isinstance(url, str) or not url:
         return False
     try:
@@ -58,11 +59,17 @@ def _safe_url(value, default: str | None = None) -> str | None:
 
 
 def _release_tuple(version) -> tuple[int, ...] | None:
-    head = re.split(r"[-+]", str(version or "").strip(), maxsplit=1)[0]
-    parts = head.split(".")
-    if not parts or not all(part.isdigit() for part in parts):
+    if not version:
         return None
-    return tuple(int(part) for part in parts)
+    v = str(version).strip().lstrip("vV")
+    head = re.split(r"[-+a-zA-Z]", v, maxsplit=1)[0]
+    parts = head.split(".")
+    if not parts or not any(p.isdigit() for p in parts):
+        return None
+    nums = [int(p) for p in parts if p.isdigit()]
+    while len(nums) < 3:
+        nums.append(0)
+    return tuple(nums)
 
 
 def is_newer(remote_build, remote_version=None) -> bool:
@@ -77,36 +84,72 @@ def is_newer(remote_build, remote_version=None) -> bool:
     return bool(remote and local and remote > local)
 
 
-async def check_for_update(config_url: str = UPDATE_CONFIG_URL) -> dict | None:
-    """Return the update info when the feed is ahead; None otherwise."""
-    try:
-        import httpx
+async def check_for_update(
+    config_url: str = UPDATE_CONFIG_URL,
+    client: object | None = None,
+) -> dict | None:
+    """Return the update info when the feed is ahead; None when up to date.
 
-        async with httpx.AsyncClient(timeout=4.0, follow_redirects=True) as client:
-            response = await client.get(config_url)
-            if response.status_code != 200:
-                logger.debug("Update check returned %s", response.status_code)
-                return None
-            data = response.json()
-        if not isinstance(data, dict):
-            return None
+    Raises RuntimeError on network failure so the caller knows the check failed.
+    """
+    import httpx
 
-        server_build = data.get("build_number") or 0
-        if not is_newer(server_build, data.get("version")):
-            return None
+    timeout = httpx.Timeout(5.0, connect=4.0)
 
-        raw_type = data.get("type")
-        kind = raw_type if raw_type in ("update", "announcement") else "update"
-        return {
-            "version": _safe_text(data.get("version"), 50, APP_VERSION),
-            "build_number": server_build,
-            "type": kind,
-            "title": _safe_text(data.get("title"), 500),
-            "release_notes": _safe_text(data.get("release_notes"), 10000),
-            "mandatory": data.get("mandatory") is True,
-            "github_url": _safe_url(data.get("github_url"), GITHUB_RELEASES_URL),
-            "playstore_url": _safe_url(data.get("playstore_url")),
-        }
-    except Exception as exc:
-        logger.debug("Update check failed (expected if offline): %s", exc)
+    async def _fetch(c: httpx.AsyncClient) -> httpx.Response:
+        last_exc: Exception | None = None
+        for attempt in range(2):
+            try:
+                resp = await c.get(config_url)
+                if resp.status_code >= 500 and attempt == 0:
+                    await asyncio.sleep(1.0)
+                    continue
+                return resp
+            except (httpx.TimeoutException, httpx.NetworkError) as exc:
+                last_exc = exc
+                if attempt == 0:
+                    await asyncio.sleep(1.0)
+                    continue
+                raise RuntimeError(f"Network error: {exc}") from exc
+        if last_exc is not None:
+            raise RuntimeError(f"Network error: {last_exc}") from last_exc
+        raise RuntimeError("Request failed")
+
+    if client is not None:
+        response = await _fetch(client)  # type: ignore[arg-type]
+    else:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as local_c:
+            response = await _fetch(local_c)
+
+    if response.status_code == 404:
+        # Feed not published yet — clean up-to-date fallback.
         return None
+    if response.status_code != 200:
+        logger.debug("Update check returned HTTP %s", response.status_code)
+        return None
+
+    try:
+        data = response.json()
+    except Exception as exc:
+        logger.warning("Failed to parse update feed JSON: %s", exc)
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    server_build = data.get("build_number") or 0
+    if not is_newer(server_build, data.get("version")):
+        return None
+
+    raw_type = data.get("type")
+    kind = raw_type if raw_type in ("update", "announcement") else "update"
+    return {
+        "version": _safe_text(data.get("version"), 50, APP_VERSION),
+        "build_number": server_build,
+        "type": kind,
+        "title": _safe_text(data.get("title"), 500),
+        "release_notes": _safe_text(data.get("release_notes"), 10000),
+        "mandatory": data.get("mandatory") is True,
+        "github_url": _safe_url(data.get("github_url"), GITHUB_RELEASES_URL),
+        "playstore_url": _safe_url(data.get("playstore_url"), PLAY_STORE_URL),
+    }

@@ -288,3 +288,32 @@ through modern, state-driven UI without monkeypatching or forks (D-001):
 
 Exit state: 93 tests green (+2 surface tests), ruff clean, `flet run` smoke
 clean.
+
+## D-022 · 2026-10-24 · Milestone R5 executed — Updates, Sherlock AdService verbatim port & telemetry
+
+Milestone R5 delivers Sherlock's exact ad lifecycle and telemetry architecture alongside an enterprise-grade update service:
+
+1. **Sherlock AdService verbatim port:** `src/services/ad_service.py` matches
+   `Sherlock/src/services/ad_service.py` architecture: explicit `USE_TEST_IDS = True` flag,
+   separate test and placeholder production IDs (`INTERSTITIAL_ID_ANDROID_PROD = "ca-app-pub-5679949845754640/2758003779"`),
+   30s minimum interval recorded at intent, strong reference holding in `_shown_interstitial`
+   to prevent premature Flet GC release mid-display, auto-restock in `finally`, and
+   honest status reporting from `show_privacy_options()`.
+2. **Paid-Event Telemetry:** Added `on_paid` telemetry logging in `src/components/banner_ad.py`
+   capturing AdMob revenue micros and currency codes.
+3. **Robust Update Service with Retries:** Rebuilt `src/services/update_service.py` with
+   an exponential backoff retry loop (attempting up to 2 times on `httpx.TimeoutException`
+   or transient 5xx HTTP codes), per-phase timeouts (`connect=4.0s`, total 5.0s),
+   version string tuple normalization (`_release_tuple`), and distinct error vs up-to-date
+   handling.
+4. **Update Dialog & App Controller Integration:** `src/components/update_dialog.py`
+   distinguishes network failures ("Update check failed: ...") from verified up-to-date state
+   rather than showing a misleading success message when offline. `src/app_controller.py`
+   silently catches background startup failures.
+5. **MockTransport Test Suite:** Replaced mock-free allow-list checks in
+   `tests/test_update_service.py` with full `httpx.MockTransport` test suite covering
+   newer version detection, up-to-date resolution, 404 fallback, transient 500 retry
+   success, and permanent network error raising.
+
+Exit state: 99 tests green (+6 update service tests), ruff clean, `flet run` smoke clean.
+

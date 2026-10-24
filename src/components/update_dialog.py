@@ -155,14 +155,19 @@ def _update_actions(page: ft.Page, data: dict) -> list[ft.Control]:
 
 async def _check_again(page: ft.Page) -> None:
     """Re-check live; morph the dialog when the feed moved."""
+    from components.snack import show_snack
     from services.update_service import check_for_update
 
     try:
         page.pop_dialog()
     except Exception as exc:
         logger.debug("re-check with no dialog open: %s", exc)
-    result = await check_for_update()
+    try:
+        result = await check_for_update()
+    except Exception as exc:
+        show_snack(page, f"Update check failed: {exc}")
+        return
     if result:
         show_update_dialog(page, result)
     else:
-        page.show_dialog(ft.SnackBar(ft.Text(f"{APP_NAME} v{APP_VERSION} is up to date")))
+        show_snack(page, f"{APP_NAME} v{APP_VERSION} is up to date")

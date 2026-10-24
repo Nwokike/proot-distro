@@ -18,7 +18,7 @@ from core import theme
 logger = logging.getLogger(__name__)
 
 BANNER_ID_ANDROID_TEST = "ca-app-pub-3940256099942544/9214589741"
-BANNER_ID_ANDROID_PROD = "ca-app-pub-3940256099942544/9214589741"
+BANNER_ID_ANDROID_PROD = "ca-app-pub-5679949845754640/3284646274"
 USE_TEST_IDS = True
 
 _BANNER_POOL: dict[str, Control] = {}
@@ -72,12 +72,18 @@ def build_banner_ad(page: ft.Page | None = None) -> Control:
     try:
         import flet_ads as fta
 
+        def _on_paid(e):
+            val = getattr(e, "value", None)
+            currency = getattr(e, "currency_code", "USD")
+            logger.info("BannerAd paid event: %s %s", val, currency)
+
         ad = fta.BannerAd(
             unit_id=banner_unit_id(),
             width=320,
             height=50,
             on_load=lambda _e: logger.info("BannerAd loaded"),
             on_error=lambda e: logger.warning("BannerAd load error: %s", getattr(e, "data", e)),
+            on_paid=_on_paid,
         )
     except Exception as e:
         logger.warning("Failed to load BannerAd: %s", e)
