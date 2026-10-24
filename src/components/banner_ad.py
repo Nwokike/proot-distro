@@ -29,10 +29,16 @@ def banner_unit_id() -> str:
 
 
 def pooled_banner_ad(slot: str, page: ft.Page | None = None) -> Control:
-    ad = _BANNER_POOL.get(slot)
+    # The consent verdict is part of the cache key: a slot pooled as a
+    # pre-consent placeholder must be rebuilt once consent lands (and vice
+    # versa), or the pool would serve the stale shape forever.
+    from core.state import state
+
+    key = f"{slot}:{int(state.can_request_ads)}"
+    ad = _BANNER_POOL.get(key)
     if ad is None:
         ad = build_banner_ad(page)
-        _BANNER_POOL[slot] = ad
+        _BANNER_POOL[key] = ad
     return ad
 
 
@@ -54,6 +60,13 @@ def build_banner_ad(page: ft.Page | None = None) -> Control:
         if not page.platform.is_mobile() or page.web:
             return ft.Container(width=0, height=0)
     except Exception:
+        return ft.Container(width=0, height=0)
+
+    # Consent gate: the banner must never request an ad before (or without)
+    # a UMP verdict — this is the same gate the interstitial path uses.
+    from core.state import state
+
+    if not state.can_request_ads:
         return ft.Container(width=0, height=0)
 
     try:

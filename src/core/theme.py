@@ -130,3 +130,27 @@ def glass_bg() -> str:
 
 def glass_border() -> str:
     return AppColors.LIGHT_GLASS_BORDER if is_light_theme() else AppColors.DARK_GLASS_BORDER
+
+
+def apply_theme_mode(page: ft.Page, mode: str) -> None:
+    """Write one theme mode to the page (the single mapping site)."""
+    mapping = {
+        "light": ft.ThemeMode.LIGHT,
+        "dark": ft.ThemeMode.DARK,
+        "system": ft.ThemeMode.SYSTEM,
+    }
+    page.theme_mode = mapping.get(mode, ft.ThemeMode.SYSTEM)
+
+
+def follow_platform_brightness(page: ft.Page) -> bool:
+    """Re-resolve "system" mode after a platform brightness change.
+
+    Returns True when the mode is system and the palette was re-synced.
+    """
+    from core.state import state as _state
+
+    if _state.theme_mode != "system":
+        return False
+    _state.theme_revision += 1  # subscribed views re-render with the new palette
+    apply_theme_mode(page, "light" if is_light_theme(page) else "dark")
+    return True

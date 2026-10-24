@@ -458,7 +458,7 @@ Python, with the device truth still gated by CI-built APKs per D-005.
 
 ## 7. Verification — file:line index + unverified items
 
-`SP = C:\Users\nwoki\.zcode\workspace\default\proot-distro-flet\.venv\Lib\site-packages\flet\`.
+`SP = /home/maikel/.zcode/workspace/default/proot-distro-flet/.venv/Lib/site-packages/flet/`.
 All `SP/...` paths below were read; all signatures marked *(live)* came from
 `inspect.signature` via the venv python; enum members marked *(live)* from
 member iteration.

@@ -205,3 +205,52 @@ def test_licenses_view_carries_real_text():
     bodies = [t.value for t in _walk(view) if isinstance(t, ft.Text) and isinstance(t.value, str)]
     assert "(text missing)" not in "\n".join(bodies)
     assert any("GNU GENERAL PUBLIC LICENSE" in body for body in bodies)
+
+
+# ── shell subscription + dialog wiring regressions (swarm P0s) ──────────────
+
+
+def test_app_shell_subscribes_to_the_observable_state():
+    """The exact regression of commit 4ad4593: AppShell read state without
+    use_state(state), so onboarding dead-ended and shell open/close never
+    re-rendered. Observable reactivity is subscription-based, not read-based
+    (flet/components/observable.py) — the hook must stay."""
+    root = Path(__file__).resolve().parents[1]
+    source = (root / "src" / "app_shell.py").read_text(encoding="utf-8")
+    assert "ft.use_state(state)" in source, "AppShell must subscribe: st, _ = ft.use_state(state)"
+    # And it must actually read through the subscription handle.
+    assert "st.onboarding_done" in source
+    assert "st.active_session" in source
+
+
+def test_update_dialog_recheck_button_schedules_the_coroutine():
+    """The Check-for-Updates button must run_task the coroutine — a sync
+    lambda returning it is silently discarded by Flet (the old dead button)."""
+    import inspect
+    import types
+
+    from components import update_dialog
+
+    scheduled: list[tuple[object, tuple]] = []
+
+    class _Page:
+        web = False
+        platform = types.SimpleNamespace(is_mobile=lambda: False)
+
+        def show_dialog(self, dialog):
+            self.dialog = dialog
+
+        def pop_dialog(self):
+            return None
+
+        def run_task(self, handler, *args):
+            scheduled.append((handler, args))
+
+    page = _Page()
+    update_dialog.show_update_dialog(page, None)
+    actions = list(getattr(page.dialog, "actions", []))
+    recheck = next(b for b in actions if getattr(b, "content", "") == "Check for Updates")
+    recheck.on_click(None)
+    assert scheduled, "the button must page.run_task(...) — not call the coroutine"
+    handler, _args = scheduled[0]
+    assert inspect.iscoroutinefunction(handler)

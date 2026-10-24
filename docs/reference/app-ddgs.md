@@ -1,6 +1,6 @@
 # app-ddgs.md — DDGS
 
-Verified 2026-10-16 against `C:\Users\nwoki\.zcode\workspace\default\DDGS`.
+Verified 2026-10-16 against `/home/maikel/.zcode/workspace/default/DDGS`.
 
 ## Identity
 `DDGS` (no Kiri prefix), Python 3.12. Wraps `ddgs>=9.16.0` (locked 9.16.0) + `kani[openai]` (fetched live router; never vendored).

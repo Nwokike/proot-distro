@@ -28,6 +28,15 @@ def main(page) -> None:
     # shells (with their scrollback) must survive the resume.
     page.on_disconnect = lambda _e=None: None
     page.on_close = _on_close
+
+    def _on_brightness(_e=None) -> None:
+        # "System" mode must follow a runtime dark/light flip too, not just
+        # the palette the app booted with.
+        from core import theme
+
+        theme.follow_platform_brightness(page)
+
+    page.on_platform_brightness_change = _on_brightness
     atexit.register(controller.session_manager.close_all)
     page.run_task(controller.init)
 

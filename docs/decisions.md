@@ -134,3 +134,58 @@ M4 shipped (owner-approved plan: full terminal parity, the CollabShell header, t
 
 **Deferred to M5:** the production AdMob id + the CI production-id guard, the structured
 dual-mode (O-4), the image bakery/push (`command_build`), and the store/release plumbing.
+
+## D-018 · 2026-10-24 · The full-corpus swarm audit + Milestone R1 executed
+
+The owner ordered a complete re-verification of the app and docs (96 reports in
+`docs/swarm/`: 47 dependency-utilization, 43 file audits, 4 design-parity incl.
+the owner-directed DDGS/CollabShell comparison, dependency tree) and a full
+milestone plan to 100% + publication with no MVP scoping (`docs/roadmap.md`,
+R1–R9). R1 (Restore & Unbreak) then shipped:
+
+1. **Working-tree restorations:** LICENSES/, src/LICENSES/, the compliance docs,
+   runbook, testing-findings, roadmap-synthesis, check_elf_alignment.py,
+   generate_third_party_sources.py, THIRD-PARTY-SOURCES.md — all were deleted
+   uncommitted (two license tests + CI steps + the wheel builder broke).
+2. **AppShell re-subscribes to state** (swarm P0): commit 4ad4593 removed
+   `use_state(state)`; onboarding dead-ended and Open-shell never re-rendered.
+   Observable reactivity is subscription-based — the hook stays, pinned by a
+   source guard test.
+3. **`get_proot_cmd` rewritten (swarm P0):** call `command_login` directly with
+   a full login namespace (cli.main's SIGQUIT handler is main-thread-only;
+   upstream prints via `sys.stdout.buffer`, which io.StringIO lacks). A
+   `.buffer`-carrying stdout stand-in + module lock; unmocked integration test
+   runs the real upstream path against a fake container (both historical
+   failures now impossible to reintroduce silently).
+4. **Live PTY output forwarded** (swarm P0): `SessionManager._on_bytes` now
+   feeds scrollback AND `mt.send_bytes`; pre-mount bytes still arrive via
+   replay (pinned by test).
+5. **Update-dialog re-check fixed** (swarm P0): `page.run_task(_check_again,
+   page)` — a sync lambda's coroutine return is discarded by Flet.
+6. **Launch allow-list hardened** (swarm P1, security): backslash normalization
+   before urlsplit (`evil.com\@github.com` split-brain closed), tested.
+7. **Ads consent-gated everywhere (partial; full Sherlock parity is R5):** UMP
+   failure now disables ads (was: default-allow) and is surfaced via
+   `state.data_note`; banners gate on `state.can_request_ads` and the banner
+   pool keys on the verdict; interstitial interval consumed only on a
+   successful show.
+8. **Backup fixed on Android:** stage the tar in app storage, then
+   `save_file(..., src_bytes=...)` — save_file without bytes raises on mobile.
+9. **P1 batch:** license texts full (no 6000-char cut) with `errors="replace"`;
+   `notes_for` newest-by-version-key (stdlib-only; packaging is dev-only);
+   hints dismissal persisted; system-theme follows platform brightness flips
+   (single mapping site `theme.apply_theme_mode`); CI version compare via
+   `packaging.version.Version` in the identity script; grp shim raises
+   KeyError for unnamed gids (bionic parity — upstream skips them);
+   `_f2fs_probe` fully guarded; `_LineTee` captures as well as forwards;
+   `S110` silent except now logs; noop default accepts any arity; Play URL
+   fallback; `dismiss_hints` on the controller bridge.
+
+Owner ruling recorded for R5: **ads exactly as Sherlock's AdService** (port
+`Sherlock/src/services/ad_service.py` behavior verbatim; divergences need a
+decision entry).
+
+Exit state: 79 tests green (was 53; +26 regression tests), ruff clean,
+`flet run` smoke clean (session starts, consent gate logs, feed check silent).
+Remaining R1 exit step: the owner's device run from a CI APK (onboarding →
+install debian:bookworm → open shell → SEE OUTPUT → type → backup → re-check).

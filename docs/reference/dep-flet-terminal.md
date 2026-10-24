@@ -1,6 +1,6 @@
 # dep-flet-terminal.md — flet-terminal 0.3.9 (wheel facts + trio comparison + refactor blueprint)
 
-Verified 2026-10-16 against the INSTALLED wheel (R5 study) and the repo clone `C:\Users\nwoki\.zcode\workspace\default\flet-terminal` + sibling extension repos (trio study). Owner: Onyeka Nwokike; MIT (flutter-side LICENSE only). This file is M1's entire basis.
+Verified 2026-10-16 against the INSTALLED wheel (R5 study) and the repo clone `/home/maikel/.zcode/workspace/default/flet-terminal` + sibling extension repos (trio study). Owner: Onyeka Nwokike; MIT (flutter-side LICENSE only). This file is M1's entire basis.
 
 ## Shipped wheel facts (what the app gets)
 - `Requires-Dist: flet>=1.0.1`; **`Requires-Python: >=3.14`** (stricter than flet's >=3.10); **NO license metadata in METADATA**.

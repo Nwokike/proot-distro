@@ -28,18 +28,21 @@ _TABS = (
 )
 
 
-def _session_entry(controller) -> object | None:
-    if controller is None:
+def _session_entry(controller, active_container: str | None) -> object | None:
+    if controller is None or not active_container:
         return None
     manager = getattr(controller, "session_manager", None)
-    container = state.active_session
-    if manager is None or not container:
+    if manager is None:
         return None
-    return manager.entries.get(container)
+    return manager.entries.get(active_container)
 
 
 @ft.component
 def AppShell() -> ft.Control:
+    # Subscribe to the observable state: attribute reads alone do NOT
+    # re-render a component — without use_state(state) the onboarding deck
+    # dead-ends on first run and shell open/close never swaps the tree.
+    st, _ = ft.use_state(state)
     page = ft.context.page
     active_tab, set_active_tab = ft.use_state(TAB_DISTRO)
     controller = getattr(page, "_controller", None)
@@ -47,10 +50,10 @@ def AppShell() -> ft.Control:
     def _on_change(e):
         set_active_tab(int(e.data))
 
-    if not state.onboarding_done:
+    if not st.onboarding_done:
         return OnboardingView()
 
-    entry = _session_entry(controller)
+    entry = _session_entry(controller, st.active_session)
     if entry is not None:
         body = TerminalView(entry)
     elif active_tab == TAB_DISTRO:

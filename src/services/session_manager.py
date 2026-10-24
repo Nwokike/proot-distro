@@ -67,7 +67,13 @@ class SessionManager:
         env, argv = session_service.session_argv(container)
 
         def _on_bytes(data: bytes) -> None:
+            # Record for replay-on-mount AND forward live — without the
+            # send_bytes call the terminal renders nothing after mount (the
+            # PTY bytes only ever reached the scrollback deque).
             entry.feed(data)
+            mt = entry.mt
+            if mt is not None:
+                mt.send_bytes(data)
 
         def _on_exit(returncode: int | None) -> None:
             entry.ready = False

@@ -1,6 +1,6 @@
 # app-ffmpeg.md — FFmpeg Lite (native-shipment reference)
 
-Verified 2026-10-16 against `C:\Users\nwoki\.zcode\workspace\default\ffmpeg`. **The closest sibling to this app** because it ships native code through the same Forge pipeline.
+Verified 2026-10-16 against `/home/maikel/.zcode/workspace/default/ffmpeg`. **The closest sibling to this app** because it ships native code through the same Forge pipeline.
 
 ## Identity
 "FFmpeg Lite" v1.0.0 build 1, bundle `ng.kiri.ffmpeg`. Wraps **PyAV `av==18.1.0` → FFmpeg 8** via the Forge-built `flet-libffmpeg` wheel; flet family pinned exactly (`flet==flet-ads==flet-audio==...==1.0.4`) with the reason in-comment: "audited against one exact Flet/PyAV wire contract — a minor framework release can change component constructors and event semantics".

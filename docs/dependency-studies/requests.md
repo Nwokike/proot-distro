@@ -1,7 +1,7 @@
 # requests 2.34.2 — exhaustive API reference
 
 Verified 2026-10-16 against the INSTALLED source in `.venv/Lib/site-packages/requests`
-(`C:\Users\nwoki\.zcode\workspace\default\proot-distro-flet\.venv\Lib\site-packages\requests`).
+(`/home/maikel/.zcode/workspace/default/proot-distro-flet/.venv/Lib/site-packages/requests`).
 Project context read first: `docs/roadmap.md` + `docs/reference/dep-cookiecutter-stack.md`.
 Flet app; flet stays 1.0.4 (D-010).
 **Anti-hallucination rule (owner-mandated):** every API claim below cites installed

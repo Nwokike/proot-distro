@@ -157,3 +157,154 @@ def test_session_argv_handles_upstreams_wrapped_output(monkeypatch):
     assert "n" not in argv
     assert argv[0].endswith("libproot.so")
     assert argv[-2:] == ["/bin/bash", "-l"]
+
+
+# ── live output forwarding (the P0: bytes only ever reached the deque) ────────
+
+
+class _StubTerminal:
+    """Records send_bytes calls — an explicit stub, not a MagicMock (a mock
+    accepts any call, so it cannot prove the wiring exists)."""
+
+    def __init__(self) -> None:
+        self.sent: list[bytes] = []
+
+    def send_bytes(self, data: bytes) -> None:
+        self.sent.append(data)
+
+
+class _FakeSession:
+    def __init__(self, argv, env, on_bytes, on_exit) -> None:
+        self.argv, self.env = argv, env
+        self._on_bytes, self._on_exit = on_bytes, on_exit
+        self.alive = True
+
+    def start(self) -> None:
+        self._on_bytes(b"prompt $ ")
+
+    def stop(self) -> None:
+        self.alive = False
+        self._on_exit(0)
+
+
+def test_live_output_is_forwarded_to_the_terminal(monkeypatch):
+    """PTY bytes must reach the mounted terminal AND the scrollback deque —
+    without the live send_bytes call the screen renders nothing after mount."""
+    from services import session_manager as sm
+
+    monkeypatch.setattr(session_service, "ProotSession", _FakeSession)
+    monkeypatch.setattr(
+        session_service.proot_service, "get_proot_cmd", lambda container: GOLDEN_CMD
+    )
+    manager = sm.SessionManager()
+    entry = manager.open("debian")
+    stub = _StubTerminal()
+    entry.mt = stub
+
+    # The pre-mount byte (emitted by start() before entry.mt existed)
+    # reaches the screen only via replay; post-mount bytes are forwarded
+    # live — that distinction is exactly what this test pins.
+    entry.replay(stub.send_bytes)
+    assert stub.sent == [b"prompt $ "]
+
+    # Post-mount PTY output (the reader thread's callback): live delivery.
+    entry.session._on_bytes(b"hello\n")
+    assert stub.sent == [b"prompt $ ", b"hello\n"]
+    assert list(entry.scrollback) == [b"prompt $ ", b"hello\n"]
+
+
+def test_live_output_without_a_terminal_only_feeds_scrollback(monkeypatch):
+    """Before mount (mt is None) bytes must not crash — replay covers them."""
+    from services import session_manager as sm
+
+    monkeypatch.setattr(session_service, "ProotSession", _FakeSession)
+    monkeypatch.setattr(
+        session_service.proot_service, "get_proot_cmd", lambda container: GOLDEN_CMD
+    )
+    manager = sm.SessionManager()
+    entry = manager.open("debian")
+    entry.session._on_bytes(b"early\n")  # mt is None here
+    assert list(entry.scrollback) == [b"prompt $ ", b"early\n"]
+
+
+# ── the real --get-proot-cmd path (unmocked; catches both original bugs) ─────
+
+
+def _hermetic_proot_distro(monkeypatch, tmp_path):
+    """Fresh proot_distro bound to a tmp state tree.
+
+    Upstream reads XDG_* at import time, so the modules are purged and the
+    env set BEFORE the lazy import inside get_proot_cmd runs. Test-side
+    relocation only — the app itself never patches upstream.
+    """
+    import sys
+
+    root = tmp_path / "pd-root"
+    # Match what proot_service.bootstrap() will export: XDG_DATA_HOME =
+    # <support>/.local/share, containers under <that>/proot-distro/containers.
+    data_home = root / ".local" / "share"
+    (data_home / "proot-distro" / "containers").mkdir(parents=True)
+    (root / ".local" / "cache").mkdir(parents=True)
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(root))
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(root / ".local" / "cache"))
+    fake_proot = tmp_path / "libproot.so"
+    fake_proot.write_bytes(b"#!/bin/sh\nexit 0\n")
+    fake_proot.chmod(0o755)
+    monkeypatch.setenv("PD_PROOT_BIN", str(fake_proot))
+
+    purged = [
+        name for name in sys.modules if name == "proot_distro" or name.startswith("proot_distro.")
+    ]
+    for name in purged:
+        monkeypatch.delitem(sys.modules, name)
+    return root, fake_proot
+
+
+def test_get_proot_cmd_runs_the_real_upstream_path(monkeypatch, tmp_path):
+    """End-to-end through upstream's command_login — no golden-string mock.
+
+    Catches the two historical breaks: running cli.main() off the main
+    thread (SIGQUIT handler) and capturing into io.StringIO (no .buffer,
+    which upstream's printer writes to).
+    """
+    import shutil
+    import sys
+
+    if sys.platform == "win32":
+        pytest.skip("POSIX-only integration path")
+
+    root, fake_proot = _hermetic_proot_distro(monkeypatch, tmp_path)
+    from services import proot_service
+
+    # A fake installed container: real ELF shell (the arch probe reads its
+    # header), a passwd entry, a home dir.
+    rootfs = root / ".local" / "share" / "proot-distro" / "containers" / "demo" / "rootfs"
+    (rootfs / "bin").mkdir(parents=True)
+    (rootfs / "etc").mkdir()
+    (rootfs / "root").mkdir()
+    shutil.copy2("/bin/sh", rootfs / "bin" / "sh")
+    (rootfs / "bin" / "sh").chmod(0o755)
+    (rootfs / "etc" / "passwd").write_text("root:x:0:0:root:/root:/bin/sh\n")
+
+    line = proot_service.get_proot_cmd("demo")
+    # Upstream wraps with backslash-newline continuations (same shape as
+    # GOLDEN_CMD_WRAPPED); fold them before asserting.
+    folded = line.replace("\\\n", " ")
+    assert folded.lstrip().startswith("env")
+    assert "-i" in folded
+    assert str(fake_proot) in folded
+    assert folded.rstrip().endswith("-l")  # the login shell, not a bare sh
+
+
+def test_get_proot_cmd_reports_a_missing_container(monkeypatch, tmp_path):
+    import sys
+
+    if sys.platform == "win32":
+        pytest.skip("POSIX-only integration path")
+
+    _hermetic_proot_distro(monkeypatch, tmp_path)
+    from services import proot_service
+
+    with pytest.raises(RuntimeError):
+        proot_service.get_proot_cmd("no-such-container")

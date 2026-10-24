@@ -1,7 +1,7 @@
 # idna 3.20 — API reference
 
 Verified 2026-10-16 against installed source
-`C:\Users\nwoki\.zcode\workspace\default\proot-distro-flet\.venv\Lib\site-packages\idna`
+`/home/maikel/.zcode/workspace/default/proot-distro-flet/.venv/Lib/site-packages/idna`
 (py3.14 venv; flet stays 1.0.4 per roadmap D-010).
 Context read first: `docs/roadmap.md` + `docs/reference/dep-httpx-cluster.md`.
 Anti-hallucination rule: every claim cites installed file:line; anything not

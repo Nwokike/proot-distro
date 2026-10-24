@@ -1,6 +1,6 @@
 # app-data-formulator.md — Data Formulator (cleanest facade)
 
-Verified 2026-10-16 against `C:\Users\nwoki\.zcode\workspace\default\data-formulator`.
+Verified 2026-10-16 against `/home/maikel/.zcode/workspace/default/data-formulator`.
 
 ## Identity
 `data-formulator-app` v1.0.0. Wraps PyPI `data-formulator>=0.7.0` (locked 0.7.0; upstream 0.8.0b1 only ever vendor-cloned for study, never vendored). Only **4 direct runtime deps**: `data-formulator`, `flet>=1.0.3`, `flet-ads>=1.0.3`, `flet-android-notifications>=0.11.2` — "minimal direct deps" posture in action (159 packages ride in transitively via the wrapped lib).

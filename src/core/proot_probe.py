@@ -42,14 +42,19 @@ def _f2fs_probe(base_dir: Path) -> str:
     except Exception as exc:
         return f"probe failed: {exc!r}"
     try:
-        (d / "aa").write_bytes(b"x")
         try:
-            (d / "Aa").write_bytes(b"x")
-        except OSError:
-            return f"case-INSENSITIVE filesystem in {base_dir} (unexpected)"
-        if (d / "aA").exists():
-            return f"f2fs-bug signature present in {base_dir}"
-        return f"f2fs bug NOT present in {base_dir}"
+            (d / "aa").write_bytes(b"x")
+            try:
+                (d / "Aa").write_bytes(b"x")
+            except OSError:
+                return f"case-INSENSITIVE filesystem in {base_dir} (unexpected)"
+            if (d / "aA").exists():
+                return f"f2fs-bug signature present in {base_dir}"
+            return f"f2fs bug NOT present in {base_dir}"
+        except Exception as exc:
+            # Any probe failure is a report, never a startup crash — this
+            # runs inside bootstrap_env before the UI exists.
+            return f"probe failed: {exc!r}"
     finally:
         for p in sorted(d.glob("*"), reverse=True):
             try:

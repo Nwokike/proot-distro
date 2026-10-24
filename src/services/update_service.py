@@ -24,16 +24,26 @@ _ALLOWED_HOSTS = ("github.com", "raw.githubusercontent.com", "play.google.com")
 
 
 def is_allowed_launch_url(url: str) -> bool:
-    """Only https links into the project's own domains may launch."""
+    """Only https links into the project's own domains may launch.
+
+    Backslashes are normalized to slashes first: `urlsplit` treats
+    `https://evil.com\\@github.com/` as host `github.com`, while Chrome (the
+    thing that actually opens the URL) reads host `evil.com` — without the
+    normalization the allow-list is bypassable.
+    """
     from urllib.parse import urlsplit
 
+    if not isinstance(url, str) or not url:
+        return False
     try:
-        parts = urlsplit(url)
+        parts = urlsplit(url.replace("\\", "/"))
     except ValueError:
         return False
     if parts.scheme != "https":
         return False
     host = (parts.hostname or "").lower()
+    if "@" in host:  # urlsplit strips userinfo; a survivor means a crafted netloc
+        return False
     return any(host == domain or host.endswith(f".{domain}") for domain in _ALLOWED_HOSTS)
 
 

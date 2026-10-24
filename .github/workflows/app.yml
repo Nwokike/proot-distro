@@ -82,8 +82,17 @@ jobs:
           if felb != env_b:
               errs.append(f"tool.flet.build_number {felb} != BUILD_NUMBER {env_b}")
 
+          # PEP 440 comparison — the old dotted-int vt() flagged "1.0" vs
+          # "1.0.0" (the same version) as AHEAD and crashed on pre-release
+          # strings like "1.0.0-rc1".
+          from packaging.version import InvalidVersion, Version
+
           def vt(s):
-              return tuple(int(x) for x in s.split("."))
+              try:
+                  return Version(s)
+              except InvalidVersion:
+                  errs.append(f"version {s!r} is not PEP 440")
+                  return Version("0")
 
           vj_v = (vj or {}).get("version")
           if vj_v is None:

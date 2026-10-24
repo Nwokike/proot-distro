@@ -76,3 +76,77 @@ def test_banner_pool_reuses_one_control_per_slot():
     banner_ad.clear_banner_pool()
     third = banner_ad.pooled_banner_ad("slot-a", page)
     assert third is not first
+
+
+# ── consent-gating regressions (swarm: flet-ads F1/F2, ad_service F2) ───────
+
+
+class _FailingConsentManager:
+    def request_consent_info_update(self):
+        raise RuntimeError("network down")
+
+
+def test_consent_failure_disables_ads_and_is_flagged(monkeypatch):
+    """A failed UMP flow means NO ads — never 'default to allow'."""
+    import asyncio
+
+    monkeypatch.setattr(ad_service.fta, "ConsentManager", _FailingConsentManager)
+    service = ad_service.AdService(_page(mobile=True))
+    asyncio.run(service.gather_consent())
+    assert service.can_request_ads is False
+    assert service.consent_failed is True
+
+
+class _GrantingConsentManager:
+    async def request_consent_info_update(self):
+        return None
+
+    async def load_and_show_consent_form_if_required(self):
+        return None
+
+    async def can_request_ads(self):
+        return True
+
+    async def get_privacy_options_requirement_status(self):
+        return ad_service.fta.PrivacyOptionsRequirementStatus.NOT_REQUIRED
+
+
+def test_consent_success_opens_the_gate(monkeypatch):
+    import asyncio
+
+    monkeypatch.setattr(ad_service.fta, "ConsentManager", _GrantingConsentManager)
+    service = ad_service.AdService(_page(mobile=True))
+    asyncio.run(service.gather_consent())
+    assert service.can_request_ads is True
+    assert service.consent_failed is False
+
+
+def test_banner_is_refused_before_consent(monkeypatch):
+    """The banner must never request an ad without a UMP verdict."""
+    import sys
+
+    sys.path.insert(0, "src")
+    from components import banner_ad
+    from core.state import state
+
+    banner_ad.clear_banner_pool()
+    state.can_request_ads = False
+    out = banner_ad.build_banner_ad(_page(mobile=True))
+    assert getattr(out, "width", None) == 0 and getattr(out, "height", None) == 0
+    banner_ad.clear_banner_pool()
+
+
+def test_banner_pool_key_includes_the_consent_verdict():
+    from components import banner_ad
+    from core.state import state
+
+    banner_ad.clear_banner_pool()
+    try:
+        state.can_request_ads = False
+        before = banner_ad.pooled_banner_ad("slot-x", _page(mobile=True))
+        state.can_request_ads = True
+        after = banner_ad.pooled_banner_ad("slot-x", _page(mobile=True))
+        assert before is not after  # the verdict flip forces a rebuild
+    finally:
+        state.can_request_ads = False
+        banner_ad.clear_banner_pool()

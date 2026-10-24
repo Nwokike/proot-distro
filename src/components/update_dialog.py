@@ -13,7 +13,7 @@ import flet as ft
 
 from core import theme, tokens
 from core.changelog import notes_for
-from core.constants import APP_NAME, APP_VERSION, GITHUB_RELEASES_URL
+from core.constants import APP_NAME, APP_VERSION, GITHUB_RELEASES_URL, PLAY_STORE_URL
 from core.shared_services import launch_url
 from services.update_service import is_allowed_launch_url
 
@@ -99,7 +99,12 @@ def show_update_dialog(page: ft.Page, update_data: dict | None = None) -> None:
             tight=True,
         )
         actions = [
-            ft.TextButton("Check for Updates", on_click=lambda _e: _check_again(page)),
+            # run_task, not a bare call: _check_again is a coroutine, and a
+            # sync handler's return value is discarded by Flet — the bare
+            # lambda made this button a silent no-op.
+            ft.TextButton(
+                "Check for Updates", on_click=lambda _e: page.run_task(_check_again, page)
+            ),
             ft.FilledButton("Close", on_click=lambda _e: page.pop_dialog()),
         ]
         mandatory = False
@@ -123,7 +128,9 @@ def show_update_dialog(page: ft.Page, update_data: dict | None = None) -> None:
 def _update_actions(page: ft.Page, data: dict) -> list[ft.Control]:
     buttons: list[ft.Control] = []
     is_android = bool(getattr(page, "platform", None)) and page.platform.is_mobile()
-    play_url = data.get("playstore_url")
+    # The feed omitting playstore_url must not silently hide the Play button
+    # — fall back to the shipped listing URL (same rule as github_url).
+    play_url = data.get("playstore_url") or PLAY_STORE_URL
     github_url = data.get("github_url") or GITHUB_RELEASES_URL
 
     if is_android and play_url:

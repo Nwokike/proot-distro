@@ -20,3 +20,4 @@ PRIVACY_POLICY_URL = "https://github.com/Nwokike/proot-distro/blob/main/PRIVACY.
 TERMS_OF_SERVICE_URL = "https://github.com/Nwokike/proot-distro/blob/main/PRIVACY.md"
 
 STORAGE_ONBOARDING_DONE = "proot_onboarding_done"
+STORAGE_HINTS_DISMISSED = "proot_hints_dismissed"

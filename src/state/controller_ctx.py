@@ -12,7 +12,8 @@ from dataclasses import dataclass, field
 import flet as ft
 
 
-def _noop() -> None:
+def _noop(*_args, **_kwargs) -> None:
+    # Absorbs any arity: defaults are called with the real methods' signatures.
     return None
 
 
@@ -49,8 +50,9 @@ class ControllerMethods:
     list_sessions: Callable[[], Awaitable[None]] = field(default=_noop_async)
     kill_session: Callable[[str], Awaitable[None]] = field(default=_noop_async)
 
-    # Onboarding
+    # Onboarding + hints
     finish_onboarding: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    dismiss_hints: Callable[[], Awaitable[None]] = field(default=_noop_async)
 
     # Terminal sessions
     open_session: Callable[[str], Awaitable[None]] = field(default=_noop_async)

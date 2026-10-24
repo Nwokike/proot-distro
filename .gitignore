@@ -21,3 +21,4 @@ version.json
 # Signing material — NEVER commit (house rule)
 kiri-signing.json
 *.jks
+.zcode/

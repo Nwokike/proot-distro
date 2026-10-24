@@ -13,6 +13,25 @@ CHANGELOG: dict[str, str] = {
 }
 
 
+def _version_key(version: str) -> tuple[tuple[int, ...], str]:
+    """Stdlib-only dotted-int sort key ('1.10.0' > '1.9.0'); odd suffixes
+    sort by their raw string so ordering stays deterministic."""
+    head = version.split("-", 1)[0].split("+", 1)[0]
+    parts = head.split(".")
+    if all(p.isdigit() for p in parts):
+        return (tuple(int(p) for p in parts), version)
+    return ((), version)
+
+
 def notes_for(version: str) -> str:
-    """The changelog entry for a version, falling back to the newest one."""
-    return CHANGELOG.get(version) or next(iter(CHANGELOG.values()), "")
+    """The changelog entry for a version, falling back to the newest one.
+
+    Newest = highest version key (dict insertion order is not guaranteed to
+    be newest-first once older versions are appended below the head).
+    """
+    if version in CHANGELOG:
+        return CHANGELOG[version]
+    if not CHANGELOG:
+        return ""
+    newest = max(CHANGELOG, key=_version_key)
+    return CHANGELOG[newest]

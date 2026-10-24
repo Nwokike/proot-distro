@@ -10,8 +10,8 @@ import os
 import flet as ft
 
 from app_shell import AppShell
-from core import proot_probe, shared_services, theme
-from core.constants import STORAGE_ONBOARDING_DONE
+from core import proot_probe, shared_services, storage_paths, theme
+from core.constants import STORAGE_HINTS_DISMISSED, STORAGE_ONBOARDING_DONE
 from core.state import state
 from services import ad_service, proot_service, session_manager
 from state.controller_ctx import ControllerMethods, ControllerMethodsCtx
@@ -80,6 +80,7 @@ class AppController:
             leave_session=self.leave_session,
             close_session=self.close_session,
             finish_onboarding=self.finish_onboarding,
+            dismiss_hints=self.dismiss_hints,
         )
         self.page._controller = self
         self.page.render(lambda: ControllerMethodsCtx(methods, lambda: AppShell()))
@@ -90,6 +91,12 @@ class AppController:
         # UMP consent then preload the first interstitial (Sherlock pattern).
         async def _consent_and_preload() -> None:
             await self.ad_service.gather_consent()
+            # Publish the verdict: banners gate on state.can_request_ads, and
+            # a failed consent run is surfaced instead of silently serving
+            # (or silently not serving) ads.
+            state.can_request_ads = self.ad_service.can_request_ads
+            if not state.can_request_ads and self.ad_service.consent_failed:
+                state.data_note = "Ad consent is unavailable — ads stay off this session."
             await self.ad_service.preload_interstitial()
 
         self.page.run_task(_consent_and_preload)
@@ -119,7 +126,7 @@ class AppController:
             mode = await self.prefs.get("theme_mode")
             if isinstance(mode, str) and mode in _THEME_MODES:
                 state.theme_mode = mode
-                self.page.theme_mode = _THEME_MODES[mode]
+                theme.apply_theme_mode(self.page, mode)
             token = await self.prefs.get("docker_token")
             if isinstance(token, str):
                 state.docker_token = token
@@ -262,7 +269,7 @@ class AppController:
             return
         state.theme_mode = mode
         state.theme_revision += 1
-        self.page.theme_mode = _THEME_MODES[mode]
+        theme.apply_theme_mode(self.page, mode)
         if self.prefs is not None:
             with contextlib.suppress(Exception):
                 await self.prefs.set("theme_mode", mode)
@@ -297,6 +304,9 @@ class AppController:
         try:
             done = await self.prefs.get(STORAGE_ONBOARDING_DONE)
             state.onboarding_done = done == "true"
+            hints = await self.prefs.get(STORAGE_HINTS_DISMISSED)
+            if hints == "true":
+                state.hints_dismissed = True
         except Exception as exc:
             logger.debug("onboarding restore failed: %r", exc)
 
@@ -305,6 +315,13 @@ class AppController:
         if self.prefs is not None:
             with contextlib.suppress(Exception):
                 await self.prefs.set(STORAGE_ONBOARDING_DONE, "true")
+
+    async def dismiss_hints(self) -> None:
+        """The hints card stays gone across launches, not per-render."""
+        state.hints_dismissed = True
+        if self.prefs is not None:
+            with contextlib.suppress(Exception):
+                await self.prefs.set(STORAGE_HINTS_DISMISSED, "true")
 
     async def _check_for_updates(self) -> None:
         """Silent background check; a newer build flips the header chip."""
@@ -343,15 +360,29 @@ class AppController:
         if self.file_picker is None:
             self.show_snack("file picker unavailable on this build")
             return
+        # Stage the archive in app storage first, then hand the BYTES to the
+        # picker: on mobile `save_file` without `src_bytes` raises ValueError
+        # (there is no writable shared path to stream to), which made the
+        # backup action die silently on the only platform that ships.
+        staging = storage_paths.support_root() / "exports" / f"{container}.tar.gz"
+
+        def _stage() -> object:
+            staging.parent.mkdir(parents=True, exist_ok=True)
+            return self.proot.backup_container(container, str(staging))
+
+        outcome = await asyncio.to_thread(_stage)
+        if not outcome.ok:
+            self.show_snack(self.proot.friendly_job_error(outcome))
+            return
         target = await self.file_picker.save_file(
-            dialog_title=f"Backup {container}", file_name=f"{container}.tar.gz"
+            dialog_title=f"Backup {container}",
+            file_name=f"{container}.tar.gz",
+            src_bytes=staging.read_bytes(),
         )
         if not target:
+            self.show_snack(f"backup staged at {staging}")
             return
-        outcome = await asyncio.to_thread(self.proot.backup_container, container, target)
-        self.show_snack(
-            f"backup written to {target}" if outcome.ok else self.proot.friendly_job_error(outcome)
-        )
+        self.show_snack(f"backup written to {target}")
 
     async def restore_container(self) -> None:
         if self.file_picker is None:

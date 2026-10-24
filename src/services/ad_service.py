@@ -41,6 +41,13 @@ class AdService:
         self._privacy_options_required: bool | None = None
         self._is_shutting_down: bool = False
         self._last_interstitial_at: float | None = None
+        # True when the UMP flow itself failed (vs. a real "no" from the
+        # user) — the controller surfaces it in state.data_note.
+        self.consent_failed: bool = False
+
+    @property
+    def can_request_ads(self) -> bool:
+        return self._can_request_ads
 
     @property
     def interstitial_id(self) -> str:
@@ -58,6 +65,7 @@ class AdService:
 
     async def gather_consent(self):
         """Run UMP consent flow. Only shows UI in regulated regions (EEA/UK)."""
+        self.consent_failed = False
         if not _HAS_ADS:
             logger.info("AdService: flet_ads not available — ads disabled this build")
             self._can_request_ads = False
@@ -90,8 +98,12 @@ class AdService:
                     "AdService: UMP says ads cannot be requested — interstitials disabled this session"
                 )
         except Exception as e:
-            logger.warning("AdService: UMP consent flow failed, defaulting to allow ads: %s", e)
-            self._can_request_ads = True
+            # Consent failure means NO ads this session — defaulting to allow
+            # would serve ads without a verdict (D-017.9: no swallowed bugs;
+            # the UI states why ads are off via state.data_note).
+            logger.warning("AdService: UMP consent flow failed — ads disabled this session: %s", e)
+            self._can_request_ads = False
+            self.consent_failed = True
 
     async def show_privacy_options(self) -> str:
         if not self._consent_manager:
@@ -176,13 +188,15 @@ class AdService:
                     self.INTERSTITIAL_MIN_INTERVAL_SEC,
                 )
                 return False
-        self._last_interstitial_at = time.monotonic()
         if self.interstitial is not None:
             ad_to_show = self.interstitial
             self.interstitial = None
             self._shown_interstitial = ad_to_show
             try:
                 await ad_to_show.show()
+                # Consume the interval only on a successful show — a failed
+                # one should not penalize the user with a 30 s dead window.
+                self._last_interstitial_at = time.monotonic()
                 logger.info("InterstitialAd shown (preloaded instance)")
                 return True
             except Exception as e:

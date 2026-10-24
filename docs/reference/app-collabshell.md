@@ -1,6 +1,6 @@
 # app-collabshell.md — CollabShell (+ notebook I/O formats + flet-terminal usage)
 
-Verified 2026-10-16 against `C:\Users\nwoki\.zcode\workspace\default\CollabShell`. This is the **only shipped consumer of `flet-terminal`** and the house's richest I/O-mapping example.
+Verified 2026-10-16 against `/home/maikel/.zcode/workspace/default/CollabShell`. This is the **only shipped consumer of `flet-terminal`** and the house's richest I/O-mapping example.
 
 ## Identity
 "Colab Shell" v2.1.1 build 13, Python 3.14, bundle `ng.kiri.collabshell`. Wraps `google-colab-cli==0.7.4`; terminal UI = `flet-terminal==0.3.9`; flet set pinned `==1.0.3` (guarded by `tests/services/test_version_sync.py::test_flet_pins_in_sync`).

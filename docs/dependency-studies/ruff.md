@@ -19,7 +19,7 @@ anything not verifiable is marked **unverified**.
 
 House context (read first): `docs/roadmap.md` §1b/§M5 + §3 table row D5,
 `docs/reference/dep-test-and-lint-stack.md` §`ruff 0.17.1`,
-sibling configs `C:\Users\nwoki\.zcode\workspace\default\Sherlock\pyproject.toml`
+sibling configs `/home/maikel/.zcode/workspace/default/Sherlock/pyproject.toml`
 `[tool.ruff.lint]` and `...\ffmpeg\pyproject.toml` `[tool.ruff]` +
 `[tool.ruff.lint]`. flet stays 1.0.4 (D-010).
 
@@ -316,9 +316,9 @@ risk.
 - `.venv/Lib/site-packages/ruff-0.17.1.dist-info/METADATA` (`License-Expression:
   MIT`, `Summary: An extremely fast Python linter and code formatter, written
   in Rust.`), `licenses/`, `RECORD`, `WHEEL`; `ruff/__main__.py:_run()`.
-- `C:\Users\nwoki\.zcode\workspace\default\Sherlock\pyproject.toml:99-125`
+- `/home/maikel/.zcode/workspace/default/Sherlock/pyproject.toml:99-125`
   (`[tool.ruff.lint]` select/ignore/per-file-ignores + cleanup globs).
-- `C:\Users\nwoki\.zcode\workspace\default\ffmpeg\pyproject.toml`
+- `/home/maikel/.zcode/workspace/default/ffmpeg/pyproject.toml`
   (`[tool.ruff] line-length/target-version`, `[tool.ruff.lint]` select/ignore,
   `[tool.pytest.ini_options]`, `[tool.flet.*]`).
 - `docs/roadmap.md` §3 row D5 + §M5; `docs/reference/dep-test-and-lint-stack.md`

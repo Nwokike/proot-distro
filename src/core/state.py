@@ -38,6 +38,10 @@ class AppState:
     # First run: the onboarding deck shows until it is dismissed once.
     onboarding_done: bool = False
 
+    # Ads: the UMP consent verdict — banners and interstitials gate on it,
+    # so the first render can never request an ad before consent resolves.
+    can_request_ads: bool = False
+
     # Update feed (M5): the version chip flips when the feed is ahead.
     update_available: bool = False
     update_data: dict | None = None

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.metadata as importlib_metadata
+import logging
 from pathlib import Path
 
 import flet as ft
@@ -310,7 +311,7 @@ def DistroView() -> ft.Control:
     controls: list[ft.Control] = [
         build_brand_hero("Linux on Android — no root, no Termux"),
         AppHeader("Distros", lambda: page.run_task(methods.cycle_theme_mode), page=page),
-        hints_card(st.hints_dismissed, lambda _e: setattr(state, "hints_dismissed", True)),
+        hints_card(st.hints_dismissed, lambda _e: page.run_task(methods.dismiss_hints)),
         section_header("Install"),
     ]
     if not st.probe_passed:
@@ -592,8 +593,10 @@ def _native_entries() -> list[dict]:
                     "via": f"flet-proot {version}",
                 }
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        # The native-payload rows are compliance-critical (§3.3): a blank
+        # list here must be visible in logs, not silently pass.
+        logging.getLogger(__name__).warning("native license entries unavailable: %r", exc)
     return entries
 
 
@@ -625,7 +628,13 @@ def licenses_view() -> ft.Control:
     texts = []
     for fname, label in _TEXT_FILES:
         path = _LICENSES_DIR / fname
-        body = path.read_text(encoding="utf-8")[:6000] if path.is_file() else "(text missing)"
+        # Full text, no truncation: §3.3 requires scrollable complete texts,
+        # and errors="replace" keeps one stray byte from killing the dialog.
+        body = (
+            path.read_text(encoding="utf-8", errors="replace")
+            if path.is_file()
+            else "(text missing)"
+        )
         texts.append(
             ft.ExpansionTile(
                 title=ft.Text(label, size=13),

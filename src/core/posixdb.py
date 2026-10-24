@@ -48,6 +48,29 @@ def _shim_pwd() -> types.ModuleType:
     return mod
 
 
+# Bionic names these supplementary gids; everything else has no group name
+# on Android and getgrgid must raise KeyError (upstream's
+# register_android_ids_at skips unresolvable gids — a shim that invents a
+# name for every gid writes junk aid_<number> group entries instead).
+_KNOWN_GIDS = {
+    3001: "bt_net",
+    3002: "bt_net_raw",
+    3003: "inet",
+    3004: "inet_raw",
+    3005: "inet_admin",
+    9997: "everybody",
+}
+
+
+def _gr_name(gid: int) -> str | None:
+    if gid in _KNOWN_GIDS:
+        return _KNOWN_GIDS[gid]
+    if 10000 <= gid < 20000:
+        # Android app uid/gid range (u0_aNNN); outside it nothing has a name.
+        return f"u0_a{gid - 10000}"
+    return None
+
+
 def _shim_grp() -> types.ModuleType:
     struct_group = namedtuple("struct_group", _STRUCT_GROUP)
     mod = types.ModuleType("grp")
@@ -55,9 +78,10 @@ def _shim_grp() -> types.ModuleType:
     mod.__doc__ = "Android shim (see posixdb.py)"
 
     def getgrgid(gid):
-        # proot-distro prefixes "aid_" itself; numeric names reproduce
-        # Android's aid_<gid> convention exactly.
-        return struct_group(str(gid), "x", gid, [])
+        name = _gr_name(gid)
+        if name is None:
+            raise KeyError(gid)
+        return struct_group(name, "x", gid, [])
 
     def getgrnam(name):
         raise KeyError(name)

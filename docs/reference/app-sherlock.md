@@ -1,6 +1,6 @@
 # app-sherlock.md — Sherlock (production standard)
 
-Verified 2026-10-16 against `C:\Users\nwoki\.zcode\workspace\default\Sherlock`.
+Verified 2026-10-16 against `/home/maikel/.zcode/workspace/default/Sherlock`.
 
 ## Identity
 `sherlock` v2.3.0 build 13, Python 3.14, repo Nwokike/Sherlock. Wraps `maigret 0.6.6`, `holehe-v2 1.0.3`, `socid-extractor 0.1.1` (+ transitive curl-cffi/reportlab/xmind/networkx pulled by袅 eigret). Product "Sherlock", org `ng.kiri`, bundle `ng.kiri.sherlock`.

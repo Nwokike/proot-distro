@@ -6,10 +6,10 @@
 **Anti-hallucination rule (owner-mandated):** every signature below was verified against the installed source (`file:line`) or live introspection with `...\.venv\Scripts\python.exe`. Anything not verifiable is labeled **unverified** — nothing is guessed.
 
 **Sources inspected:**
-- Installed wheel: `C:\Users\nwoki\.zcode\workspace\default\proot-distro-flet\.venv\Lib\site-packages\flet_terminal\` (`__init__.py`, `terminal.py` 405 L, `mobile_terminal.py` 445 L, `extra_keys.py` 397 L, `search_bar.py` 158 L, `themes.py` 74 L, `tokens.py` 32 L, `frozen_support.py` 106 L)
+- Installed wheel: `/home/maikel/.zcode/workspace/default/proot-distro-flet/.venv/Lib/site-packages/flet_terminal/` (`__init__.py`, `terminal.py` 405 L, `mobile_terminal.py` 445 L, `extra_keys.py` 397 L, `search_bar.py` 158 L, `themes.py` 74 L, `tokens.py` 32 L, `frozen_support.py` 106 L)
 - Bundled Dart: `...\.venv\Lib\site-packages\flutter\flet_terminal\` (`lib/flet_terminal.dart`, `lib/src/extension.dart`, `lib/src/flet_terminal.dart` 594 L, `pubspec.yaml`, `CHANGELOG.md`, `LICENSE`, `README.md`)
 - Metadata: `...\.venv\Lib\site-packages\flet_terminal-0.3.9.dist-info\{METADATA,RECORD,WHEEL}`
-- Repo clone (docs/changelog/example): `C:\Users\nwoki\.zcode\workspace\default\flet-terminal\` (`pyproject.toml`, `LICENSE`, `main.py`, `examples/flet_terminal_example/src/{app.py:264,main.py:29,pty_service.py:173,ui_helpers.py:106}`)
+- Repo clone (docs/changelog/example): `/home/maikel/.zcode/workspace/default/flet-terminal/` (`pyproject.toml`, `LICENSE`, `main.py`, `examples/flet_terminal_example/src/{app.py:264,main.py:29,pty_service.py:173,ui_helpers.py:106}`)
 - Live introspection: `inspect.signature` dumps for all exports (see §6).
 
 ---

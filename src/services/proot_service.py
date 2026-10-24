@@ -7,6 +7,7 @@ import importlib
 import io
 import logging
 import os
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -51,15 +52,18 @@ def available() -> bool:
 
 
 class _LineTee(io.TextIOBase):
-    """A stderr stand-in that forwards each line to `on_line` as it is written.
+    """A stderr stand-in that forwards each line to `on_line` as it is
+    written AND keeps the text for the final Outcome.
 
     stdlib capture only — this is exactly `redirect_stderr` with a live hook,
     not a patch of anything upstream."""
 
     def __init__(self, on_line):
         self._on_line = on_line
+        self._buf = io.StringIO()
 
     def write(self, data: str) -> int:
+        self._buf.write(data)
         if data.strip():
             for line in data.splitlines():
                 if line.strip():
@@ -68,6 +72,9 @@ class _LineTee(io.TextIOBase):
 
     def flush(self) -> None:  # pragma: no cover - trivial
         return None
+
+    def getvalue(self) -> str:
+        return self._buf.getvalue()
 
 
 def _run_command(
@@ -85,21 +92,26 @@ def _run_command(
         raise ProotUnavailable(f"proot_distro unavailable: {exc!r}") from exc
     fn = getattr(module, fn_name)
     buf = io.StringIO()
+    tee: _LineTee | None = None
     try:
-        with contextlib.redirect_stderr(buf), contextlib.redirect_stdout(buf):
-            if on_line is not None:
-                with contextlib.redirect_stderr(_LineTee(on_line)):
-                    fn(namespace)
-            else:
+        if on_line is not None:
+            tee = _LineTee(on_line)
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(tee):
                 fn(namespace)
-        return Outcome(True, "completed", buf.getvalue())
+        else:
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+                fn(namespace)
+        captured = buf.getvalue() + (tee.getvalue() if tee is not None else "")
+        return Outcome(True, "completed", captured)
     except SystemExit as exc:
         code = exc.code if isinstance(exc.code, int) else 1
+        captured = buf.getvalue() + (tee.getvalue() if tee is not None else "")
         if code == 0:
-            return Outcome(True, "no-op", buf.getvalue())
-        return Outcome(False, f"proot-distro exited {code}", buf.getvalue())
+            return Outcome(True, "no-op", captured)
+        return Outcome(False, f"proot-distro exited {code}", captured)
     except Exception as exc:
-        return Outcome(False, f"{exc}", buf.getvalue())
+        captured = buf.getvalue() + (tee.getvalue() if tee is not None else "")
+        return Outcome(False, f"{exc}", captured)
 
 
 # ── argparse namespaces (the only fragile part; verified against parser.py) ──
@@ -309,40 +321,93 @@ def busy_locks() -> list[str]:
         return []
 
 
+def _ns_login_get_proot_cmd(container: str) -> SimpleNamespace:
+    # Verified against parser.py:116-160 (_add_login_or_run_common) + :262
+    # (_login): every field _login_with_rootfs reads from the namespace.
+    return SimpleNamespace(
+        container_name=container,
+        user="root",
+        redirect_ports=False,
+        fix_low_ports=False,
+        isolated=False,
+        minimal=False,
+        shared_home=False,
+        termux_home=False,
+        shared_tmp=False,
+        shared_x11=False,
+        bind=[],
+        no_link2symlink=False,
+        no_sysvipc=False,
+        no_kill_on_exit=False,
+        emulator="",
+        kernel="",
+        hostname="",
+        work_dir="",
+        env=[],
+        detach=False,
+        get_proot_cmd=True,
+        login_cmd=[],
+    )
+
+
+class _CapturedStdout:
+    """sys.stdout stand-in carrying the `.buffer` upstream's printer writes to.
+
+    login/__init__.py prints `--get-proot-cmd` output via
+    `sys.stdout.buffer.write(...)`; io.StringIO has no `.buffer`, which made
+    the previous capture raise AttributeError on every session open.
+    """
+
+    def __init__(self) -> None:
+        self.buffer = io.BytesIO()
+
+    def write(self, data: str) -> int:  # upstream writes through .buffer
+        return self.buffer.write(data.encode("utf-8", errors="replace"))
+
+    def flush(self) -> None:  # pragma: no cover - trivial
+        return None
+
+    @property
+    def value(self) -> str:
+        return self.buffer.getvalue().decode("utf-8", errors="replace")
+
+
+_GET_PROOT_CMD_LOCK = threading.Lock()
+
+
 def get_proot_cmd(container: str) -> str:
     """Upstream's own session command line: `pd login <c> --get-proot-cmd`.
 
-    It prints `env -i K=V … <proot args> … <inner>` and exits 0. Run
-    in-process because on Android `sys.executable` is the Flutter host (M0
-    G1b). Returns the raw line; parsing lives in session_service.
+    Calls `command_login` directly: `cli.main()` installs a SIGQUIT handler
+    (main-thread-only) so it cannot run on a worker thread, and a subprocess
+    is impossible on Android (`sys.executable` is the Flutter host). With
+    `--get-proot-cmd` upstream prints the `env -i …` line and returns before
+    any exec; parsing lives in session_service.
     """
     bootstrap()
     import sys
 
-    from proot_distro import cli
+    from proot_distro.commands.login import command_login
 
-    argv_backup = sys.argv[:]
-    stdout_backup = sys.stdout
-    stderr_backup = sys.stderr
-    sys.argv = ["proot-distro", "login", container, "--get-proot-cmd"]
-    buffer = io.StringIO()
-    errors = io.StringIO()
-    try:
-        sys.stdout = buffer
+    with _GET_PROOT_CMD_LOCK:
+        stdout_backup = sys.stdout
+        stderr_backup = sys.stderr
+        captured = _CapturedStdout()
+        errors = io.StringIO()
+        sys.stdout = captured
         sys.stderr = errors
         try:
-            cli.main()
+            command_login(_ns_login_get_proot_cmd(container))
         except SystemExit as exc:
             code = exc.code if isinstance(exc.code, int) else 1
             if code != 0:
                 reason = errors.getvalue().strip().splitlines()
                 detail = reason[-1][:200] if reason else "no output"
                 raise RuntimeError(f"login --get-proot-cmd exited {code} — {detail}") from exc
-    finally:
-        sys.stdout = stdout_backup
-        sys.stderr = stderr_backup
-        sys.argv = argv_backup
-    return buffer.getvalue()
+        finally:
+            sys.stdout = stdout_backup
+            sys.stderr = stderr_backup
+    return captured.value
 
 
 def rename_container(orig: str, new: str) -> Outcome:

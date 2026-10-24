@@ -1,7 +1,7 @@
 # certifi 2026.7.22 — API reference
 
 Verified 2026-10-16 against installed source
-`C:\Users\nwoki\.zcode\workspace\default\proot-distro-flet\.venv\Lib\site-packages\certifi`
+`/home/maikel/.zcode/workspace/default/proot-distro-flet/.venv/Lib/site-packages/certifi`
 (py3.14 venv; flet stays 1.0.4 per roadmap D-010).
 Context read first: `docs/roadmap.md` + `docs/reference/dep-httpx-cluster.md`.
 Anti-hallucination rule: every claim cites installed file:line; anything not
@@ -38,7 +38,7 @@ There is nothing else — no classes, no constants, no configuration.
 Returns the filesystem path of `cacert.pem`. Verified runtime value:
 
 ```
-C:\Users\nwoki\.zcode\workspace\default\proot-distro-flet\.venv\Lib\site-packages\certifi\cacert.pem
+/home/maikel/.zcode/workspace/default/proot-distro-flet/.venv/Lib/site-packages/certifi/cacert.pem
 ```
 
 Implementation details that matter:

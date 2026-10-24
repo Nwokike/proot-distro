@@ -48,15 +48,19 @@ def test_ensure_only_shims_what_is_missing():
 def test_grp_shim_shapes():
     """The shim's shapes are a platform-independent contract (Termux parity).
 
-    Called on the factories directly so the contract is covered everywhere —
-    on Android these are what `ensure()` installs; on desktop the real module
-    is used instead (test_ensure_only_shims_what_is_missing covers that).
+    getgrgid mirrors bionic: known AIDs and app-range gids get real names,
+    everything else raises KeyError — upstream's register_android_ids_at
+    skips unresolvable gids, so inventing names would write junk
+    aid_<number> group entries into every install.
     """
     from core import posixdb
 
     grp = posixdb._shim_grp()
     entry = grp.getgrgid(3003)
-    assert entry.gr_name == "3003" and entry.gr_gid == 3003 and entry.gr_mem == []
+    assert entry.gr_name == "inet" and entry.gr_gid == 3003 and entry.gr_mem == []
+    assert grp.getgrgid(10115).gr_name == "u0_a115"
+    with pytest.raises(KeyError):
+        grp.getgrgid(50000)  # no name on Android either
     assert grp.getgrall() == []  # Termux parity: their stub returns NULL too
     with pytest.raises(KeyError):
         grp.getgrnam("root")
