@@ -8,6 +8,7 @@ theme flip) never kills the shell — the buffer replays on mount.
 from __future__ import annotations
 
 import logging
+import threading
 from collections import deque
 from typing import Any
 
@@ -48,57 +49,71 @@ class SessionManager:
 
     def __init__(self):
         self.entries: dict[str, SessionEntry] = {}
+        self._lock = threading.RLock()
 
     def entry(self, container: str) -> SessionEntry:
-        entry = self.entries.get(container)
-        if entry is None:
-            if len(self.entries) >= MAX_CONCURRENT_SESSIONS:
-                raise RuntimeError(
-                    f"{MAX_CONCURRENT_SESSIONS} shells are already open — close one first"
-                )
-            entry = SessionEntry(container)
-            self.entries[container] = entry
-        return entry
+        with self._lock:
+            entry = self.entries.get(container)
+            if entry is None:
+                if len(self.entries) >= MAX_CONCURRENT_SESSIONS:
+                    raise RuntimeError(
+                        f"{MAX_CONCURRENT_SESSIONS} shells are already open — close one first"
+                    )
+                entry = SessionEntry(container)
+                self.entries[container] = entry
+            return entry
 
     def open(self, container: str) -> SessionEntry:
-        entry = self.entry(container)
-        if entry.session is not None and entry.session.alive:
+        with self._lock:
+            entry = self.entry(container)
+            if entry.session is not None:
+                if entry.session.alive:
+                    return entry
+                # Previous session died — stop cleanly before replacing.
+                entry.session.stop()
+                entry.session = None
+                entry.ready = False
+
+            env, argv = session_service.session_argv(container)
+
+            def _on_bytes(data: bytes) -> None:
+                entry.feed(data)
+                mt = entry.mt
+                if mt is not None:
+                    mt.send_bytes(data)
+
+            def _on_exit(returncode: int | None) -> None:
+                entry.ready = False
+                entry.session = None
+                entry.error = f"shell exited ({returncode})"
+
+            session = session_service.ProotSession(argv, env, _on_bytes, _on_exit)
+            session.start()
+            entry.session = session
+            entry.ready = True
+            entry.error = ""
             return entry
-        env, argv = session_service.session_argv(container)
-
-        def _on_bytes(data: bytes) -> None:
-            # Record for replay-on-mount AND forward live — without the
-            # send_bytes call the terminal renders nothing after mount (the
-            # PTY bytes only ever reached the scrollback deque).
-            entry.feed(data)
-            mt = entry.mt
-            if mt is not None:
-                mt.send_bytes(data)
-
-        def _on_exit(returncode: int | None) -> None:
-            entry.ready = False
-            entry.session = None
-            entry.error = f"shell exited ({returncode})"
-
-        session = session_service.ProotSession(argv, env, _on_bytes, _on_exit)
-        session.start()
-        entry.session = session
-        entry.ready = True
-        entry.error = ""
-        return entry
 
     def close(self, container: str) -> None:
-        entry = self.entries.pop(container, None)
-        if entry is None:
-            return
-        if entry.session is not None:
-            entry.session.stop()
+        with self._lock:
+            entry = self.entries.pop(container, None)
+            if entry is None:
+                return
+            entry.ready = False
+            session, entry.session = entry.session, None
+            if session is not None:
+                session.stop()
+            entry.wired = False
+            entry.mt = None
 
     def close_all(self) -> None:
-        for container in list(self.entries):
+        with self._lock:
+            containers = list(self.entries.keys())
+        for container in containers:
             self.close(container)
 
     def set_title(self, container: str, title: str) -> None:
-        entry = self.entries.get(container)
-        if entry is not None and title:
-            entry.title = title
+        with self._lock:
+            entry = self.entries.get(container)
+            if entry is not None and title:
+                entry.title = title

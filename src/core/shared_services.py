@@ -15,6 +15,7 @@ _ATTR_NAMES = {
     "share": "share",
     "url_launcher": "url_launcher",
     "prefs": "shared_preferences",
+    "wakelock": "wakelock",
 }
 
 
@@ -26,6 +27,7 @@ def mount_shared_services(page: ft.Page) -> dict[str, Any]:
         ("share", ft.Share),
         ("url_launcher", ft.UrlLauncher),
         ("prefs", ft.SharedPreferences),
+        ("wakelock", ft.Wakelock),
     )
     mounted: dict[str, Any] = {}
     for key, factory in specs:

@@ -98,15 +98,22 @@ class ProotSession:
         import pty
 
         master_fd, slave_fd = pty.openpty()
-        self._process = subprocess.Popen(  # noqa: S603 - argv from upstream's login
-            self._argv,
-            stdin=slave_fd,
-            stdout=slave_fd,
-            stderr=slave_fd,
-            close_fds=True,
-            start_new_session=True,
-            env=self._env,
-        )
+        try:
+            self._process = subprocess.Popen(  # noqa: S603 - argv from upstream's login
+                self._argv,
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                close_fds=True,
+                start_new_session=True,
+                env=self._env,
+            )
+        except Exception:
+            with contextlib.suppress(OSError):
+                os.close(slave_fd)
+            with contextlib.suppress(OSError):
+                os.close(master_fd)
+            raise
         os.close(slave_fd)
         self._master_fd = master_fd
 
@@ -134,10 +141,19 @@ class ProotSession:
         self._reader.start()
 
     def write(self, payload: bytes) -> None:
-        if self._master_fd is None:
+        master_fd = self._master_fd
+        if master_fd is None or not payload:
             return
-        with contextlib.suppress(OSError):
-            os.write(self._master_fd, payload)
+        total = len(payload)
+        offset = 0
+        while offset < total:
+            try:
+                written = os.write(master_fd, payload[offset:])
+                if written <= 0:
+                    break
+                offset += written
+            except OSError, ValueError:
+                break
 
     def resize(self, cols: int, rows: int) -> None:
         if self._master_fd is None or cols <= 0 or rows <= 0:
@@ -151,18 +167,26 @@ class ProotSession:
 
     def stop(self) -> None:
         process, self._process = self._process, None
+        reader, self._reader = self._reader, None
         if self._master_fd is not None:
             with contextlib.suppress(OSError):
                 os.close(self._master_fd)
             self._master_fd = None
-        if process is None:
-            return
-        if process.poll() is None:
+        if process is not None and process.poll() is None:
             with contextlib.suppress(Exception):
                 process.terminate()
+            try:
+                process.wait(timeout=2.0)
+            except Exception:
+                with contextlib.suppress(Exception):
+                    process.kill()
+                with contextlib.suppress(Exception):
+                    process.wait(timeout=1.0)
+        if process is not None:
+            self.returncode = process.poll()
+        if reader is not None and reader.is_alive():
             with contextlib.suppress(Exception):
-                process.wait(timeout=2)
-        self.returncode = process.poll()
+                reader.join(timeout=1.0)
 
     def __enter__(self) -> ProotSession:
         self.start()

@@ -308,3 +308,108 @@ def test_get_proot_cmd_reports_a_missing_container(monkeypatch, tmp_path):
 
     with pytest.raises(RuntimeError):
         proot_service.get_proot_cmd("no-such-container")
+
+
+# ── PTY lifecycle hardening tests (Milestone R3) ──────────────────────────────
+
+
+def test_proot_session_writes_complete_payload_in_chunks(monkeypatch):
+    """write() must loop until all bytes are written even on partial writes."""
+    written_chunks: list[bytes] = []
+
+    def _fake_write(fd, buf):
+        # Simulate partial write consuming max 2 bytes per call
+        chunk = buf[:2]
+        written_chunks.append(chunk)
+        return len(chunk)
+
+    monkeypatch.setattr("os.write", _fake_write)
+    session = session_service.ProotSession(["/bin/sh"], {}, lambda _b: None)
+    session._master_fd = 999  # simulate started session
+    session.write(b"hello")
+    assert b"".join(written_chunks) == b"hello"
+    assert len(written_chunks) == 3  # b"he", b"ll", b"o"
+
+
+def test_proot_session_stop_escalates_to_kill(monkeypatch):
+    """When terminate() does not stop the process within 2s, kill() must be called."""
+
+    class _StubProcess:
+        def __init__(self):
+            self.terminated = False
+            self.killed = False
+            self._waits = 0
+
+        def poll(self):
+            return -9 if self.killed else None
+
+        def terminate(self):
+            self.terminated = True
+
+        def kill(self):
+            self.killed = True
+
+        def wait(self, timeout=None):
+            self._waits += 1
+            if self._waits == 1:
+                import subprocess
+
+                raise subprocess.TimeoutExpired(["proc"], timeout)
+            return -9
+
+    proc = _StubProcess()
+    session = session_service.ProotSession(["/bin/sh"], {}, lambda _b: None)
+    session._process = proc
+    session._master_fd = 999
+
+    closed_fds: list[int] = []
+    monkeypatch.setattr("os.close", closed_fds.append)
+
+    session.stop()
+    assert proc.terminated is True
+    assert proc.killed is True
+    assert 999 in closed_fds
+    assert session.returncode == -9
+
+
+def test_proot_session_start_prevents_fd_leak_on_popen_failure(monkeypatch):
+    """If Popen fails, both master and slave fds must be closed immediately."""
+    import pty
+
+    closed_fds: list[int] = []
+    monkeypatch.setattr(pty, "openpty", lambda: (101, 102))
+    monkeypatch.setattr("os.close", closed_fds.append)
+
+    def _failing_popen(*_args, **_kwargs):
+        raise OSError("fork failed: out of memory")
+
+    monkeypatch.setattr("subprocess.Popen", _failing_popen)
+
+    session = session_service.ProotSession(["/bin/sh"], {}, lambda _b: None)
+    with pytest.raises(OSError, match="fork failed"):
+        session.start()
+
+    assert 101 in closed_fds, "master_fd was leaked on Popen failure"
+    assert 102 in closed_fds, "slave_fd was leaked on Popen failure"
+    assert session._master_fd is None
+
+
+def test_session_manager_replaces_dead_session(monkeypatch):
+    """When a session has died, open() cleanly stops the old process and starts fresh."""
+    from services import session_manager as sm
+
+    monkeypatch.setattr(session_service, "ProotSession", _FakeSession)
+    monkeypatch.setattr(
+        session_service.proot_service, "get_proot_cmd", lambda container: GOLDEN_CMD
+    )
+
+    manager = sm.SessionManager()
+    entry = manager.open("debian")
+    old_session = entry.session
+    old_session.alive = False  # simulate shell death
+
+    new_entry = manager.open("debian")
+    assert new_entry is entry
+    assert new_entry.session is not old_session
+    assert new_entry.session.alive is True
+    assert new_entry.ready is True

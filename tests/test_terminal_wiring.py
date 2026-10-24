@@ -1,7 +1,7 @@
 """Terminal wiring — the MobileTerminal contract, offline (CollabShell shape).
 
-The terminal widget is a MagicMock: what matters is that the view wires BOTH
-input paths, forwards the resize, and replays the scrollback on mount in order.
+The terminal widget is verified: the view wires both input paths, forwards
+resize, replays scrollback on mount in order, and provides in-screen switcher tabs.
 """
 
 from __future__ import annotations
@@ -52,12 +52,12 @@ def test_replay_clears_pending_then_sends_scrollback_in_order(entry):
     assert sent == [b"first", b"second"]
 
 
-def test_resize_payload_carries_cols_rows_and_inset():
-    payload = json.dumps({"cols": 100, "rows": 30, "bottom_inset": 42})
+def test_resize_payload_carries_cols_and_rows():
+    """Dart side transmits cols and rows upon terminal canvas resize."""
+    payload = json.dumps({"cols": 100, "rows": 30})
     parsed = json.loads(payload)
     assert parsed["cols"] == 100
     assert parsed["rows"] == 30
-    assert parsed["bottom_inset"] == 42
 
 
 def test_malformed_resize_payload_is_ignored():
@@ -85,3 +85,29 @@ def test_terminal_view_is_built_inside_the_component_tree():
     ).read_text(encoding="utf-8")
     assert "MobileTerminal(" in source
     assert "entry.mt is None" in source
+
+
+def test_terminal_view_source_has_switcher_tabs_and_actions():
+    """Terminal view must render in-screen switcher tabs and action menu."""
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[1] / "src" / "screens" / "terminal_view.py"
+    ).read_text(encoding="utf-8")
+    assert "switcher_box" in source
+    assert "action_menu" in source
+    assert "PALETTE_ROUNDED" in source
+    assert "ZOOM_IN" in source
+    assert "ZOOM_OUT" in source
+    assert "SEARCH_ROUNDED" in source
+
+
+def test_terminal_view_wires_bell_and_shortcut():
+    """Terminal view wires on_bell and on_shortcut handlers."""
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[1] / "src" / "screens" / "terminal_view.py"
+    ).read_text(encoding="utf-8")
+    assert "mt.on_bell = _on_bell" in source
+    assert "mt.on_shortcut = _on_shortcut" in source

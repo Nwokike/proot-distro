@@ -225,3 +225,34 @@ while integrating DDGS house polish (11pt type floor, 8-pt grid, Outfit typeface
 
 Exit state: 85 tests green (+6 design-parity guard tests), ruff clean, `flet run`
 smoke clean.
+
+## D-020 · 2026-10-24 · Milestone R3 executed — Terminal Excellence & PTY Lifecycle Hardening
+
+R3 delivers the full interactive multi-shell experience and hardens process
+lifecycles against crashes and leaks:
+
+1. **Multi-shell in-screen switcher tabs:** `switcher_box` (CollabShell
+   `terminal_panel.py:838-948` parity) placed directly above the terminal canvas
+   renders scrollable tab chips for all open containers, active tab highlighted,
+   close tap target (`CLOSE_ROUNDED`) per tab, and a `+` button (`ADD_ROUNDED`)
+   opening an in-screen container launcher (capped at `MAX_CONCURRENT_SESSIONS = 4`).
+2. **Compact switcher actions & header menu:** Right side of switcher box houses
+   terminal theme cycling (`PALETTE_ROUNDED` across JetBrains Dark, Dracula,
+   Matrix Green, Colab Light), zoom out/in buttons, and search toggle. Header
+   action menu (`MORE_VERT_ROUNDED`) exposes New Terminal, Copy Selection,
+   Paste, Clear Terminal, Reset Zoom, and Toggle Cursor Blink.
+3. **Dynamic terminal events:** `on_title_change` captures guest OSC 0/2 titles
+   (e.g. `root@debian: ~`) and updates header and tab chips; `on_bell` triggers
+   subtle feedback via `ft.HapticFeedback`; `on_shortcut` routes keyboard
+   shortcuts.
+4. **PTY lifecycle & process hardening:** `start()` wraps `pty.openpty()` in
+   `try/finally` to prevent FD leaks if `Popen` raises; `write()` uses a loop for
+   partial-write safety; `stop()` implements SIGTERM -> 2s wait -> SIGKILL
+   escalation + reader thread join; `SessionManager` protects `entries` with
+   `threading.RLock()`.
+5. **Screen wakelock:** `ft.Wakelock` mounted as an app-wide service and enabled
+   during active terminal sessions to keep CPU/screen awake mid-command,
+   releasing on exit.
+
+Exit state: 91 tests green (+6 PTY/terminal tests), ruff clean, `flet run` smoke
+clean.
