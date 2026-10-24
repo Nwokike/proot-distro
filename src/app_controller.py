@@ -64,6 +64,8 @@ class AppController:
             reset_container=self.reset_container,
             search_distro=self.search_distro,
             clear_cache=self.clear_cache,
+            clear_orphan_layers=self.clear_orphan_layers,
+            remove_cached_image=self.remove_cached_image,
             set_docker_token=self.set_docker_token,
             set_theme_mode=self.set_theme_mode,
             cycle_theme_mode=self.cycle_theme_mode,
@@ -74,8 +76,11 @@ class AppController:
             backup_container=self.backup_container,
             restore_container=self.restore_container,
             copy_path=self.copy_path,
+            sync_path=self.sync_path,
+            inspect_container=self.inspect_container,
             list_sessions=self.list_sessions,
             kill_session=self.kill_session,
+            kill_all_sessions=self.kill_all_sessions,
             open_session=self.open_session,
             leave_session=self.leave_session,
             close_session=self.close_session,
@@ -160,9 +165,15 @@ class AppController:
         try:
             cached = await asyncio.to_thread(self.proot.cached_images)
             state.cached_count = len(cached)
+            state.cached_images = cached
         except Exception as exc:
             state.cached_count = 0
+            state.cached_images = []
             notes.append(f"cached-image list unavailable: {_reason(exc)}")
+        try:
+            state.busy_locks = await asyncio.to_thread(self.proot.busy_locks)
+        except Exception:
+            state.busy_locks = []
         state.data_note = " · ".join(notes)
 
     async def install_distro(self, image: str, name: str) -> None:
@@ -240,14 +251,42 @@ class AppController:
             return
         state.cache_busy = True
         try:
-            images = await asyncio.to_thread(self.proot.cached_images)
-            for image in images:
-                identifier = image.get("identifier")
-                if identifier and identifier != "?":
-                    await asyncio.to_thread(self.proot.remove_cached_image, identifier)
-            self.show_snack("cached downloads cleared")
+            outcome = await asyncio.to_thread(self.proot.clear_cache)
+            self.show_snack(
+                "cached downloads cleared" if outcome.ok else self.proot.friendly_job_error(outcome)
+            )
         except Exception as exc:
             self.show_snack(f"cache clear failed: {exc!r}")
+        finally:
+            state.cache_busy = False
+            await self.refresh_containers()
+
+    async def clear_orphan_layers(self) -> None:
+        if state.cache_busy:
+            return
+        state.cache_busy = True
+        try:
+            outcome = await asyncio.to_thread(self.proot.clear_cache, orphan=True)
+            self.show_snack(
+                "orphan layers cleared" if outcome.ok else self.proot.friendly_job_error(outcome)
+            )
+        except Exception as exc:
+            self.show_snack(f"orphan sweep failed: {exc!r}")
+        finally:
+            state.cache_busy = False
+            await self.refresh_containers()
+
+    async def remove_cached_image(self, identifier: str) -> None:
+        if state.cache_busy:
+            return
+        state.cache_busy = True
+        try:
+            outcome = await asyncio.to_thread(self.proot.remove_cached_image, identifier)
+            self.show_snack(
+                f"removed {identifier}" if outcome.ok else self.proot.friendly_job_error(outcome)
+            )
+        except Exception as exc:
+            self.show_snack(f"image remove failed: {exc!r}")
         finally:
             state.cache_busy = False
             await self.refresh_containers()
@@ -414,15 +453,148 @@ class AppController:
             else self.proot.friendly_job_error(outcome)
         )
 
+    async def sync_path(
+        self, source: str, destination: str, checksum: bool = True, delete: bool = False
+    ) -> None:
+        source = source.strip()
+        destination = destination.strip()
+        if not source or not destination:
+            self.show_snack("sync needs a source and a destination")
+            return
+        outcome = await asyncio.to_thread(
+            self.proot.sync_path, source, destination, checksum, delete
+        )
+        self.show_snack(
+            f"synced {source} -> {destination}"
+            if outcome.ok
+            else self.proot.friendly_job_error(outcome)
+        )
+
+    async def inspect_container(self, name: str) -> None:
+        info = await asyncio.to_thread(self.proot.inspect_container, name)
+        from core import tokens
+
+        os_rel = info.get("os_release", {})
+        pretty_name = os_rel.get("PRETTY_NAME") or os_rel.get("NAME") or name
+        version_id = os_rel.get("VERSION_ID", "")
+        cfg = info.get("config", {})
+        entrypoint = cfg.get("Entrypoint") or "default"
+        cmd = cfg.get("Cmd") or "default"
+        workdir = cfg.get("WorkingDir") or "/"
+
+        content = ft.Column(
+            controls=[
+                ft.Text(
+                    f"OS: {pretty_name} {version_id}".strip(),
+                    size=tokens.FONT_MD,
+                    weight=ft.FontWeight.W_600,
+                    color=theme.text(),
+                ),
+                ft.Text(
+                    f"Origin: {info.get('image', 'local')} ({info.get('arch', 'unknown')})",
+                    size=tokens.FONT_SM,
+                    color=theme.text_dim(),
+                ),
+                ft.Divider(),
+                ft.Text(
+                    f"WorkingDir: {workdir}",
+                    size=tokens.FONT_SM,
+                    color=theme.text(),
+                ),
+                ft.Text(
+                    f"Entrypoint: {entrypoint}",
+                    size=tokens.FONT_XS,
+                    color=theme.text_dim(),
+                ),
+                ft.Text(
+                    f"Cmd: {cmd}",
+                    size=tokens.FONT_XS,
+                    color=theme.text_dim(),
+                ),
+            ],
+            spacing=tokens.SPACE_XS,
+            tight=True,
+        )
+
+        self.page.show_dialog(
+            ft.AlertDialog(
+                title=ft.Text(
+                    f"Container: {name}",
+                    size=tokens.FONT_LG,
+                    weight=ft.FontWeight.BOLD,
+                ),
+                content=content,
+                actions=[ft.TextButton("Close", on_click=lambda _e: self.page.pop_dialog())],
+            )
+        )
+
     async def list_sessions(self) -> None:
         rows = await asyncio.to_thread(self.proot.active_sessions)
         if not rows:
             self.show_snack("no running sessions")
             return
-        lines = [
-            f"pid {row.get('pid')} · {row.get('container')} · {row.get('kind')}" for row in rows
-        ]
-        self.show_snack(" · ".join(lines[:4]))
+        from core import tokens
+
+        def _close_dlg(_e=None):
+            self.page.pop_dialog()
+
+        def _kill(pid):
+            _close_dlg()
+            self.page.run_task(self.kill_session, str(pid))
+
+        def _kill_all(_e):
+            _close_dlg()
+            self.page.run_task(self.kill_all_sessions)
+
+        items = []
+        for r in rows:
+            pid_val = str(r.get("pid", ""))
+            items.append(
+                ft.ListTile(
+                    leading=ft.Icon(ft.Icons.TERMINAL_ROUNDED, color=theme.primary()),
+                    title=ft.Text(
+                        f"{r.get('container')} (PID {r.get('pid')})",
+                        size=tokens.FONT_MD,
+                        weight=ft.FontWeight.W_600,
+                    ),
+                    subtitle=ft.Text(
+                        f"user: {r.get('user')} · cmd: {r.get('command')}",
+                        size=tokens.FONT_XS,
+                    ),
+                    trailing=ft.IconButton(
+                        icon=ft.Icons.STOP_CIRCLE_ROUNDED,
+                        icon_color=theme.warn(),
+                        tooltip="Stop session",
+                        on_click=lambda _e, p=pid_val: _kill(p),
+                    ),
+                )
+            )
+
+        self.page.show_dialog(
+            ft.AlertDialog(
+                title=ft.Text(
+                    "Active Sessions",
+                    size=tokens.FONT_LG,
+                    weight=ft.FontWeight.BOLD,
+                ),
+                content=ft.Column(
+                    controls=items,
+                    spacing=tokens.SPACE_XS,
+                    tight=True,
+                    scroll=ft.ScrollMode.AUTO,
+                ),
+                actions=[
+                    ft.TextButton("Stop All", on_click=_kill_all),
+                    ft.TextButton("Close", on_click=_close_dlg),
+                ],
+            )
+        )
+
+    async def kill_all_sessions(self) -> None:
+        outcome = await asyncio.to_thread(self.proot.kill_session, "", True)
+        self.show_snack(
+            "stopped all sessions" if outcome.ok else self.proot.friendly_job_error(outcome)
+        )
 
     async def kill_session(self, pid: str) -> None:
         outcome = await asyncio.to_thread(self.proot.kill_session, str(pid))

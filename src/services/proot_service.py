@@ -181,6 +181,48 @@ def _ns_kill(target: str, all_sessions: bool = False, signal: str | None = None)
     return SimpleNamespace(target=target, all=all_sessions, signal=signal)
 
 
+def _ns_clear_cache(orphan: bool = False, build_cache: bool = False) -> SimpleNamespace:
+    return SimpleNamespace(
+        orphan=orphan,
+        build_cache=build_cache,
+        verbose=False,
+        quiet=False,
+    )
+
+
+def _ns_sync(
+    source: str, destination: str, checksum: bool = True, delete: bool = False
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        source=source,
+        destination=destination,
+        checksum=checksum,
+        delete=delete,
+        verbose=False,
+        quiet=False,
+    )
+
+
+def _ns_run(container: str, run_args: list[str], work_dir: str | None = None) -> SimpleNamespace:
+    return SimpleNamespace(
+        container_name=container,
+        run_args=run_args,
+        work_dir=work_dir,
+        user="root",
+        redirect_ports=False,
+        shared_home=False,
+        shared_tmp=False,
+        shared_x11=False,
+        bind=[],
+        emulator=None,
+        kernel=None,
+        hostname=None,
+        env=[],
+        detach=False,
+        get_proot_cmd=False,
+    )
+
+
 # ── public API (plain data) ──────────────────────────────────────────────────
 
 
@@ -444,6 +486,69 @@ def copy_path(source: str, destination: str, move: bool = False) -> Outcome:
         "command_copy",
         _ns_copy(source, destination, move=move),
     )
+
+
+def sync_path(
+    source: str, destination: str, checksum: bool = True, delete: bool = False
+) -> Outcome:
+    """Synchronize directories between containers / host with checksum and pruning."""
+    return _run_command(
+        "proot_distro.commands.sync",
+        "command_sync",
+        _ns_sync(source, destination, checksum=checksum, delete=delete),
+    )
+
+
+def clear_cache(orphan: bool = False, build_cache: bool = False) -> Outcome:
+    """Clear download cache or sweep orphan layer blobs."""
+    return _run_command(
+        "proot_distro.commands.clear_cache",
+        "command_clear_cache",
+        _ns_clear_cache(orphan=orphan, build_cache=build_cache),
+    )
+
+
+def run_command(container: str, run_args: list[str], work_dir: str | None = None) -> Outcome:
+    """Run a non-interactive command inside container via Entrypoint/Cmd."""
+    return _run_command(
+        "proot_distro.commands.run",
+        "command_run",
+        _ns_run(container, run_args, work_dir),
+    )
+
+
+def inspect_container(name: str) -> dict:
+    """Inspect installed container: image origin, OCI config, guest /etc/os-release."""
+    bootstrap()
+    from proot_distro import guestfile, paths
+
+    rootfs = paths.container_rootfs(name)
+    origin_image, origin_arch = "", ""
+    with contextlib.suppress(Exception):
+        origin_image, origin_arch = paths.container_image_origin(name)
+
+    config = {}
+    with contextlib.suppress(Exception):
+        config = paths.container_image_config(name) or {}
+
+    os_release = {}
+    with contextlib.suppress(Exception):
+        raw = guestfile.read_guest_file(rootfs, "etc/os-release") or guestfile.read_guest_file(
+            rootfs, "usr/lib/os-release"
+        )
+        if raw:
+            for line in raw.splitlines():
+                if "=" in line and not line.startswith("#"):
+                    k, _, v = line.partition("=")
+                    os_release[k.strip()] = v.strip().strip('"').strip("'")
+
+    return {
+        "name": name,
+        "image": origin_image,
+        "arch": origin_arch,
+        "os_release": os_release,
+        "config": config,
+    }
 
 
 def kill_session(target: str, all_sessions: bool = False) -> Outcome:

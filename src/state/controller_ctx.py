@@ -33,6 +33,8 @@ class ControllerMethods:
 
     # Settings
     clear_cache: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    clear_orphan_layers: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    remove_cached_image: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     set_docker_token: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     set_theme_mode: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     cycle_theme_mode: Callable[[], Awaitable[None]] = field(default=_noop_async)
@@ -47,8 +49,11 @@ class ControllerMethods:
     backup_container: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     restore_container: Callable[[], Awaitable[None]] = field(default=_noop_async)
     copy_path: Callable[[str, str], Awaitable[None]] = field(default=_noop_async)
+    sync_path: Callable[[str, str, bool, bool], Awaitable[None]] = field(default=_noop_async)
+    inspect_container: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     list_sessions: Callable[[], Awaitable[None]] = field(default=_noop_async)
     kill_session: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    kill_all_sessions: Callable[[], Awaitable[None]] = field(default=_noop_async)
 
     # Onboarding + hints
     finish_onboarding: Callable[[], Awaitable[None]] = field(default=_noop_async)

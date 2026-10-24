@@ -256,3 +256,35 @@ lifecycles against crashes and leaks:
 
 Exit state: 91 tests green (+6 PTY/terminal tests), ruff clean, `flet run` smoke
 clean.
+
+## D-021 · 2026-10-24 · Milestone R4 executed — Full proot-distro surface
+
+Milestone R4 exposes upstream proot-distro's full operational capabilities
+through modern, state-driven UI without monkeypatching or forks (D-001):
+
+1. **Interactive Storage Manager:** The Settings storage section lists each cached
+   OCI image (`proot_service.cached_images()`) with its architecture, on-disk size,
+   and per-image delete button (`remove_cached_image`). Added "Sweep orphan layers"
+   (`clear_cache(orphan=True)`) and active lock indicators (`busy_locks()`).
+2. **Container Inspection & Guest Metadata:** `inspect_container(name)` reads
+   guest `/etc/os-release` via `guestfile.read_guest_file` and OCI config
+   (Entrypoint, Cmd, WorkingDir) via `paths.container_image_config`, presented in
+   a clean informational dialog ("Inspect container" in container menu).
+3. **Interactive Active Sessions Manager:** `list_sessions` presents an interactive
+   modal dialog with PID, container name, kind, user, command, and per-session
+   "Stop" button plus "Stop All" (`kill_session(all_sessions=True)`).
+4. **Directory Synchronization:** `sync_path(source, destination, checksum, delete)`
+   wraps upstream's 1,101-line `commands.sync.command_sync` with optional checksum
+   verification and destination pruning ("Sync folder" in container menu).
+5. **Certified Distro Quick-Pickers:** Quick-select chips in `DistroView` for
+   Debian 12, Ubuntu 24.04, and Alpine 3.21 pre-fill image ref and container
+   name in one tap.
+6. **Structured Command Mode (O-4):** `run_command(container, run_args, work_dir)`
+   wraps upstream's `commands.run.command_run` for non-interactive execution
+   inside containers, returning an `Outcome` with captured output.
+7. **Certifi TLS Integration:** `storage_paths.env_contract()` dynamically exports
+   `SSL_CERT_FILE = certifi.where()` so upstream urllib OCI layer pulls validate
+   registry certificates against our verified 121-CA Mozilla bundle.
+
+Exit state: 93 tests green (+2 surface tests), ruff clean, `flet run` smoke
+clean.

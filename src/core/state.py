@@ -22,9 +22,11 @@ class AppState:
     search_status: str = ""
     search_results: list = None  # list[dict] — Docker Hub hits
 
-    # Settings
+    # Settings & Storage
     storage_bytes: int = 0
     cached_count: int = 0
+    cached_images: list = None  # list[dict] — cached OCI images
+    busy_locks: list = None  # list[str] — locks held by active operations
     cache_busy: bool = False
     docker_token: str = ""
     theme_mode: str = "system"  # "system" | "light" | "dark"
@@ -53,6 +55,8 @@ class AppState:
     def __init__(self):
         self.containers = []
         self.search_results = []
+        self.cached_images = []
+        self.busy_locks = []
 
 
 state = AppState()

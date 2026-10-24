@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 from pathlib import Path
 
@@ -42,7 +43,7 @@ def env_contract() -> dict[str, str]:
     PROOT_LOADER point at the payload the M2 wheel staged. Callers extend
     this with the payload paths from `core.proot_probe`.
     """
-    return {
+    contract = {
         "TERMUX_APP__PACKAGE_NAME": PACKAGE_NAME,
         "TERMUX__PREFIX": "/data/data/" + PACKAGE_NAME + "/files/usr",
         "TERMUX__HOME": "/data/data/" + PACKAGE_NAME + "/files/home",
@@ -51,3 +52,9 @@ def env_contract() -> dict[str, str]:
         "PROOT_TMP_DIR": str(support_root() / "tmp"),
         "PD_FORCE_NO_COLORS": "1",
     }
+    with contextlib.suppress(Exception):
+        import importlib
+
+        certifi = importlib.import_module("certifi")
+        contract["SSL_CERT_FILE"] = certifi.where()
+    return contract

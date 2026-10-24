@@ -189,6 +189,12 @@ def DistroView() -> ft.Control:
             def _copy(_e) -> None:
                 _ask_copy(container)
 
+            def _sync(_e) -> None:
+                _ask_sync(container)
+
+            def _inspect(_e) -> None:
+                page.run_task(methods.inspect_container, container)
+
             def _sessions(_e) -> None:
                 page.run_task(methods.list_sessions)
 
@@ -196,6 +202,10 @@ def DistroView() -> ft.Control:
                 page.run_task(methods.restore_container)
 
             return [
+                ft.PopupMenuItem(
+                    content=ft.Text("Inspect container", size=tokens.FONT_SM),
+                    on_click=_inspect,
+                ),
                 ft.PopupMenuItem(content=ft.Text("Rename", size=tokens.FONT_SM), on_click=_rename),
                 ft.PopupMenuItem(
                     content=ft.Text("Backup to a file", size=tokens.FONT_SM), on_click=_backup
@@ -208,9 +218,71 @@ def DistroView() -> ft.Control:
                     content=ft.Text("Copy a path", size=tokens.FONT_SM), on_click=_copy
                 ),
                 ft.PopupMenuItem(
+                    content=ft.Text("Sync folder", size=tokens.FONT_SM), on_click=_sync
+                ),
+                ft.PopupMenuItem(
                     content=ft.Text("Running sessions", size=tokens.FONT_SM), on_click=_sessions
                 ),
             ]
+
+        def _ask_sync(container: str) -> None:
+            source = ft.TextField(
+                hint_text=f"source (e.g. {container}:/root or /sdcard/src)",
+                text_size=tokens.FONT_SM,
+                height=44,
+                border=ft.OutlineInputBorder(
+                    border_radius=tokens.RADIUS_MD,
+                    side=ft.BorderSide(1, theme.surface_alt()),
+                ),
+            )
+            destination = ft.TextField(
+                hint_text=f"destination (e.g. {container}:/root/dest)",
+                text_size=tokens.FONT_SM,
+                height=44,
+                border=ft.OutlineInputBorder(
+                    border_radius=tokens.RADIUS_MD,
+                    side=ft.BorderSide(1, theme.surface_alt()),
+                ),
+            )
+            delete_box = ft.Checkbox(
+                label="Prune files in destination that do not exist in source",
+                value=False,
+            )
+
+            def _save(_e) -> None:
+                page.pop_dialog()
+                page.run_task(
+                    methods.sync_path,
+                    source.value or "",
+                    destination.value or "",
+                    True,
+                    delete_box.value or False,
+                )
+
+            page.show_dialog(
+                ft.AlertDialog(
+                    title=ft.Text(
+                        f"Sync Folder ({container})",
+                        size=tokens.FONT_LG,
+                        weight=ft.FontWeight.BOLD,
+                    ),
+                    content=ft.Column(
+                        controls=[source, destination, delete_box],
+                        spacing=tokens.SPACE_XS,
+                        tight=True,
+                    ),
+                    actions=[
+                        ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
+                        ft.FilledButton(
+                            "Sync",
+                            on_click=_save,
+                            style=ft.ButtonStyle(
+                                shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
+                            ),
+                        ),
+                    ],
+                )
+            )
 
         def _ask_rename(container: str) -> None:
             field = ft.TextField(
@@ -395,6 +467,60 @@ def DistroView() -> ft.Control:
             border_radius=tokens.RADIUS_MD,
         )
 
+    _CERTIFIED_DISTROS = (
+        ("Debian 12", "debian:bookworm", "debian"),
+        ("Ubuntu 24.04", "ubuntu:24.04", "ubuntu"),
+        ("Alpine 3.21", "alpine:3.21", "alpine"),
+    )
+
+    chips = []
+    for clabel, cref, cdef_name in _CERTIFIED_DISTROS:
+        is_sel = query == cref
+        chips.append(
+            ft.Container(
+                content=ft.Row(
+                    controls=[
+                        ft.Icon(
+                            ft.Icons.CHECK_CIRCLE_ROUNDED
+                            if is_sel
+                            else ft.Icons.RADIO_BUTTON_UNCHECKED_ROUNDED,
+                            size=tokens.ICON_XS,
+                            color=theme.primary() if is_sel else theme.text_dim(),
+                        ),
+                        ft.Text(
+                            clabel,
+                            size=tokens.FONT_XS,
+                            color=theme.primary() if is_sel else theme.text(),
+                            weight=ft.FontWeight.W_600 if is_sel else ft.FontWeight.W_400,
+                        ),
+                    ],
+                    spacing=tokens.SPACE_XS,
+                    tight=True,
+                ),
+                padding=ft.Padding(
+                    tokens.SPACE_SM,
+                    tokens.SPACE_XXS,
+                    tokens.SPACE_SM,
+                    tokens.SPACE_XXS,
+                ),
+                border_radius=tokens.RADIUS_PILL,
+                bgcolor=ft.Colors.with_opacity(0.12, theme.primary())
+                if is_sel
+                else theme.surface_alt(),
+                border=ft.Border.all(
+                    1,
+                    ft.Colors.with_opacity(0.24, theme.primary())
+                    if is_sel
+                    else ft.Colors.TRANSPARENT,
+                ),
+                on_click=lambda _e, r=cref, n=cdef_name: (
+                    set_query(r),
+                    set_name(n),
+                ),
+                ink=True,
+            )
+        )
+
     controls: list[ft.Control] = [
         build_brand_hero("Linux on Android — no root, no Termux"),
         hints_card(st.hints_dismissed, lambda _e: page.run_task(methods.dismiss_hints)),
@@ -406,6 +532,11 @@ def DistroView() -> ft.Control:
         card(
             ft.Column(
                 controls=[
+                    ft.Row(
+                        controls=chips,
+                        spacing=tokens.SPACE_XS,
+                        scroll=ft.ScrollMode.AUTO,
+                    ),
                     ft.Row(
                         controls=[
                             _field(),
@@ -525,6 +656,63 @@ def SettingsView() -> ft.Control:
             )
         )
 
+    def _confirm_remove_cached(identifier: str) -> None:
+        def _yes(_e) -> None:
+            page.pop_dialog()
+            page.run_task(methods.remove_cached_image, identifier)
+
+        page.show_dialog(
+            ft.AlertDialog(
+                title=ft.Text(
+                    f"Remove cached image {identifier}?",
+                    size=tokens.FONT_LG,
+                    weight=ft.FontWeight.BOLD,
+                ),
+                content=ft.Text(
+                    f"Removes the cached layers for {identifier}. Installed containers "
+                    "based on this image keep working.",
+                    size=tokens.FONT_SM,
+                ),
+                actions=[
+                    ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
+                    ft.FilledButton(
+                        "Remove",
+                        on_click=_yes,
+                        style=ft.ButtonStyle(
+                            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
+                            bgcolor=theme.warn(),
+                        ),
+                    ),
+                ],
+            )
+        )
+
+    def _make_cached_image_row(img: dict) -> ft.Control:
+        ident = str(img.get("identifier", ""))
+        arch = str(img.get("arch", ""))
+        size = _fmt_size(img.get("size_bytes", 0))
+        return ft.Row(
+            controls=[
+                ft.Icon(
+                    ft.Icons.LAYERS_ROUNDED,
+                    size=tokens.ICON_XS,
+                    color=theme.primary(),
+                ),
+                ft.Text(
+                    f"{ident} ({arch}) · {size}",
+                    size=tokens.FONT_XS,
+                    expand=True,
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
+                    icon_size=tokens.ICON_SM,
+                    tooltip=f"Remove cached {ident}",
+                    on_click=lambda _e: _confirm_remove_cached(ident),
+                ),
+            ],
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+
     def _licenses(_e) -> None:
         def _close(_e) -> None:
             page.pop_dialog()
@@ -581,6 +769,17 @@ def SettingsView() -> ft.Control:
                         *(
                             [
                                 ft.Text(
+                                    f"Active locks: {', '.join(st.busy_locks)}",
+                                    size=tokens.FONT_XS,
+                                    color=theme.accent(),
+                                )
+                            ]
+                            if st.busy_locks
+                            else []
+                        ),
+                        *(
+                            [
+                                ft.Text(
                                     st.data_note,
                                     size=tokens.FONT_XS,
                                     color=theme.warn(),
@@ -590,7 +789,40 @@ def SettingsView() -> ft.Control:
                             if st.data_note
                             else []
                         ),
-                        ft.TextButton("Clear cached downloads", on_click=lambda _e: _clear_cache()),
+                        *(
+                            [
+                                ft.Column(
+                                    controls=[
+                                        ft.Text(
+                                            "Cached Images",
+                                            size=tokens.FONT_SM,
+                                            weight=ft.FontWeight.W_600,
+                                        ),
+                                        *[
+                                            _make_cached_image_row(img)
+                                            for img in st.cached_images
+                                            if img.get("identifier")
+                                            and img.get("identifier") != "?"
+                                        ],
+                                    ],
+                                    spacing=tokens.SPACE_XXS,
+                                )
+                            ]
+                            if st.cached_images
+                            else []
+                        ),
+                        ft.Row(
+                            controls=[
+                                ft.TextButton(
+                                    "Clear all cache", on_click=lambda _e: _clear_cache()
+                                ),
+                                ft.TextButton(
+                                    "Sweep orphan layers",
+                                    on_click=lambda _e: page.run_task(methods.clear_orphan_layers),
+                                ),
+                            ],
+                            spacing=tokens.SPACE_XS,
+                        ),
                         ft.Text(
                             "Package downloads happen inside your container, from "
                             "the distro's own mirrors, only when you run a command "

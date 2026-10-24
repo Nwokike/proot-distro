@@ -82,6 +82,61 @@ def test_remove_and_reset_namespaces():
     assert s["container_name"] == "debian"
 
 
+def test_sync_and_clear_cache_and_run_namespaces():
+    pytest.importorskip("proot_distro")
+    from proot_distro import parser
+
+    from services.proot_service import _ns_clear_cache, _ns_run, _ns_sync
+
+    p = parser.build_parser()
+    sync_args = vars(p.parse_args(["sync", "src", "dst"]))
+    assert set(vars(_ns_sync("src", "dst", checksum=True, delete=False))) <= set(sync_args)
+
+    clear_args = vars(p.parse_args(["clear-cache", "--orphan"]))
+    assert set(vars(_ns_clear_cache(orphan=True))) <= set(clear_args)
+
+    # run_args is attached by cli.py after the '--' separator
+    run_fields = set(vars(p.parse_args(["run", "demo"]))) | {"run_args"}
+    assert set(vars(_ns_run("demo", ["ls", "-l"]))) <= run_fields
+
+
+def test_inspect_container_contract(monkeypatch, tmp_path):
+    pytest.importorskip("proot_distro")
+    import sys
+
+    if sys.platform == "win32":
+        pytest.skip("POSIX-only integration path")
+
+    from proot_distro import paths
+
+    from services import proot_service
+
+    rootfs = tmp_path / "rootfs"
+    (rootfs / "etc").mkdir(parents=True)
+    (rootfs / "etc" / "os-release").write_text(
+        'NAME="Debian GNU/Linux"\nVERSION_ID="12"\nPRETTY_NAME="Debian GNU/Linux 12 (bookworm)"\n'
+    )
+
+    monkeypatch.setattr(paths, "container_rootfs", lambda _name: str(rootfs))
+    monkeypatch.setattr(
+        paths, "container_image_origin", lambda _name: ("debian:bookworm", "aarch64")
+    )
+    monkeypatch.setattr(
+        paths,
+        "container_image_config",
+        lambda _name: {"Cmd": ["/bin/bash"], "WorkingDir": "/root"},
+    )
+
+    info = proot_service.inspect_container("demo")
+    assert info["name"] == "demo"
+    assert info["image"] == "debian:bookworm"
+    assert info["arch"] == "aarch64"
+    assert info["os_release"].get("ID", True)
+    assert info["os_release"]["NAME"] == "Debian GNU/Linux"
+    assert info["os_release"]["VERSION_ID"] == "12"
+    assert info["config"]["WorkingDir"] == "/root"
+
+
 # ── 3. env contract ──────────────────────────────────────────────────────────
 
 
@@ -96,8 +151,10 @@ def test_env_contract_is_import_safe():
         "XDG_DATA_HOME",
         "XDG_CACHE_HOME",
         "PROOT_TMP_DIR",
+        "SSL_CERT_FILE",
     ):
         assert env.get(key), f"{key} missing/empty"
+    assert Path(env["SSL_CERT_FILE"]).is_file()
     # The containers root must live under our XDG home, never a Termux default.
     assert str(storage_paths.containers_dir()).startswith(env["XDG_DATA_HOME"])
     assert "com.termux" not in env["TERMUX_APP__PACKAGE_NAME"]
