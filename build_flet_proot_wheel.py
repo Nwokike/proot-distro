@@ -28,8 +28,9 @@ TIMEOUT = 120.0
 UA = "kiri-flet-proot-wheel-builder/1.0 (+https://github.com/Nwokike/proot-distro)"
 
 # ── the pin set (the "bump a version" path: one edit here) ──────────────────
-# proot 5.1.107.98 replaced 5.1.107.96 when Termux dropped the old debs from
-# the pool (CI 404). talloc/shmem unchanged.
+# proot 5.1.107.101 replaced 5.1.107.98 when Termux dropped the old debs from
+# the pool (CI 404, again — same class as the 96→98 bump, D-015.6).
+# talloc/shmem unchanged.
 
 _PINNED_SOURCES = {
     "pool_root": "https://packages.termux.dev/apt/termux-main/pool/main",
@@ -37,15 +38,15 @@ _PINNED_SOURCES = {
     "packages": {
         "proot": {
             "pool_dir": "p/proot",
-            "version": "5.1.107.98",
+            "version": "5.1.107.101",
             "debs": {
                 "aarch64": {
-                    "file": "proot_5.1.107.98_aarch64.deb",
-                    "sha256": "29de40efea4daa2a6168b617915206511c63e8d46bf5f4b07d48723441ef7f3b",
+                    "file": "proot_5.1.107.101_aarch64.deb",
+                    "sha256": "a28355e9be257e1f87f4e9294b3118470d4fd7a5442fed8b278f4443c83407d7",
                 },
                 "x86_64": {
-                    "file": "proot_5.1.107.98_x86_64.deb",
-                    "sha256": "1c31ad7e1046f4d418fef19b6dfaa9a14801d2047ade6ad0375b3f5501e3e227",
+                    "file": "proot_5.1.107.101_x86_64.deb",
+                    "sha256": "85adb8d0d2e1edc6c56e60c17136adf05e54ce75f69407ec7116a4c5997eaed5",
                 },
             },
         },

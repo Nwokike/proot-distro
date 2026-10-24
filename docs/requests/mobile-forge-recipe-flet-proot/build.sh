@@ -32,10 +32,10 @@ ARCHS = ["aarch64", "x86_64"]
 SOURCES = {
     "proot": {
         "dir": "p/proot",
-        "ver": "5.1.107.96",
+        "ver": "5.1.107.101",
         "sha": {
-            "aarch64": "8199dca06dccb693ec09fb1759e3e1ad08b4863f0c11c612f89c20bd9ecdc1a0",
-            "x86_64": "77ea45540071ca543adda2b51aca2bc3761c52904d013fd0890682288eff9455",
+            "aarch64": "a28355e9be257e1f87f4e9294b3118470d4fd7a5442fed8b278f4443c83407d7",
+            "x86_64": "85adb8d0d2e1edc6c56e60c17136adf05e54ce75f69407ec7116a4c5997eaed5",
         },
     },
     "libtalloc": {

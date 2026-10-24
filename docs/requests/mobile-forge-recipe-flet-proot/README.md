@@ -12,7 +12,7 @@ maintainers want it.
 | File | Notes |
 |---|---|
 | `meta.yaml` | Minimal recipe metadata. Field set mirrors the fields visibly used by `recipes/flet-libffmpeg/meta.yaml` (version set-block, `name`, `build.number`, `license`). The full schema lives in the forge's `meta-schema.yaml` — **re-check against it before opening the PR**. |
-| `build.sh` | Repack build: downloads the pinned Termux `.deb`s (proot 5.1.107.96, libtalloc 2.5.0, libandroid-shmem 0.7), verifies sha256, extracts, and stages the payload at `opt/lib/*.so` (the layout `copyOpt_<abi>` consumes). **UNVERIFIED against the forge build environment** — whether `$SRC_DIR`/`$PREFIX` conventions and network access match what a forge `build.sh` is given has not been checked (no forge build has been run). |
+| `build.sh` | Repack build: downloads the pinned Termux `.deb`s (proot 5.1.107.101, libtalloc 2.5.0, libandroid-shmem 0.7), verifies sha256, extracts, and stages the payload at `opt/lib/*.so` (the layout `copyOpt_<abi>` consumes). **UNVERIFIED against the forge build environment** — whether `$SRC_DIR`/`$PREFIX` conventions and network access match what a forge `build.sh` is given has not been checked (no forge build has been run). |
 | `test.py` | Target-installation sanity test (manifest + payload presence + 16 KiB PT_LOAD alignment). |
 | `licenses/` | Full canonical texts: GPL-2.0 (proot + loader), GPL-3.0 (libtalloc), BSD-3-Clause (libandroid-shmem). |
 
