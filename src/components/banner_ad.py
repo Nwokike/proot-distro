@@ -13,7 +13,7 @@ import logging
 import flet as ft
 from flet import Control
 
-from core import theme
+from core import theme, tokens
 
 logger = logging.getLogger(__name__)
 
@@ -95,17 +95,20 @@ def build_banner_ad(page: ft.Page | None = None) -> Control:
                 ft.Container(content=ad, width=320, height=50),
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=4,
+            spacing=tokens.SPACE_XS,
             tight=True,
         ),
         expand=True,
-        padding=8,
-        border_radius=12,
-        bgcolor=theme.surface(),
-        border=ft.Border.all(1, theme.surface_alt()),
+        padding=tokens.SPACE_SM,
+        border_radius=tokens.RADIUS_LG,
+        bgcolor=theme.glass_bg(),
+        border=ft.Border.all(1, theme.glass_border()),
     )
 
-    return ft.Row(
-        controls=[banner],
-        alignment=ft.MainAxisAlignment.CENTER,
+    return ft.Container(
+        content=ft.Row(
+            controls=[banner],
+            alignment=ft.MainAxisAlignment.CENTER,
+        ),
+        padding=ft.Padding.symmetric(horizontal=tokens.SPACE_SM),
     )

@@ -7,20 +7,22 @@ is impossible — M0 G1b) and parse that one public output. Nothing about the
 argv is reimplemented or hardcoded, so an upstream bump flows through.
 
 `ProotSession` is the PTY port of the flet-terminal example: openpty + Popen
-on the slave fd, a blocking read thread that hands bytes to `on_bytes`, and
-TIOCSWINSZ resize.
+on the slave fd with controlling TTY (`TIOCSCTTY`), a blocking read thread that
+hands bytes to `on_bytes`, and TIOCSWINSZ resize.
 """
 
 from __future__ import annotations
 
 import contextlib
 import os
+import platform
 import re
 import shlex
 import struct
 import subprocess
 import threading
 from collections.abc import Callable
+from pathlib import Path
 
 from services import proot_service
 
@@ -36,8 +38,88 @@ _ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 _HOST_ESSENTIALS = ("LD_LIBRARY_PATH", "PROOT_LOADER", "PROOT_TMP_DIR")
 
 
+def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
+    """Harden session with the verified Android Termux extensions and bindings from M0 spike."""
+    if not argv:
+        return env, argv
+
+    # Locate rootfs from --rootfs argument
+    rootfs_path: Path | None = None
+    for token in argv:
+        if token.startswith("--rootfs="):
+            raw = token[len("--rootfs=") :]
+            if raw != ".":
+                rootfs_path = Path(raw)
+            break
+
+    # If rootfs was relative or missing, query proot_service storage
+    if rootfs_path is None or not rootfs_path.is_dir():
+        with contextlib.suppress(Exception):
+            from core import storage_paths
+
+            candidate = (
+                storage_paths.xdg_data_home() / "proot-distro" / "containers" / container / "rootfs"
+            )
+            if candidate.is_dir():
+                rootfs_path = candidate
+
+    # Ensure shm and l2s directories on host filesystem
+    shm_bind: str | None = None
+    if rootfs_path and rootfs_path.is_dir():
+        shm = rootfs_path / "tmp"
+        with contextlib.suppress(OSError):
+            shm.mkdir(parents=True, exist_ok=True)
+            os.chmod(shm, 0o1777)  # noqa: S103 - sticky bit required for /dev/shm
+        shm_bind = f"--bind={shm}:/dev/shm"
+
+        l2s = rootfs_path / ".l2s"
+        with contextlib.suppress(OSError):
+            l2s.mkdir(parents=True, exist_ok=True)
+        env["PROOT_L2S_DIR"] = str(l2s)
+
+    # Hardened Android extensions (device-proven in M0 spike)
+    # Only injected before the inner guest command
+    inner_idx = len(argv)
+    for idx, arg in enumerate(argv[1:], start=1):
+        if not arg.startswith("-"):
+            inner_idx = idx
+            break
+
+    head = argv[:inner_idx]
+    tail = argv[inner_idx:]
+
+    def _add_if_missing(flag: str) -> None:
+        if flag not in head:
+            head.append(flag)
+
+    _add_if_missing("--kill-on-exit")
+    _add_if_missing("--link2symlink")
+    _add_if_missing("--sysvipc")
+    _add_if_missing("-L")
+
+    uname_m = platform.machine() or "aarch64"
+    kernel_fake = f"--kernel-release=\\Linux\\localhost\\{platform.release()}\\#1 SMP PREEMPT_DYNAMIC Fri, 10 Oct 2025 00:00:00 +0000\\{uname_m}\\localdomain\\-1\\"
+    if not any(a.startswith("--kernel-release=") for a in head):
+        head.append(kernel_fake)
+
+    # Standard devices & stdio streams required by proot on Android
+    _add_if_missing("--bind=/dev/urandom:/dev/random")
+    _add_if_missing("--bind=/proc/self/fd:/dev/fd")
+    _add_if_missing("--bind=/proc/self/fd/0:/dev/stdin")
+    _add_if_missing("--bind=/proc/self/fd/1:/dev/stdout")
+    _add_if_missing("--bind=/proc/self/fd/2:/dev/stderr")
+
+    if shm_bind:
+        _add_if_missing(shm_bind)
+
+    env.setdefault("TERM", "xterm-256color")
+    env.setdefault("COLORTERM", "truecolor")
+
+    return env, head + tail
+
+
 def session_argv(container: str) -> tuple[Env, Argv]:
-    """The guest session's (env, argv) exactly as upstream builds it."""
+    """The guest session's (env, argv) exactly as upstream builds it, hardened with M0 spike flags."""
     line = proot_service.get_proot_cmd(container)
     # Upstream prints the command wrapped with backslash-newline continuations;
     # shlex would read the escaped newline as a literal "n", so the
@@ -66,11 +148,13 @@ def session_argv(container: str) -> tuple[Env, Argv]:
         value = os.environ.get(key)
         if value:
             env[key] = value
+
+    env, argv = _harden_session(env, argv, container)
     return env, argv
 
 
 class ProotSession:
-    """One interactive guest shell on a PTY."""
+    """One interactive guest shell on a PTY with controlling TTY."""
 
     def __init__(
         self,
@@ -84,6 +168,7 @@ class ProotSession:
         self._on_bytes = on_bytes
         self._on_exit = on_exit
         self._master_fd: int | None = None
+        self._slave_fd: int | None = None
         self._process: subprocess.Popen | None = None
         self._reader: threading.Thread | None = None
         self.returncode: int | None = None
@@ -92,12 +177,23 @@ class ProotSession:
     def alive(self) -> bool:
         return self._process is not None and self._process.poll() is None
 
+    def _preexec(self) -> None:
+        """Child process setup: own session + controlling TTY (proven in M0 spike-6)."""
+        os.setsid()
+        if self._slave_fd is not None:
+            with contextlib.suppress(OSError):
+                import fcntl
+                import termios
+
+                fcntl.ioctl(self._slave_fd, termios.TIOCSCTTY, 0)
+
     def start(self) -> None:
         if self._process is not None:
             raise RuntimeError("session already started")
         import pty
 
         master_fd, slave_fd = pty.openpty()
+        self._slave_fd = slave_fd
         try:
             self._process = subprocess.Popen(  # noqa: S603 - argv from upstream's login
                 self._argv,
@@ -105,15 +201,17 @@ class ProotSession:
                 stdout=slave_fd,
                 stderr=slave_fd,
                 close_fds=True,
-                start_new_session=True,
+                preexec_fn=self._preexec,
                 env=self._env,
             )
         except Exception:
+            self._slave_fd = None
             with contextlib.suppress(OSError):
                 os.close(slave_fd)
             with contextlib.suppress(OSError):
                 os.close(master_fd)
             raise
+        self._slave_fd = None
         os.close(slave_fd)
         self._master_fd = master_fd
 
@@ -167,30 +265,19 @@ class ProotSession:
 
     def stop(self) -> None:
         process, self._process = self._process, None
-        reader, self._reader = self._reader, None
-        if self._master_fd is not None:
+        master_fd, self._master_fd = self._master_fd, None
+        if master_fd is not None:
             with contextlib.suppress(OSError):
-                os.close(self._master_fd)
-            self._master_fd = None
+                os.close(master_fd)
         if process is not None and process.poll() is None:
-            with contextlib.suppress(Exception):
-                process.terminate()
+            process.terminate()
             try:
                 process.wait(timeout=2.0)
-            except Exception:
-                with contextlib.suppress(Exception):
-                    process.kill()
+            except subprocess.TimeoutExpired:
+                process.kill()
                 with contextlib.suppress(Exception):
                     process.wait(timeout=1.0)
-        if process is not None:
             self.returncode = process.poll()
+        reader, self._reader = self._reader, None
         if reader is not None and reader.is_alive():
-            with contextlib.suppress(Exception):
-                reader.join(timeout=1.0)
-
-    def __enter__(self) -> ProotSession:
-        self.start()
-        return self
-
-    def __exit__(self, *_exc) -> None:
-        self.stop()
+            reader.join(timeout=1.0)

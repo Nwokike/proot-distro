@@ -28,10 +28,15 @@ def _native_library_dir() -> Path | None:
     native = os.environ.get("ANDROID_NATIVE_LIBRARY_DIR", "")
     if native and Path(native).is_dir():
         return Path(native)
-    # Dev fallback: an emulator/edge layout, glob the well-known pattern.
-    for hit in sorted(Path("/data/app").glob("*/ng.kiri.prootdistro-*/lib/*")):
-        if hit.is_dir():
-            return hit
+    # Dev fallback: support Android 11+ (~~) and legacy /data/app paths.
+    for pattern in (
+        "~~*/ng.kiri.prootdistro-*/lib/*",
+        "*/ng.kiri.prootdistro-*/lib/*",
+        "ng.kiri.prootdistro-*/lib/*",
+    ):
+        for hit in sorted(Path("/data/app").glob(pattern)):
+            if hit.is_dir():
+                return hit
     return None
 
 

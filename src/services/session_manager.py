@@ -80,7 +80,17 @@ class SessionManager:
                 entry.feed(data)
                 mt = entry.mt
                 if mt is not None:
-                    mt.send_bytes(data)
+                    page = getattr(mt, "page", None)
+                    if page is not None and hasattr(page, "loop") and page.loop is not None:
+                        try:
+                            page.loop.call_soon_threadsafe(mt.send_bytes, data)
+                        except Exception:
+                            mt.send_bytes(data)
+                    else:
+                        try:
+                            mt.send_bytes(data)
+                        except Exception:
+                            pass
 
             def _on_exit(returncode: int | None) -> None:
                 entry.ready = False

@@ -317,3 +317,41 @@ Milestone R5 delivers Sherlock's exact ad lifecycle and telemetry architecture a
 
 Exit state: 99 tests green (+6 update service tests), ruff clean, `flet run` smoke clean.
 
+## D-023 · 2026-10-24 · Milestone R6 executed — Terminal PTY stability, Sherlock settings & banners, clean home & distro cards, Linux desktop build
+
+Following owner review and device test findings, R6 resolves the terminal spawn crash, redesigns the home and settings screens according to house design language (CollabShell + Sherlock), and adds automated Linux desktop packaging:
+
+1. **Terminal PTY crash resolution:**
+   - In `src/services/session_service.py`: Re-introduced the exact M0 spike argv flags proven on Android hardware:
+     `--change-id=0:0`, `--kill-on-exit`, `--link2symlink`, `--sysvipc`, `--kernel-release=...`, `-L`, `--bind=/dev/urandom:/dev/random`,
+     `/proc/self/fd:/dev/fd`, `/proc/self/fd/0:/dev/stdin`, `/proc/self/fd/1:/dev/stdout`, `/proc/self/fd/2:/dev/stderr`, and
+     `<rootfs>/tmp:/dev/shm` (ensuring 0o1777 mode).
+   - Restored child process controlling TTY via `preexec_fn` (`os.setsid()` + `fcntl.ioctl(slave_fd, termios.TIOCSCTTY, 0)`).
+   - In `src/services/session_manager.py`: Marshaled `mt.send_bytes(data)` to Flet's event loop via `page.loop.call_soon_threadsafe`.
+   - In `src/core/proot_probe.py`: Expanded `_native_library_dir()` glob to handle Android 11+ two-tier `~~...` install directories.
+2. **Clean tagline & redesigned home screen:**
+   - Tagline updated to `"Linux on Android — no root"`.
+   - Removed awkward hints card and replaced with CollabShell / DDGS "How It Works" step rows and feature capability cards.
+   - Popular distros section with clean unversioned names (**Debian**, **Ubuntu**, **Alpine**) and direct install buttons.
+   - Centered SearchBar with paste action and responsive search results.
+3. **Responsive mobile container layout:**
+   - Container card dynamically checks narrow/mobile viewport width (`page.width < 500`). On mobile screens, action buttons
+     (`Open shell`, `Reset`, `Remove`, and menu) wrap onto a dedicated line underneath container details.
+4. **Sherlock settings screen port:**
+   - Ported Sherlock's `_setting_row` and `_settings_card` pattern into `SettingsView`:
+     - Grouped Material 3 glass cards with elevation borders.
+     - Responsive `stacked=True` support for mobile viewports.
+     - Distinct sections: Appearance & Theme (System / Light / Dark selector cards), Container Storage & Cache (size breakdown,
+       clear cache, sweep orphan layers), Registry Authentication (Docker token save), Privacy & Monetization (AdMob UMP options,
+       privacy policy), and About & System Status (Changelog, licenses, environment probe dialog).
+5. **Sherlock banner ad alignment:**
+   - Updated `src/components/banner_ad.py` to wrap `BannerAd` in full-width centered glass container matching Sherlock.
+6. **Linux desktop CI packaging:**
+   - Added `linux` build job in `.github/workflows/app.yml` compiling Linux desktop app with Flet, packaging into `.tar.gz`,
+     `.deb`, and `.rpm` with desktop entry and 256x256 app icons. Windows excluded (no complexities).
+7. **Onboarding deck polish:**
+   - Rewrote slide copy in `src/screens/onboarding_view.py` matching CollabShell and DDGS house design.
+
+Exit state: 99 tests green, ruff clean, AST guard clean.
+
+

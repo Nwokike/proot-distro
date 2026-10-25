@@ -1,7 +1,7 @@
-"""Onboarding — the first-run deck (CollabShell/DDGS pattern: chrome-free, skippable).
+"""Onboarding — first-run presentation deck matching CollabShell and DDGS house design.
 
 Three slides with animated dot indicators, 120px circular icon backdrops,
-and full-screen gesture detection.
+full-screen gesture detection, and clean typography.
 """
 
 from __future__ import annotations
@@ -15,26 +15,26 @@ from state.controller_ctx import ControllerMethodsCtx
 _SLIDES = (
     {
         "icon": None,
-        "title": "Real Linux\non your phone",
+        "title": "Linux on Android\nno root",
         "body": (
-            "Full Debian, Ubuntu or Alpine containers running on Android — "
-            "no root, no Termux, nothing to set up."
-        ),
-    },
-    {
-        "icon": ft.Icons.DOWNLOAD_ROUNDED,
-        "title": "Any image\nyou can pull",
-        "body": (
-            "Install a container by typing a reference like debian:bookworm, "
-            "or search Docker Hub and tap a result."
+            "Run Debian, Ubuntu, Alpine, or any container image in an isolated, "
+            "rootless Linux environment directly on your device."
         ),
     },
     {
         "icon": ft.Icons.TERMINAL_ROUNDED,
-        "title": "A shell\nthat is really yours",
+        "title": "Native Terminal\nwith Full Shell",
         "body": (
-            "Open a terminal in any container and use it like a normal "
-            "Linux shell — the same proot-distro engine Termux runs."
+            "Interactive bash sessions with apt, compilers, development tools, "
+            "and multi-shell tabs without modifying Android partitions."
+        ),
+    },
+    {
+        "icon": ft.Icons.SHIELD_ROUNDED,
+        "title": "Private, Local\n& Containerized",
+        "body": (
+            "All container data and commands reside strictly in your private "
+            "storage sandbox. No accounts, no remote servers, no tracking."
         ),
     },
 )
@@ -105,10 +105,10 @@ def OnboardingView() -> ft.Control:
                 color=theme.text(),
                 text_align=ft.TextAlign.CENTER,
             ),
-            ft.Container(height=tokens.SPACE_SM),
+            ft.Container(height=tokens.SPACE_MD),
             ft.Text(
                 slide["body"],
-                size=tokens.FONT_LG,
+                size=tokens.FONT_MD,
                 color=theme.text_dim(),
                 text_align=ft.TextAlign.CENTER,
                 width=tokens.MESSAGE_MAX_WIDTH,
@@ -119,8 +119,6 @@ def OnboardingView() -> ft.Control:
         spacing=0,
     )
 
-    # GestureDetector with expand=True covers the entire screen, eliminating
-    # the dead swipe zone reported in the file audit.
     gesture_area = ft.GestureDetector(
         on_horizontal_drag_end=_swipe,
         content=slide_content,
@@ -156,7 +154,7 @@ def OnboardingView() -> ft.Control:
                     ft.Container(height=tokens.SPACE_XL),
                     ft.FilledButton(
                         "Get Started" if last else "Next",
-                        width=220,
+                        width=240,
                         height=48,
                         on_click=_next,
                         style=ft.ButtonStyle(
@@ -165,8 +163,7 @@ def OnboardingView() -> ft.Control:
                     ),
                     ft.Container(height=tokens.SPACE_SM),
                     ft.Text(
-                        "An unofficial client. Not affiliated with the Termux project "
-                        "or the PRoot-Distro project.",
+                        "An independent utility wrapping open-source PRoot.",
                         size=tokens.FONT_XS,
                         color=theme.text_dim(),
                         text_align=ft.TextAlign.CENTER,
