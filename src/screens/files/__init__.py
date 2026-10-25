@@ -14,6 +14,7 @@ from pathlib import Path
 import flet as ft
 
 from components import card, empty_state, section_header
+from components.banner_ad import pooled_banner_ad
 from components.file_item import build_file_item
 from core import theme, tokens
 from core.state import state
@@ -607,17 +608,19 @@ def FilesView(
         file_list_content = ft.ListView(
             controls=file_items,
             spacing=tokens.SPACE_XXS,
-            height=340,
+            expand=True,
         )
 
     return ft.Column(
         controls=[
             ft.Row(controls=container_chips, scroll=ft.ScrollMode.AUTO, spacing=tokens.SPACE_SM),
+            pooled_banner_ad("files-1", page),
             nav_row,
             action_bar,
             ft.Divider(height=1, color=theme.glass_border()),
             card(file_list_content, padding=tokens.SPACE_SM),
         ],
         spacing=tokens.SPACE_SM,
+        expand=True,
         scroll=ft.ScrollMode.AUTO,
     )

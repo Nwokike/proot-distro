@@ -47,9 +47,25 @@ class SessionEntry:
 class SessionManager:
     """Opens, closes and switches guest shells; caps concurrency."""
 
-    def __init__(self):
+    def __init__(self, page=None):
         self.entries: dict[str, SessionEntry] = {}
         self._lock = threading.RLock()
+        self._page = page
+
+    def _loop(self) -> object | None:
+        page = self._page
+        if page is None:
+            for e in self.entries.values():
+                if e.mt is not None:
+                    page = getattr(e.mt, "page", None)
+                    if page is not None:
+                        break
+        if page is None:
+            return None
+        try:
+            return page.session.connection.loop
+        except Exception:
+            return None
 
     def entry(self, container: str) -> SessionEntry:
         with self._lock:
@@ -79,23 +95,36 @@ class SessionManager:
             def _on_bytes(data: bytes) -> None:
                 entry.feed(data)
                 mt = entry.mt
-                if mt is not None:
-                    page = getattr(mt, "page", None)
-                    if page is not None and hasattr(page, "loop") and page.loop is not None:
-                        try:
-                            page.loop.call_soon_threadsafe(mt.send_bytes, data)
-                        except Exception:
-                            mt.send_bytes(data)
-                    else:
-                        try:
-                            mt.send_bytes(data)
-                        except Exception:
-                            pass
+                if mt is None:
+                    return
+                loop = self._loop()
+                if loop is not None:
+                    try:
+                        loop.call_soon_threadsafe(mt.send_bytes, data)
+                        return
+                    except Exception:
+                        pass
+                # Fallback: direct call (only safe if already on the UI thread).
+                try:
+                    mt.send_bytes(data)
+                except Exception:
+                    pass
 
             def _on_exit(returncode: int | None) -> None:
-                entry.ready = False
-                entry.session = None
-                entry.error = f"shell exited ({returncode})"
+                loop = self._loop()
+
+                def _apply() -> None:
+                    entry.ready = False
+                    entry.session = None
+                    entry.error = f"shell exited ({returncode})"
+
+                if loop is not None:
+                    try:
+                        loop.call_soon_threadsafe(_apply)
+                        return
+                    except Exception:
+                        pass
+                _apply()
 
             session = session_service.ProotSession(argv, env, _on_bytes, _on_exit)
             session.start()

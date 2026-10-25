@@ -39,7 +39,7 @@ class AppController:
     def __init__(self, page: ft.Page):
         self.page = page
         self.proot = proot_service
-        self.session_manager = session_manager.SessionManager()
+        self.session_manager = session_manager.SessionManager(self.page)
         self.ad_service = ad_service.AdService(page)
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
@@ -219,6 +219,11 @@ class AppController:
                 ]
                 with contextlib.suppress(Exception):
                     logs_ctrl.update()
+            # Force the dialog itself to patch.
+            dialog = getattr(self.page, "_install_dialog", None)
+            if dialog is not None:
+                with contextlib.suppress(Exception):
+                    dialog.update()
 
         def _on_line(line: str) -> None:
             loop.call_soon_threadsafe(_apply_line, line)

@@ -1,6 +1,8 @@
-"""The terminal view — MobileTerminal in the component tree, wired once per
-session. CollabShell pattern: in-screen switcher tabs, action cluster,
-zoom/blink controls, full-width flat chrome, and hardened PTY lifecycle.
+"""Terminal view — plain Terminal control (spike-parity), kept minimal.
+
+Switched from MobileTerminal to plain Terminal to match the M0 spike that
+was proven on-device. MobileTerminal's extra-keys/search/zoom land in a
+follow-up once the basic shell is confirmed working on the phone.
 """
 
 from __future__ import annotations
@@ -9,7 +11,7 @@ import contextlib
 import json
 
 import flet as ft
-from flet_terminal import BUILTIN_THEMES, MobileTerminal
+from flet_terminal import Terminal
 
 from components.app_header import theme_button
 from components.banner_ad import pooled_banner_ad
@@ -31,54 +33,10 @@ _QUICK_COMMANDS = (
     ("exit", "exit\n"),
 )
 
-_THEME_PRESETS = ("JetBrains Dark", "Dracula", "Matrix Green", "Colab Light")
-
-
-def _theme_name() -> str:
-    return "Colab Light" if theme.is_light_theme() else "JetBrains Dark"
-
 
 def _write(entry: SessionEntry, payload: bytes) -> None:
     if entry.session is not None:
         entry.session.write(payload)
-
-
-def _compact_btn_style() -> ft.ButtonStyle:
-    return ft.ButtonStyle(
-        padding=ft.Padding(tokens.SPACE_XS, tokens.SPACE_XS, tokens.SPACE_XS, tokens.SPACE_XS),
-        visual_density=ft.VisualDensity.COMPACT,
-    )
-
-
-def _confirm_close(page: ft.Page, methods, container: str) -> None:
-    def _yes(_e) -> None:
-        page.pop_dialog()
-        page.run_task(methods.close_session, container)
-
-    page.show_dialog(
-        ft.AlertDialog(
-            title=ft.Text(
-                f"Close {container}?",
-                size=tokens.FONT_LG,
-                weight=ft.FontWeight.BOLD,
-            ),
-            content=ft.Text(
-                "The shell is terminated; unsaved work inside it is lost.",
-                size=tokens.FONT_SM,
-            ),
-            actions=[
-                ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
-                ft.FilledButton(
-                    "Close",
-                    on_click=_yes,
-                    style=ft.ButtonStyle(
-                        shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
-                        bgcolor=theme.warn(),
-                    ),
-                ),
-            ],
-        )
-    )
 
 
 @ft.component
@@ -86,7 +44,6 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
     page = ft.context.page
     methods = ft.use_context(ControllerMethodsCtx)
     _st, _ = ft.use_state(state)
-    note_dismissed, set_note_dismissed = ft.use_state(state.apt_note_dismissed)
     fullscreen, set_fullscreen = ft.use_state(state.terminal_fullscreen)
     controller = getattr(page, "_controller", None)
     manager = getattr(controller, "session_manager", None)
@@ -98,23 +55,18 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
             with contextlib.suppress(Exception):
                 page.run_task(wl.enable)
 
-        def _cleanup():
-            if wl is not None:
-                with contextlib.suppress(Exception):
-                    page.run_task(wl.disable)
-
-        return _cleanup
+    def _cleanup():
+        wl = getattr(page, "wakelock", None)
+        if wl is not None:
+            with contextlib.suppress(Exception):
+                page.run_task(wl.disable)
 
     ft.on_mounted(_sync_wakelock)
 
     if entry.mt is None:
-        entry.mt = MobileTerminal(
-            show_extra_keys=True,
-            show_search=False,
-            show_settings=False,
+        entry.mt = Terminal(
             scrollback=10000,
             font_family="JetBrains Mono",
-            theme=BUILTIN_THEMES.get(_theme_name()),
             auto_focus=False,
             expand=True,
         )
@@ -127,13 +79,12 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
                 data = json.loads(e.data)
                 cols = int(data.get("cols", 80))
                 rows = int(data.get("rows", 24))
-            except ValueError:
+            except ValueError, TypeError:
                 return
             if entry.session is not None:
                 entry.session.resize(cols, rows)
 
         def _on_mount(_e) -> None:
-            mt.clear_pending()
             entry.replay(mt.send_bytes)
 
         def _on_title(e) -> None:
@@ -151,24 +102,12 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
 
         def _on_shortcut(e) -> None:
             sc = getattr(e, "shortcut", "") or ""
-            if sc == "toggle_search":
-                mt.toggle_search()
-            elif sc == "zoom_in":
-                mt.zoom_in()
-            elif sc == "zoom_out":
-                mt.zoom_out()
-            elif sc == "zoom_reset":
-                mt.reset_zoom()
-            elif sc == "clear":
+            if sc == "clear":
                 mt.clear()
             elif sc == "copy":
-                page.run_task(mt.copy_selection_async)
+                page.run_task(mt.get_selection_async)
             elif sc == "paste":
                 page.run_task(mt.paste_async)
-            elif sc == "new_terminal":
-                _open_new_session_sheet()
-            elif sc == "close_terminal":
-                _confirm_close(page, methods, entry.container)
 
         mt.set_on_bytes(lambda payload: _write(entry, payload))
         mt.on_data = lambda e: _write(
@@ -183,46 +122,64 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
 
     theme_btn = theme_button(lambda: page.run_task(methods.cycle_theme_mode))
 
-    def _apply_theme() -> None:
-        name = _theme_name()
-        with contextlib.suppress(Exception):
-            mt.set_theme(name)
-
-    ft.use_effect(_apply_theme, [state.theme_revision])
-
-    def _cycle_terminal_theme() -> None:
-        cur = mt.theme_name or _theme_name()
-        idx = _THEME_PRESETS.index(cur) if cur in _THEME_PRESETS else 0
-        next_theme = _THEME_PRESETS[(idx + 1) % len(_THEME_PRESETS)]
-        with contextlib.suppress(Exception):
-            mt.set_theme(next_theme)
-
-    def _quick(label: str, command: str) -> ft.Control:
-        def _send(_e) -> None:
-            _write(entry, command.encode("utf-8"))
-
-        return ft.TextButton(label, on_click=_send)
-
-    def _toggle_fullscreen(_e) -> None:
+    def _toggle_fullscreen(_e=None) -> None:
         state.terminal_fullscreen = not fullscreen
         set_fullscreen(not fullscreen)
 
-    def _open_new_session_sheet() -> None:
-        installed = [r.get("name", "") for r in state.containers if r.get("name")]
-        unopened = [c for c in installed if manager and c not in manager.entries]
-        if not unopened:
-            msg = (
-                "All installed containers already have a running shell."
-                if installed
-                else "No containers installed yet. Install one from the Distros tab."
-            )
-            page.show_dialog(
-                ft.AlertDialog(
-                    title=ft.Text("New Terminal", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
-                    content=ft.Text(msg, size=tokens.FONT_SM),
-                    actions=[ft.TextButton("Close", on_click=lambda _e: page.pop_dialog())],
+    # Switcher tabs for concurrent shells
+    tab_chips: list[ft.Control] = []
+    if manager:
+        for cname, e in manager.entries.items():
+            is_active = cname == entry.container
+            tab_chips.append(
+                ft.Container(
+                    content=ft.Row(
+                        controls=[
+                            ft.Icon(
+                                ft.Icons.TERMINAL_ROUNDED,
+                                size=tokens.ICON_XS,
+                                color=theme.primary() if is_active else theme.text_dim(),
+                            ),
+                            ft.Text(
+                                e.title or cname,
+                                size=tokens.FONT_XS,
+                                color=theme.primary() if is_active else theme.text(),
+                                weight=ft.FontWeight.W_600 if is_active else ft.FontWeight.W_400,
+                            ),
+                            ft.GestureDetector(
+                                content=ft.Icon(
+                                    ft.Icons.CLOSE_ROUNDED,
+                                    size=tokens.ICON_XS,
+                                    color=theme.text_dim(),
+                                ),
+                                on_tap=lambda _evt, c=cname: _confirm_close(page, methods, c),
+                            ),
+                        ],
+                        spacing=tokens.SPACE_XXS,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    padding=ft.Padding(
+                        tokens.SPACE_SM, tokens.SPACE_XXS, tokens.SPACE_XS, tokens.SPACE_XXS
+                    ),
+                    border_radius=tokens.RADIUS_SM,
+                    bgcolor=ft.Colors.with_opacity(0.12, theme.primary())
+                    if is_active
+                    else ft.Colors.TRANSPARENT,
+                    border=ft.Border.all(
+                        1,
+                        ft.Colors.with_opacity(0.24, theme.primary())
+                        if is_active
+                        else ft.Colors.TRANSPARENT,
+                    ),
+                    ink=True,
+                    on_click=lambda _e, c=cname: page.run_task(methods.open_session, c),
                 )
             )
+
+    def _open_new_session_sheet() -> None:
+        containers = [row.get("name", "?") for row in state.containers]
+        unopened = [c for c in containers if manager and c not in manager.entries]
+        if not unopened:
             return
 
         def _launch(c: str) -> None:
@@ -253,14 +210,73 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
             )
         )
 
+    def _confirm_close(page: ft.Page, methods, container: str) -> None:
+        def _yes(_e) -> None:
+            page.pop_dialog()
+            page.run_task(methods.close_session, container)
+
+        page.show_dialog(
+            ft.AlertDialog(
+                title=ft.Text(
+                    f"Close {container}?",
+                    size=tokens.FONT_LG,
+                    weight=ft.FontWeight.BOLD,
+                ),
+                content=ft.Text(
+                    "The shell is terminated; unsaved work inside it is lost.",
+                    size=tokens.FONT_SM,
+                ),
+                actions=[
+                    ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
+                    ft.FilledButton(
+                        "Close",
+                        on_click=_yes,
+                        style=ft.ButtonStyle(
+                            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
+                            bgcolor=theme.warn(),
+                        ),
+                    ),
+                ],
+            )
+        )
+
+    def _toggle_fullscreen(_e=None) -> None:
+        state.terminal_fullscreen = not fullscreen
+        set_fullscreen(not fullscreen)
+
+    switcher_box = ft.Container(
+        content=ft.Row(
+            controls=[
+                ft.Row(
+                    controls=tab_chips,
+                    spacing=tokens.SPACE_XXS,
+                    scroll=ft.ScrollMode.AUTO,
+                    expand=True,
+                ),
+                ft.Row(
+                    controls=[
+                        ft.IconButton(
+                            icon=ft.Icons.ADD_ROUNDED,
+                            icon_size=tokens.ICON_SM,
+                            tooltip="New Terminal",
+                            on_click=lambda _e: _open_new_session_sheet(),
+                        ),
+                    ],
+                    spacing=tokens.SPACE_XXS,
+                ),
+            ],
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=tokens.SPACE_XS,
+        ),
+        padding=ft.Padding(tokens.SPACE_SM, tokens.SPACE_XS, tokens.SPACE_SM, tokens.SPACE_XS),
+        bgcolor=theme.glass_bg(),
+        border=ft.Border.all(1, theme.glass_border()),
+        border_radius=tokens.RADIUS_MD,
+    )
+
     status_indicators: list[ft.Control] = [status_dot(entry.ready)]
     if not entry.ready:
         status_indicators.append(ft.ProgressRing(width=14, height=14, stroke_width=2))
-
-    def _browse_files() -> None:
-        from screens.files.modal import show_manage_files_modal
-
-        show_manage_files_modal(page, entry.container)
 
     action_menu = ft.PopupMenuButton(
         icon=ft.Icons.MORE_VERT_ROUNDED,
@@ -273,29 +289,9 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
                 on_click=lambda _e: _open_new_session_sheet(),
             ),
             ft.PopupMenuItem(
-                icon=ft.Icons.COPY_ALL_ROUNDED,
-                content=ft.Text("Copy Selection", size=tokens.FONT_SM),
-                on_click=lambda _e: page.run_task(mt.copy_selection_async),
-            ),
-            ft.PopupMenuItem(
-                icon=ft.Icons.CONTENT_PASTE_ROUNDED,
-                content=ft.Text("Paste", size=tokens.FONT_SM),
-                on_click=lambda _e: page.run_task(mt.paste_async),
-            ),
-            ft.PopupMenuItem(
                 icon=ft.Icons.CLEAR_ALL_ROUNDED,
                 content=ft.Text("Clear Terminal", size=tokens.FONT_SM),
                 on_click=lambda _e: mt.clear(),
-            ),
-            ft.PopupMenuItem(
-                icon=ft.Icons.FIT_SCREEN_ROUNDED,
-                content=ft.Text("Reset Zoom", size=tokens.FONT_SM),
-                on_click=lambda _e: mt.reset_zoom(),
-            ),
-            ft.PopupMenuItem(
-                icon=ft.Icons.VISIBILITY_ROUNDED,
-                content=ft.Text("Toggle Cursor Blink", size=tokens.FONT_SM),
-                on_click=lambda _e: mt.toggle_cursor_blink(),
             ),
             ft.PopupMenuItem(
                 icon=ft.Icons.FOLDER_OPEN_ROUNDED,
@@ -309,6 +305,11 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
             ),
         ],
     )
+
+    def _browse_files() -> None:
+        from screens.files.modal import show_manage_files_modal
+
+        show_manage_files_modal(page, entry.container)
 
     # CollabShell flat full-width session header
     header = ft.Container(
@@ -355,116 +356,12 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
         padding=ft.Padding(tokens.SPACE_SM, tokens.SPACE_SM, tokens.SPACE_LG, tokens.SPACE_SM),
     )
 
-    # Multi-shell switcher tabs: CollabShell switcher_box pattern
-    tab_chips: list[ft.Control] = []
-    if manager:
-        for cname, e in manager.entries.items():
-            is_active = cname == entry.container
-            tab_chips.append(
-                ft.Container(
-                    content=ft.Row(
-                        controls=[
-                            ft.Icon(
-                                ft.Icons.TERMINAL_ROUNDED,
-                                size=tokens.ICON_XS,
-                                color=theme.primary() if is_active else theme.text_dim(),
-                            ),
-                            ft.Text(
-                                e.title or cname,
-                                size=tokens.FONT_XS,
-                                color=theme.primary() if is_active else theme.text(),
-                                weight=ft.FontWeight.W_600 if is_active else ft.FontWeight.W_400,
-                            ),
-                            ft.GestureDetector(
-                                content=ft.Icon(
-                                    ft.Icons.CLOSE_ROUNDED,
-                                    size=tokens.ICON_XS,
-                                    color=theme.text_dim(),
-                                ),
-                                on_tap=lambda _evt, c=cname: _confirm_close(page, methods, c),
-                            ),
-                        ],
-                        spacing=tokens.SPACE_XXS,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                    padding=ft.Padding(
-                        tokens.SPACE_SM, tokens.SPACE_XXS, tokens.SPACE_XS, tokens.SPACE_XXS
-                    ),
-                    border_radius=tokens.RADIUS_SM,
-                    bgcolor=ft.Colors.with_opacity(0.12, theme.primary())
-                    if is_active
-                    else ft.Colors.TRANSPARENT,
-                    border=ft.Border.all(
-                        1,
-                        ft.Colors.with_opacity(0.24, theme.primary())
-                        if is_active
-                        else ft.Colors.with_opacity(0.08, theme.text_dim()),
-                    ),
-                    on_click=lambda _evt, c=cname: setattr(state, "active_session", c),
-                    ink=True,
-                )
-            )
-
-    tab_chips.append(
-        ft.IconButton(
-            icon=ft.Icons.ADD_ROUNDED,
-            icon_size=tokens.ICON_SM,
-            tooltip="New Terminal",
-            style=_compact_btn_style(),
-            on_click=lambda _e: _open_new_session_sheet(),
-        )
-    )
-
-    switcher_box = ft.Container(
-        content=ft.Row(
-            controls=[
-                ft.Container(
-                    content=ft.Row(
-                        controls=tab_chips,
-                        spacing=tokens.SPACE_XS,
-                        scroll=ft.ScrollMode.AUTO,
-                    ),
-                    expand=True,
-                ),
-                ft.IconButton(
-                    icon=ft.Icons.PALETTE_ROUNDED,
-                    icon_size=tokens.ICON_SM,
-                    tooltip="Cycle Terminal Theme",
-                    style=_compact_btn_style(),
-                    on_click=lambda _e: _cycle_terminal_theme(),
-                ),
-                ft.IconButton(
-                    icon=ft.Icons.ZOOM_OUT,
-                    icon_size=tokens.ICON_SM,
-                    tooltip="Zoom Out",
-                    style=_compact_btn_style(),
-                    on_click=lambda _e: mt.zoom_out(),
-                ),
-                ft.IconButton(
-                    icon=ft.Icons.ZOOM_IN,
-                    icon_size=tokens.ICON_SM,
-                    tooltip="Zoom In",
-                    style=_compact_btn_style(),
-                    on_click=lambda _e: mt.zoom_in(),
-                ),
-                ft.IconButton(
-                    icon=ft.Icons.SEARCH_ROUNDED,
-                    icon_size=tokens.ICON_SM,
-                    tooltip="Search Buffer",
-                    style=_compact_btn_style(),
-                    on_click=lambda _e: mt.toggle_search(),
-                ),
-            ],
-            spacing=0,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-        ),
-        padding=ft.Padding(tokens.SPACE_SM, 0, tokens.SPACE_SM, 0),
-        bgcolor=ft.Colors.with_opacity(0.04, theme.text()),
-    )
-
     quick_strip = ft.Container(
         content=ft.Row(
-            controls=[_quick(label, cmd) for label, cmd in _QUICK_COMMANDS],
+            controls=[
+                ft.TextButton(label, on_click=lambda _e, cmd=cmd: _write(entry, cmd.encode()))
+                for label, cmd in _QUICK_COMMANDS
+            ],
             scroll=ft.ScrollMode.AUTO,
         ),
         padding=ft.Padding.symmetric(horizontal=tokens.SPACE_XS),
@@ -472,40 +369,9 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
 
     controls: list[ft.Control] = []
     if not fullscreen:
-        # D-017.7: the ad sits strictly ABOVE the app chrome.
         controls.append(pooled_banner_ad("terminal-1", page))
         controls.append(header)
         controls.append(switcher_box)
-        # Note sits beneath the header/switcher so dismissing it causes no header jump.
-        if not note_dismissed:
-            controls.append(
-                card(
-                    ft.Row(
-                        controls=[
-                            ft.Icon(
-                                ft.Icons.INFO_OUTLINE,
-                                size=tokens.ICON_XS,
-                                color=theme.warn(),
-                            ),
-                            ft.Text(
-                                "Package installs work; upgrading an already-installed "
-                                "package can fail — reinstalling is always safe.",
-                                size=tokens.FONT_XS,
-                                color=theme.text_dim(),
-                                expand=True,
-                            ),
-                            ft.TextButton(
-                                "Got it",
-                                on_click=lambda _e: (
-                                    setattr(state, "apt_note_dismissed", True),
-                                    set_note_dismissed(True),
-                                ),
-                            ),
-                        ],
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    )
-                )
-            )
     else:
         controls.append(
             ft.Container(
@@ -661,6 +527,7 @@ def SessionSelectorView() -> ft.Control:
             )
         )
 
+    sections.append(pooled_banner_ad("terminals-1", page))
     sections.append(ft.Container(height=tokens.NAV_BAR_CLEARANCE))
     return ft.Column(
         controls=sections,

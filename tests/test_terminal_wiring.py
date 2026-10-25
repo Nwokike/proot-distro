@@ -77,13 +77,13 @@ def test_terminal_source_does_not_reach_into_private_apis():
 
 
 def test_terminal_view_is_built_inside_the_component_tree():
-    """The view constructs MobileTerminal during render (never at import)."""
+    """The view constructs Terminal during render (never at import)."""
     from pathlib import Path
 
     source = (
         Path(__file__).resolve().parents[1] / "src" / "screens" / "terminal_view.py"
     ).read_text(encoding="utf-8")
-    assert "MobileTerminal(" in source
+    assert "Terminal(" in source
     assert "entry.mt is None" in source
 
 
@@ -96,10 +96,8 @@ def test_terminal_view_source_has_switcher_tabs_and_actions():
     ).read_text(encoding="utf-8")
     assert "switcher_box" in source
     assert "action_menu" in source
-    assert "PALETTE_ROUNDED" in source
-    assert "ZOOM_IN" in source
-    assert "ZOOM_OUT" in source
-    assert "SEARCH_ROUNDED" in source
+    assert "CLEAR_ALL_ROUNDED" in source
+    assert "FOLDER_OPEN_ROUNDED" in source
 
 
 def test_terminal_view_wires_bell_and_shortcut():
