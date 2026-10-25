@@ -28,6 +28,7 @@ def show_install_progress_modal(page: ft.Page, target: str) -> None:
         ],
         spacing=tokens.SPACE_NANO,
         scroll=ft.ScrollMode.AUTO,
+        height=180,
     )
 
     stage_text = ft.Text(
@@ -48,18 +49,10 @@ def show_install_progress_modal(page: ft.Page, target: str) -> None:
 
     log_box = ft.Container(
         content=logs_column,
-        height=140,
         bgcolor=ft.Colors.with_opacity(0.06, theme.text()),
         border=ft.Border.all(1, theme.surface_alt()),
         border_radius=tokens.RADIUS_SM,
         padding=tokens.SPACE_SM,
-    )
-
-    log_expansion = ft.ExpansionTile(
-        title=ft.Text("Show Terminal Output", size=tokens.FONT_SM),
-        leading=ft.Icon(ft.Icons.TERMINAL_ROUNDED, size=tokens.ICON_SM, color=theme.primary()),
-        controls=[log_box],
-        expanded=False,
     )
 
     def _minimize(_e) -> None:
@@ -77,10 +70,10 @@ def show_install_progress_modal(page: ft.Page, target: str) -> None:
             spacing=tokens.SPACE_SM,
         ),
         content=ft.Column(
-            controls=[status_row, log_expansion],
+            controls=[status_row, log_box],
             spacing=tokens.SPACE_MD,
             tight=True,
-            width=tokens.DIALOG_WIDTH_LG,
+            width=tokens.DIALOG_WIDTH,
         ),
         actions=[
             ft.TextButton(

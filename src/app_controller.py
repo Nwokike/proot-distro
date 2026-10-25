@@ -224,6 +224,11 @@ class AppController:
             installed_now = state.installing
             state.installing = None
             await self.refresh_containers()
+            # Close the install progress modal automatically when done, unless
+            # the user already minimized it into the background banner.
+            if not state.install_dialog_minimized:
+                with contextlib.suppress(Exception):
+                    self.page.pop_dialog()
             if installed_now and outcome is not None and outcome.ok:
                 state.install_completed = True
                 state.last_installed = installed_now

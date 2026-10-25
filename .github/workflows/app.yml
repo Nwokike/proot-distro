@@ -2,11 +2,10 @@ name: App Build
 
 on:
   push:
+    branches: [main]
     paths:
       - "src/**"
-      - "scripts/build_flet_proot_wheel.py"
-      - "scripts/check_elf_alignment.py"
-      - "scripts/generate_third_party_sources.py"
+      - "scripts/**"
       - "tests/**"
       - "LICENSES/**"
       - "pyproject.toml"

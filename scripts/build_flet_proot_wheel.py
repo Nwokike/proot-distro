@@ -20,7 +20,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent
+REPO_ROOT = Path(__file__).resolve().parent.parent
 LICENSE_DIR = REPO_ROOT / "LICENSES"
 
 DIST_NAME = "flet_proot"
