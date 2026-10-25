@@ -1,0 +1,10 @@
+{
+  "build_number": 1,
+  "version": "1.0.0",
+  "type": "update",
+  "title": "Proot Distro 1.0.0",
+  "release_notes": "• Real Linux containers on Android — no root, no Termux\n• Install any Docker image, or search Docker Hub\n• Interactive shells in every container\n• Manage containers: rename, back up, restore, copy, reset, remove\n• Light and dark themes",
+  "mandatory": false,
+  "github_url": "https://github.com/Nwokike/proot-distro/releases/latest",
+  "playstore_url": "https://play.google.com/store/apps/details?id=ng.kiri.prootdistro"
+}
