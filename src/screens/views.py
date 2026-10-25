@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import importlib.metadata as importlib_metadata
 import logging
 from pathlib import Path
@@ -155,170 +154,58 @@ def DistroView() -> ft.Control:
     methods = ft.use_context(ControllerMethodsCtx)
     page = ft.context.page
     query, set_query = ft.use_state("")
-    name, _set_name = ft.use_state("")
+    name, set_name = ft.use_state("")
 
     is_narrow = bool(page and getattr(page, "width", None) and page.width < 500)
 
-    def _consent_install(target_ref: str | None = None, target_name: str | None = None) -> None:
-        image = (target_ref or query).strip()
+    def _field() -> ft.TextField:
+        return ft.TextField(
+            hint_text="docker image ref (e.g. debian)",
+            value=query,
+            text_size=tokens.FONT_SM,
+            height=44,
+            expand=True,
+            border=ft.OutlineInputBorder(
+                border_radius=tokens.RADIUS_MD,
+                side=ft.BorderSide(1, theme.surface_alt()),
+            ),
+            on_change=lambda e: set_query(e.control.value),
+            on_submit=lambda _e: _consent_install(),
+        )
+
+    def _consent_install() -> None:
+        image = query.strip()
         if not image or st.installing:
             return
-        container_tag = (target_name or name or image.split(":")[0]).strip()
 
         def _confirm(_e) -> None:
             page.pop_dialog()
-            page.run_task(methods.install_distro, image, container_tag)
+            page.run_task(methods.install_distro, image, name.strip())
 
         page.show_dialog(
             ft.AlertDialog(
-                title=ft.Text(f"Install {image}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
+                title=ft.Text(
+                    "Download and install", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
+                ),
                 content=ft.Column(
                     controls=[
+                        ft.Text(image, size=tokens.FONT_SM, weight=ft.FontWeight.BOLD),
                         ft.Text(
-                            f"Container name: {container_tag}",
-                            size=tokens.FONT_SM,
-                            weight=ft.FontWeight.BOLD,
-                        ),
-                        ft.Text(
-                            "Downloads official rootfs layers into private storage. "
-                            "Typical size: Alpine ~8 MB, Debian ~30 MB, Ubuntu ~75 MB.",
+                            "Download size is not known until the registry responds. "
+                            "The download starts only after you tap Install. Package "
+                            "downloads inside the container happen only when you run "
+                            "commands.",
                             size=tokens.FONT_XS,
                             color=theme.text_dim(),
                         ),
                     ],
                     spacing=tokens.SPACE_XS,
-                    tight=True,
                 ),
                 actions=[
                     ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
-                    ft.FilledButton(
-                        "Download & Install",
-                        on_click=_confirm,
-                        style=ft.ButtonStyle(
-                            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
-                        ),
-                    ),
-                ],
-            )
-        )
-
-    async def _on_paste(_e=None) -> None:
-        clipboard = getattr(page, "clipboard", None)
-        if clipboard is not None:
-            with contextlib.suppress(Exception):
-                pasted = await clipboard.get()
-                if pasted and isinstance(pasted, str):
-                    set_query(pasted.strip())
-
-    def _on_search(_e=None) -> None:
-        q = query.strip()
-        if not q:
-            return
-        if ":" in q:
-            _consent_install(q)
-        else:
-            page.run_task(methods.search_images, q)
-
-    def _distro_tile(label: str, ref: str, def_name: str, desc: str) -> ft.Container:
-        return card(
-            ft.Row(
-                controls=[
-                    ft.Container(
-                        content=ft.Icon(
-                            ft.Icons.APPS_ROUNDED,
-                            size=tokens.ICON_MD,
-                            color=theme.primary(),
-                        ),
-                        width=38,
-                        height=38,
-                        border_radius=tokens.RADIUS_SM,
-                        bgcolor=ft.Colors.with_opacity(0.10, theme.primary()),
-                        alignment=ft.Alignment.CENTER,
-                    ),
-                    ft.Column(
-                        controls=[
-                            ft.Text(
-                                label,
-                                size=tokens.FONT_MD,
-                                weight=ft.FontWeight.W_600,
-                                color=theme.text(),
-                            ),
-                            ft.Text(desc, size=tokens.FONT_XS, color=theme.text_dim()),
-                        ],
-                        spacing=tokens.SPACE_XXS,
-                        expand=True,
-                    ),
                     ft.FilledButton(
                         "Install",
-                        on_click=lambda _e, r=ref, n=def_name: _consent_install(r, n),
-                        height=34,
-                        style=ft.ButtonStyle(
-                            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
-                        ),
-                    ),
-                ],
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=tokens.SPACE_SM,
-            ),
-            padding=tokens.SPACE_SM,
-        )
-
-    def _menu_items(cname: str) -> list[ft.PopupMenuItem]:
-        return [
-            ft.PopupMenuItem(
-                icon=ft.Icons.EDIT_ROUNDED,
-                text="Rename",
-                on_click=lambda _e: _ask_rename(cname),
-            ),
-            ft.PopupMenuItem(
-                icon=ft.Icons.ARCHIVE_ROUNDED,
-                text="Backup snapshot",
-                on_click=lambda _e: _ask_backup(cname),
-            ),
-            ft.PopupMenuItem(
-                icon=ft.Icons.FOLDER_COPY_ROUNDED,
-                text="Copy a path",
-                on_click=lambda _e: _ask_copy(cname),
-            ),
-            ft.PopupMenuItem(
-                icon=ft.Icons.SYNC_ROUNDED,
-                text="Sync folder",
-                on_click=lambda _e: _ask_sync(cname),
-            ),
-            ft.PopupMenuItem(
-                icon=ft.Icons.INFO_OUTLINE_ROUNDED,
-                text="Inspect container",
-                on_click=lambda _e: page.run_task(methods.inspect_container, cname),
-            ),
-        ]
-
-    def _ask_rename(container: str) -> None:
-        new_name = ft.TextField(
-            label="New name",
-            value=container,
-            text_size=tokens.FONT_SM,
-            height=44,
-            border=ft.OutlineInputBorder(
-                border_radius=tokens.RADIUS_MD,
-                side=ft.BorderSide(1, theme.surface_alt()),
-            ),
-        )
-
-        def _save(_e) -> None:
-            page.pop_dialog()
-            page.run_task(methods.rename_container, container, new_name.value or "")
-
-        page.show_dialog(
-            ft.AlertDialog(
-                title=ft.Text(
-                    f"Rename {container}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
-                ),
-                content=new_name,
-                actions=[
-                    ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
-                    ft.FilledButton(
-                        "Rename",
-                        on_click=_save,
+                        on_click=_confirm,
                         style=ft.ButtonStyle(
                             shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
                         ),
@@ -327,162 +214,213 @@ def DistroView() -> ft.Control:
             )
         )
 
-    def _ask_backup(container: str) -> None:
-        dest = ft.TextField(
-            label="Archive name",
-            value=f"{container}-backup.tar.gz",
-            text_size=tokens.FONT_SM,
-            height=44,
-            border=ft.OutlineInputBorder(
-                border_radius=tokens.RADIUS_MD,
-                side=ft.BorderSide(1, theme.surface_alt()),
-            ),
-        )
+    def _search() -> None:
+        q = query.strip()
+        if q:
+            page.run_task(methods.search_distro, q)
 
-        def _save(_e) -> None:
-            page.pop_dialog()
-            page.run_task(methods.backup_container, container, dest.value or "")
+    def _hit_row(hit: dict) -> ft.Control:
+        label = hit.get("name", "?")
+        stars = _fmt_count(hit.get("stars", 0))
+        pulls = _fmt_count(hit.get("pulls", 0))
+        official = " [official]" if hit.get("official") else ""
+        desc = (hit.get("description") or "")[:80]
 
-        page.show_dialog(
-            ft.AlertDialog(
-                title=ft.Text(
-                    f"Backup {container}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
-                ),
-                content=dest,
-                actions=[
-                    ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
-                    ft.FilledButton(
-                        "Backup",
-                        on_click=_save,
-                        style=ft.ButtonStyle(
-                            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
-                        ),
+        def _pick(_e) -> None:
+            set_query(label)
+            set_name(label.split(":")[0].split("/")[-1])
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Text(
+                        f"{label}{official}  ★{stars} ⤓{pulls}",
+                        size=tokens.FONT_SM,
+                        color=theme.text(),
+                        weight=ft.FontWeight.W_500,
                     ),
+                    ft.Text(desc, size=tokens.FONT_XS, color=theme.text_dim()),
                 ],
-            )
-        )
-
-    def _ask_copy(container: str) -> None:
-        source = ft.TextField(
-            hint_text="source (container:/path)",
-            text_size=tokens.FONT_SM,
-            height=44,
-            border=ft.OutlineInputBorder(
-                border_radius=tokens.RADIUS_MD,
-                side=ft.BorderSide(1, theme.surface_alt()),
+                spacing=tokens.SPACE_XXS,
             ),
-        )
-        destination = ft.TextField(
-            hint_text="destination (container:/path)",
-            text_size=tokens.FONT_SM,
-            height=44,
-            border=ft.OutlineInputBorder(
-                border_radius=tokens.RADIUS_MD,
-                side=ft.BorderSide(1, theme.surface_alt()),
-            ),
+            on_click=_pick,
+            ink=True,
+            padding=tokens.SPACE_XS,
+            border_radius=tokens.RADIUS_SM,
         )
 
-        def _save(_e) -> None:
-            page.pop_dialog()
-            page.run_task(methods.copy_path, source.value or "", destination.value or "")
-
-        page.show_dialog(
-            ft.AlertDialog(
-                title=ft.Text("Copy a path", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
-                content=ft.Column(
-                    controls=[source, destination], spacing=tokens.SPACE_XS, tight=True
-                ),
-                actions=[
-                    ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
-                    ft.FilledButton(
-                        "Copy",
-                        on_click=_save,
-                        style=ft.ButtonStyle(
-                            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
-                        ),
-                    ),
-                ],
-            )
-        )
-
-    def _ask_sync(container: str) -> None:
-        source = ft.TextField(
-            hint_text="source folder (host or container:/path)",
-            text_size=tokens.FONT_SM,
-            height=44,
-            border=ft.OutlineInputBorder(
-                border_radius=tokens.RADIUS_MD,
-                side=ft.BorderSide(1, theme.surface_alt()),
-            ),
-        )
-        dest = ft.TextField(
-            hint_text="destination folder",
-            text_size=tokens.FONT_SM,
-            height=44,
-            border=ft.OutlineInputBorder(
-                border_radius=tokens.RADIUS_MD,
-                side=ft.BorderSide(1, theme.surface_alt()),
-            ),
-        )
-        use_checksum = ft.Checkbox(label="Verify with checksums", value=False)
-        prune_dest = ft.Checkbox(label="Prune files deleted in source", value=False)
-
-        def _save(_e) -> None:
-            page.pop_dialog()
-            page.run_task(
-                methods.sync_path,
-                source.value or "",
-                dest.value or "",
-                bool(use_checksum.value),
-                bool(prune_dest.value),
-            )
-
-        page.show_dialog(
-            ft.AlertDialog(
-                title=ft.Text("Sync Directory", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
-                content=ft.Column(
-                    controls=[source, dest, use_checksum, prune_dest],
-                    spacing=tokens.SPACE_XS,
-                    tight=True,
-                ),
-                actions=[
-                    ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
-                    ft.FilledButton(
-                        "Sync",
-                        on_click=_save,
-                        style=ft.ButtonStyle(
-                            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
-                        ),
-                    ),
-                ],
-            )
-        )
-
-    def _container_card(row: dict) -> ft.Control:
+    def _container_row(row: dict) -> ft.Control:
         cname = row.get("name", "?")
 
-        def _reset(_e) -> None:
-            def _yes(_e) -> None:
+        def _menu_items(container: str) -> list[ft.PopupMenuItem]:
+            def _rename(_e) -> None:
+                _ask_rename(container)
+
+            def _backup(_e) -> None:
+                page.run_task(methods.backup_container, container)
+
+            def _copy(_e) -> None:
+                _ask_copy(container)
+
+            def _sync(_e) -> None:
+                _ask_sync(container)
+
+            def _inspect(_e) -> None:
+                page.run_task(methods.inspect_container, container)
+
+            def _sessions(_e) -> None:
+                page.run_task(methods.list_sessions)
+
+            def _restore(_e) -> None:
+                page.run_task(methods.restore_container)
+
+            return [
+                ft.PopupMenuItem(
+                    content=ft.Text("Inspect container", size=tokens.FONT_SM),
+                    on_click=_inspect,
+                ),
+                ft.PopupMenuItem(content=ft.Text("Rename", size=tokens.FONT_SM), on_click=_rename),
+                ft.PopupMenuItem(
+                    content=ft.Text("Backup to a file", size=tokens.FONT_SM), on_click=_backup
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Text("Restore from an archive", size=tokens.FONT_SM),
+                    on_click=_restore,
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Text("Copy a path", size=tokens.FONT_SM), on_click=_copy
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Text("Sync folder", size=tokens.FONT_SM), on_click=_sync
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Text("Running sessions", size=tokens.FONT_SM), on_click=_sessions
+                ),
+            ]
+
+        def _ask_rename(container: str) -> None:
+            new_name = ft.TextField(
+                label="New name",
+                value=container,
+                text_size=tokens.FONT_SM,
+                height=44,
+                border=ft.OutlineInputBorder(
+                    border_radius=tokens.RADIUS_MD,
+                    side=ft.BorderSide(1, theme.surface_alt()),
+                ),
+            )
+
+            def _save(_e) -> None:
                 page.pop_dialog()
-                page.run_task(methods.reset_container, cname)
+                page.run_task(methods.rename_container, container, new_name.value or "")
 
             page.show_dialog(
                 ft.AlertDialog(
                     title=ft.Text(
-                        f"Reset {cname}?", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
+                        f"Rename {container}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
                     ),
-                    content=ft.Text(
-                        "Container files are wiped back to the clean base image.",
-                        size=tokens.FONT_SM,
+                    content=new_name,
+                    actions=[
+                        ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
+                        ft.FilledButton(
+                            "Rename",
+                            on_click=_save,
+                            style=ft.ButtonStyle(
+                                shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
+                            ),
+                        ),
+                    ],
+                )
+            )
+
+        def _ask_copy(container: str) -> None:
+            source = ft.TextField(
+                hint_text="source (container:/path)",
+                text_size=tokens.FONT_SM,
+                height=44,
+                border=ft.OutlineInputBorder(
+                    border_radius=tokens.RADIUS_MD,
+                    side=ft.BorderSide(1, theme.surface_alt()),
+                ),
+            )
+            destination = ft.TextField(
+                hint_text="destination (container:/path)",
+                text_size=tokens.FONT_SM,
+                height=44,
+                border=ft.OutlineInputBorder(
+                    border_radius=tokens.RADIUS_MD,
+                    side=ft.BorderSide(1, theme.surface_alt()),
+                ),
+            )
+
+            def _save(_e) -> None:
+                page.pop_dialog()
+                page.run_task(methods.copy_path, source.value or "", destination.value or "")
+
+            page.show_dialog(
+                ft.AlertDialog(
+                    title=ft.Text("Copy a path", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
+                    content=ft.Column(controls=[source, destination], spacing=tokens.SPACE_XS),
+                    actions=[
+                        ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
+                        ft.FilledButton(
+                            "Copy",
+                            on_click=_save,
+                            style=ft.ButtonStyle(
+                                shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
+                            ),
+                        ),
+                    ],
+                )
+            )
+
+        def _ask_sync(container: str) -> None:
+            source = ft.TextField(
+                hint_text=f"source (e.g. {container}:/root or /sdcard/src)",
+                text_size=tokens.FONT_SM,
+                height=44,
+                border=ft.OutlineInputBorder(
+                    border_radius=tokens.RADIUS_MD,
+                    side=ft.BorderSide(1, theme.surface_alt()),
+                ),
+            )
+            destination = ft.TextField(
+                hint_text=f"destination (e.g. {container}:/root/dest)",
+                text_size=tokens.FONT_SM,
+                height=44,
+                border=ft.OutlineInputBorder(
+                    border_radius=tokens.RADIUS_MD,
+                    side=ft.BorderSide(1, theme.surface_alt()),
+                ),
+            )
+            use_checksum = ft.Checkbox(label="Verify with checksums", value=True)
+            prune_dest = ft.Checkbox(label="Prune files deleted in source", value=False)
+
+            def _save(_e) -> None:
+                page.pop_dialog()
+                page.run_task(
+                    methods.sync_path,
+                    source.value or "",
+                    destination.value or "",
+                    bool(use_checksum.value),
+                    bool(prune_dest.value),
+                )
+
+            page.show_dialog(
+                ft.AlertDialog(
+                    title=ft.Text("Sync Directory", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
+                    content=ft.Column(
+                        controls=[source, destination, use_checksum, prune_dest],
+                        spacing=tokens.SPACE_XS,
+                        tight=True,
                     ),
                     actions=[
                         ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
                         ft.FilledButton(
-                            "Reset",
-                            on_click=_yes,
+                            "Sync",
+                            on_click=_save,
                             style=ft.ButtonStyle(
-                                shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
-                                bgcolor=theme.warn(),
+                                shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
                             ),
                         ),
                     ],
@@ -500,7 +438,7 @@ def DistroView() -> ft.Control:
                         f"Remove {cname}?", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
                     ),
                     content=ft.Text(
-                        "The container files are deleted. Cached downloads stay.",
+                        "The container's files are deleted. Cached downloads stay.",
                         size=tokens.FONT_SM,
                     ),
                     actions=[
@@ -517,6 +455,34 @@ def DistroView() -> ft.Control:
                 )
             )
 
+        def _reset(_e) -> None:
+            def _yes(_e) -> None:
+                page.pop_dialog()
+                page.run_task(methods.reset_container, cname)
+
+            page.show_dialog(
+                ft.AlertDialog(
+                    title=ft.Text(
+                        f"Reset {cname}?", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
+                    ),
+                    content=ft.Text(
+                        "The container is wiped and reinstalled from the cached "
+                        "image — no re-download when the layers are cached.",
+                        size=tokens.FONT_SM,
+                    ),
+                    actions=[
+                        ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
+                        ft.FilledButton(
+                            "Reset",
+                            on_click=_yes,
+                            style=ft.ButtonStyle(
+                                shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
+                            ),
+                        ),
+                    ],
+                )
+            )
+
         details_col = ft.Column(
             controls=[
                 ft.Text(
@@ -526,7 +492,9 @@ def DistroView() -> ft.Control:
                     color=theme.text(),
                 ),
                 ft.Text(
-                    f"{row.get('image', '')} · {_fmt_size(row.get('size_bytes', 0))} · {row.get('arch', '')}",
+                    f"{row.get('image', '')} · "
+                    f"{_fmt_size(row.get('size_bytes', 0))} · "
+                    f"{row.get('arch', '')}",
                     size=tokens.FONT_XS,
                     color=theme.text_dim(),
                 ),
@@ -534,202 +502,228 @@ def DistroView() -> ft.Control:
             spacing=0,
             expand=not is_narrow,
         )
-
-        btn_shell = ft.FilledButton(
-            "Open shell",
-            on_click=lambda _e: page.run_task(methods.open_session, cname),
-            height=34,
-            style=ft.ButtonStyle(
-                shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
-            ),
-        )
-        btn_reset = ft.Button("Reset", on_click=_reset, height=34)
-        btn_remove = ft.Button("Remove", on_click=_remove, height=34)
-        menu_btn = ft.PopupMenuButton(
-            icon=ft.Icons.MORE_VERT,
-            icon_size=tokens.ICON_MD,
-            tooltip="More actions",
-            items=_menu_items(cname),
-        )
-
-        if is_narrow:
-            card_content = ft.Column(
-                controls=[
-                    ft.Row(
-                        controls=[
-                            ft.Icon(
-                                ft.Icons.APPS_ROUNDED, size=tokens.ICON_MD, color=theme.primary()
-                            ),
-                            details_col,
-                            menu_btn,
-                        ],
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        spacing=tokens.SPACE_SM,
-                    ),
-                    ft.Row(
-                        controls=[btn_shell, btn_reset, btn_remove],
-                        spacing=tokens.SPACE_SM,
-                        wrap=True,
-                    ),
-                ],
-                spacing=tokens.SPACE_SM,
-            )
-        else:
-            card_content = ft.Row(
-                controls=[
-                    ft.Icon(ft.Icons.APPS_ROUNDED, size=tokens.ICON_MD, color=theme.primary()),
-                    details_col,
-                    btn_shell,
-                    btn_reset,
-                    btn_remove,
-                    menu_btn,
-                ],
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=tokens.SPACE_SM,
-            )
-
-        return card(card_content, padding=tokens.SPACE_SM)
-
-    controls: list[ft.Control] = [
-        build_brand_hero("Linux on Android — no root"),
-    ]
-    if not st.probe_passed:
-        controls.append(probe_banner(st.probe_summary))
-
-    # Popular distros with unversioned display labels
-    _POPULAR_DISTROS = (
-        (
-            "Debian",
-            "debian:bookworm",
-            "debian",
-            "Most popular · Stable, comprehensive package archive",
-        ),
-        ("Ubuntu", "ubuntu:24.04", "ubuntu", "Canonical LTS · Modern development environments"),
-        (
-            "Alpine",
-            "alpine:3.21",
-            "alpine",
-            "Ultra-lightweight (~8 MB) · musl libc & apk package manager",
-        ),
-    )
-
-    distro_tiles = [
-        _distro_tile(label, ref, def_name, desc) for label, ref, def_name, desc in _POPULAR_DISTROS
-    ]
-    controls.extend(
-        [
-            section_header("Popular Distros"),
-            *distro_tiles,
-        ]
-    )
-
-    # SearchBar-style input container (DDGS inspired)
-    search_bar = ft.Container(
-        content=ft.Row(
+        actions_row = ft.Row(
             controls=[
-                ft.Icon(ft.Icons.SEARCH_ROUNDED, size=tokens.ICON_MD, color=theme.primary()),
-                ft.TextField(
-                    hint_text="Search Docker Hub or enter custom ref (e.g. archlinux)...",
-                    value=query,
-                    text_size=tokens.FONT_SM,
-                    height=44,
-                    expand=True,
-                    border=ft.NoInputBorder(),
-                    on_change=lambda e: set_query(e.control.value),
-                    on_submit=lambda _e: _on_search(),
-                ),
-                ft.IconButton(
-                    icon=ft.Icons.CONTENT_PASTE_ROUNDED,
-                    icon_size=tokens.ICON_SM,
-                    tooltip="Paste from clipboard",
-                    on_click=lambda _e: page.run_task(_on_paste),
-                ),
                 ft.FilledButton(
-                    "Search",
-                    on_click=_on_search,
-                    height=34,
+                    "Open shell",
+                    on_click=lambda _e: page.run_task(methods.open_session, cname),
+                    height=36,
                     style=ft.ButtonStyle(
-                        shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
+                        shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
                     ),
+                ),
+                ft.Button("Reset", on_click=_reset, height=36),
+                ft.Button("Remove", on_click=_remove, height=36),
+                ft.PopupMenuButton(
+                    icon=ft.Icons.MORE_VERT,
+                    icon_size=tokens.ICON_MD,
+                    tooltip="More actions",
+                    items=_menu_items(cname),
                 ),
             ],
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=tokens.SPACE_XS,
-        ),
-        bgcolor=theme.glass_bg(),
-        border=ft.Border.all(1, theme.glass_border()),
-        border_radius=tokens.RADIUS_MD,
-        padding=ft.Padding(tokens.SPACE_MD, tokens.SPACE_XS, tokens.SPACE_SM, tokens.SPACE_XS),
+            spacing=tokens.SPACE_SM,
+            wrap=is_narrow,
+        )
+
+        # Narrow screens: the actions drop to their own line under the
+        # details (Sherlock's stacked setting-row rule); wide layouts keep
+        # the proven single row.
+        content = (
+            ft.Column(controls=[details_col, actions_row], spacing=tokens.SPACE_SM)
+            if is_narrow
+            else ft.Row(
+                controls=[details_col, actions_row],
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            )
+        )
+        return ft.Container(
+            content=content,
+            bgcolor=theme.glass_bg(),
+            border=ft.Border.all(1, theme.glass_border()),
+            padding=tokens.SPACE_SM,
+            border_radius=tokens.RADIUS_MD,
+        )
+
+    # Certified distros — bare names and bare refs. No versions, no sizes,
+    # no descriptions: `debian` installs Docker Hub's current latest at tap
+    # time, and upstream's derive_alias names the container.
+    _CERTIFIED_DISTROS = (
+        ("Debian", "debian"),
+        ("Ubuntu", "ubuntu"),
+        ("Alpine", "alpine"),
     )
 
-    controls.extend(
-        [
-            ft.Container(height=tokens.SPACE_XS),
-            section_header("Search & Custom Install"),
-            search_bar,
-        ]
-    )
+    chips = []
+    for clabel, cref in _CERTIFIED_DISTROS:
+        is_sel = query == cref
+        chips.append(
+            ft.Container(
+                content=ft.Row(
+                    controls=[
+                        ft.Icon(
+                            ft.Icons.CHECK_CIRCLE_ROUNDED
+                            if is_sel
+                            else ft.Icons.RADIO_BUTTON_UNCHECKED_ROUNDED,
+                            size=tokens.ICON_XS,
+                            color=theme.primary() if is_sel else theme.text_dim(),
+                        ),
+                        ft.Text(
+                            clabel,
+                            size=tokens.FONT_XS,
+                            color=theme.primary() if is_sel else theme.text(),
+                            weight=ft.FontWeight.W_600 if is_sel else ft.FontWeight.W_400,
+                        ),
+                    ],
+                    spacing=tokens.SPACE_XS,
+                    tight=True,
+                ),
+                padding=ft.Padding(
+                    tokens.SPACE_SM,
+                    tokens.SPACE_XXS,
+                    tokens.SPACE_SM,
+                    tokens.SPACE_XXS,
+                ),
+                border_radius=tokens.RADIUS_PILL,
+                bgcolor=ft.Colors.with_opacity(0.12, theme.primary())
+                if is_sel
+                else theme.surface_alt(),
+                border=ft.Border.all(
+                    1,
+                    ft.Colors.with_opacity(0.24, theme.primary())
+                    if is_sel
+                    else ft.Colors.TRANSPARENT,
+                ),
+                on_click=lambda _e, r=cref: (set_query(r), set_name(r)),
+                ink=True,
+            )
+        )
 
-    if st.search_status:
-        controls.append(ft.Text(st.search_status, size=tokens.FONT_XS, color=theme.text_dim()))
-    if st.search_results:
-        result_cards = []
-        for r in st.search_results[:8]:
-            r_name = r.get("name", "")
-            r_desc = r.get("description", "") or "No description"
-            result_cards.append(
-                card(
+    controls: list[ft.Control] = [
+        build_brand_hero("Linux on Android — no root"),
+        section_header("Install"),
+    ]
+    if not st.probe_passed:
+        controls.append(probe_banner(st.probe_summary))
+    controls.append(
+        card(
+            ft.Column(
+                controls=[
                     ft.Row(
                         controls=[
-                            ft.Column(
-                                controls=[
-                                    ft.Text(
-                                        r_name, size=tokens.FONT_SM, weight=ft.FontWeight.W_600
-                                    ),
-                                    ft.Text(
-                                        r_desc,
-                                        size=tokens.FONT_XS,
-                                        color=theme.text_dim(),
-                                        max_lines=2,
-                                    ),
-                                ],
-                                spacing=tokens.SPACE_XXS,
-                                expand=True,
-                            ),
+                            _field(),
                             ft.FilledButton(
                                 "Install",
-                                on_click=lambda _e, target=r_name: _consent_install(target),
-                                height=32,
+                                on_click=lambda _e: _consent_install(),
+                                height=44,
                                 style=ft.ButtonStyle(
                                     shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
                                 ),
                             ),
                         ],
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         spacing=tokens.SPACE_SM,
                     ),
-                    padding=tokens.SPACE_SM,
-                )
+                    ft.Row(
+                        controls=[
+                            ft.TextField(
+                                hint_text="name (optional)",
+                                value=name,
+                                width=160,
+                                text_size=tokens.FONT_SM,
+                                height=44,
+                                border=ft.OutlineInputBorder(
+                                    border_radius=tokens.RADIUS_MD,
+                                    side=ft.BorderSide(1, theme.surface_alt()),
+                                ),
+                                on_change=lambda e: set_name(e.control.value),
+                            ),
+                        ],
+                        spacing=tokens.SPACE_SM,
+                    ),
+                    ft.Row(
+                        controls=chips,
+                        spacing=tokens.SPACE_XS,
+                        scroll=ft.ScrollMode.AUTO,
+                    ),
+                ],
+                spacing=tokens.SPACE_SM,
             )
-        controls.extend(result_cards)
+        )
+    )
 
-    # Installed containers section
+    if st.installing:
+        progress = f"installing {st.installing} — {st.install_stage}"
+    elif st.busy_note:
+        progress = st.busy_note
+    else:
+        progress = ""
+    if progress:
+        controls.append(ft.Text(progress, size=tokens.FONT_SM, color=theme.accent()))
+
     controls.append(section_header("Containers"))
     if st.containers:
-        controls.extend([_container_card(row) for row in st.containers])
+        controls.append(
+            ft.Column(controls=[_container_row(r) for r in st.containers], spacing=tokens.SPACE_SM)
+        )
     else:
         controls.append(
             empty_state(
                 "No containers yet",
-                "Choose a popular distro above or search any Docker image to begin.",
+                "Install any Docker image to begin.",
                 icon=ft.Icons.INVENTORY_2_OUTLINED,
             )
         )
+    if st.data_note:
+        controls.append(
+            ft.Text(st.data_note, size=tokens.FONT_XS, color=theme.warn(), selectable=True)
+        )
 
-    # Full-width glass banner ad
-    controls.append(pooled_banner_ad("distros-1", page))
+    controls.append(pooled_banner_ad("home-1", page))
 
-    # How It Works section matching CollabShell / DDGS
+    controls.append(section_header("Search Docker Hub"))
+    controls.append(
+        card(
+            ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.TextField(
+                                hint_text="search (e.g. debian)",
+                                value=query,
+                                text_size=tokens.FONT_SM,
+                                height=44,
+                                expand=True,
+                                border=ft.OutlineInputBorder(
+                                    border_radius=tokens.RADIUS_MD,
+                                    side=ft.BorderSide(1, theme.surface_alt()),
+                                ),
+                                on_change=lambda e: set_query(e.control.value),
+                                on_submit=lambda _e: _search(),
+                            ),
+                            ft.FilledButton(
+                                "Search",
+                                on_click=lambda _e: _search(),
+                                height=44,
+                                style=ft.ButtonStyle(
+                                    shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
+                                ),
+                            ),
+                        ],
+                        spacing=tokens.SPACE_SM,
+                    ),
+                    ft.Text(st.search_status, size=tokens.FONT_XS, color=theme.text_dim()),
+                    ft.Column(
+                        controls=[_hit_row(hit) for hit in st.search_results[:12]],
+                        spacing=tokens.SPACE_XXS,
+                    ),
+                ],
+                spacing=tokens.SPACE_SM,
+            )
+        )
+    )
+
+    controls.append(pooled_banner_ad("home-2", page))
+
     controls.extend(
         [
             section_header("How It Works"),
@@ -744,12 +738,12 @@ def DistroView() -> ft.Control:
                         _step_row(
                             "2",
                             "One-Tap Install",
-                            "Downloads and unpacks official container layers directly into private app storage.",
+                            "Official layers are pulled directly from container registries into private app storage.",
                         ),
                         _step_row(
                             "3",
                             "Launch Interactive Terminal",
-                            "Enjoy full bash shell access with apt package manager, tools, and multi-session tabs.",
+                            "Full shell access with package manager, tools, and multi-session tabs.",
                         ),
                     ],
                     spacing=tokens.SPACE_MD,
@@ -759,7 +753,6 @@ def DistroView() -> ft.Control:
         ]
     )
 
-    # Feature capabilities matching CollabShell home
     controls.extend(
         [
             section_header("What Proot Distro Can Do"),
@@ -778,16 +771,17 @@ def DistroView() -> ft.Control:
                 "Container Backup & Sync",
                 "Backup snapshots to tar archives, synchronize folders, and inspect container configurations anytime.",
             ),
-            ft.Container(height=tokens.NAV_BAR_CLEARANCE),
         ]
     )
 
+    controls.append(pooled_banner_ad("home-3", page))
+    controls.append(ft.Container(height=tokens.NAV_BAR_CLEARANCE))
     return ft.Column(
         controls=controls, spacing=tokens.SPACE_SM, expand=True, scroll=ft.ScrollMode.AUTO
     )
 
 
-# ── settings (Sherlock verbatim port) ─────────────────────────────────────────
+# ── settings ─────────────────────────────────────────────────────────────────
 
 
 def _settings_card(controls: list[ft.Control]) -> ft.Container:
@@ -1025,7 +1019,10 @@ def SettingsView() -> ft.Control:
                 actions=[
                     ft.TextButton(
                         "Re-check",
-                        on_click=lambda _e: (page.pop_dialog(), page.run_task(methods.check_probe)),
+                        on_click=lambda _e: (
+                            page.pop_dialog(),
+                            page.run_task(methods.check_probe),
+                        ),
                     ),
                     ft.TextButton("Close", on_click=lambda _e: page.pop_dialog()),
                 ],
@@ -1043,7 +1040,8 @@ def SettingsView() -> ft.Control:
             )
         )
 
-    # 1. Appearance & Theme Card
+    # 1. Appearance & Theme Card — CollabShell order (Light / Dark / System)
+    # and CollabShell icons.
     appearance_card = _settings_card(
         [
             ft.Container(
@@ -1052,10 +1050,10 @@ def SettingsView() -> ft.Control:
                         ft.Text("Theme", size=tokens.FONT_MD, weight=ft.FontWeight.W_500),
                         ft.Row(
                             controls=[
-                                _create_theme_card("dark", "Dark", ft.Icons.DARK_MODE_ROUNDED),
                                 _create_theme_card("light", "Light", ft.Icons.LIGHT_MODE_ROUNDED),
+                                _create_theme_card("dark", "Dark", ft.Icons.DARK_MODE_ROUNDED),
                                 _create_theme_card(
-                                    "system", "System", ft.Icons.SETTINGS_SYSTEM_DAYDREAM_ROUNDED
+                                    "system", "System", ft.Icons.BRIGHTNESS_AUTO_ROUNDED
                                 ),
                             ],
                             spacing=tokens.SPACE_SM,
@@ -1082,7 +1080,9 @@ def SettingsView() -> ft.Control:
                     content=ft.Row(
                         controls=[
                             ft.Icon(
-                                ft.Icons.LAYERS_ROUNDED, size=tokens.ICON_XS, color=theme.primary()
+                                ft.Icons.LAYERS_ROUNDED,
+                                size=tokens.ICON_XS,
+                                color=theme.primary(),
                             ),
                             ft.Text(f"{ident} ({arch}) · {size}", size=tokens.FONT_XS, expand=True),
                             ft.IconButton(
@@ -1162,39 +1162,9 @@ def SettingsView() -> ft.Control:
         ]
     )
 
-    # 4. Privacy & Monetization Card
-    privacy_card = _settings_card(
-        [
-            _setting_row(
-                ft.Icons.PRIVACY_TIP_ROUNDED,
-                "Ad Consent & Privacy",
-                "Manage Google UMP consent preferences and personalized ads",
-                ft.FilledButton(
-                    "Manage Options",
-                    on_click=lambda _e: page.run_task(methods.show_privacy_options),
-                    height=36,
-                    style=ft.ButtonStyle(
-                        shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
-                    ),
-                ),
-                stacked=is_narrow,
-            ),
-            ft.Divider(height=1, color=theme.glass_border()),
-            _setting_row(
-                ft.Icons.POLICY_ROUNDED,
-                "Privacy Policy",
-                "Transparent local-only policy: zero telemetry, zero servers",
-                ft.OutlinedButton(
-                    "View Policy",
-                    on_click=lambda _e: page.run_task(launch_url, PRIVACY_POLICY_URL, page),
-                    height=36,
-                ),
-                stacked=is_narrow,
-            ),
-        ]
-    )
-
-    # 5. About & Status Card
+    # 4. About & Status Card. The UMP consent form is intentionally NOT a
+    # settings entry (Sherlock's standing ruling: it appears on its own when
+    # the user's region requires it; a manage-consent row is revenue-negative).
     about_card = _settings_card(
         [
             _setting_row(
@@ -1210,6 +1180,18 @@ def SettingsView() -> ft.Control:
                 "Open-Source Licenses",
                 "Complete license texts for PRoot, talloc, and Python dependencies",
                 ft.TextButton("View Licenses", on_click=_licenses),
+                stacked=is_narrow,
+            ),
+            ft.Divider(height=1, color=theme.glass_border()),
+            _setting_row(
+                ft.Icons.POLICY_ROUNDED,
+                "Privacy Policy",
+                "Container data stays on this device; see the full policy",
+                ft.OutlinedButton(
+                    "View Policy",
+                    on_click=lambda _e: page.run_task(launch_url, PRIVACY_POLICY_URL, page),
+                    height=36,
+                ),
                 stacked=is_narrow,
             ),
             ft.Divider(height=1, color=theme.glass_border()),
@@ -1233,11 +1215,10 @@ def SettingsView() -> ft.Control:
             storage_card,
             section_header("Registry Authentication"),
             auth_card,
-            section_header("Privacy & Consent"),
-            privacy_card,
             section_header("About & System Status"),
             about_card,
             pooled_banner_ad("settings-1", page),
+            pooled_banner_ad("settings-2", page),
             ft.Container(height=tokens.NAV_BAR_CLEARANCE),
         ],
         spacing=tokens.SPACE_SM,
