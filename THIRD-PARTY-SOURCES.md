@@ -12,7 +12,7 @@ and via GitHub Releases at: https://github.com/Nwokike/proot-distro/releases/lat
 
 This offer is valid for at least three (3) years from the date of release to any third
 party for no charge other than the cost of physically performing source distribution.
-To request source code via durable physical medium, contact: onyeka@kiri.ng
+To request source code via durable physical medium, contact: contact@nwokike.ng
 
 ## Native Payloads (Packaged in flet-proot)
 

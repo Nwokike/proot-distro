@@ -180,6 +180,9 @@ def DistroView() -> ft.Control:
             is_submitting = True
             page.pop_dialog()
             page.run_task(methods.install_distro, image, container_tag)
+            from components.install_progress_modal import show_install_progress_modal
+
+            show_install_progress_modal(page, container_tag or image)
 
         page.show_dialog(
             ft.AlertDialog(
@@ -282,11 +285,21 @@ def DistroView() -> ft.Control:
                 on_click=lambda _e: _ask_sync(cname),
             ),
             ft.PopupMenuItem(
+                icon=ft.Icons.FOLDER_OPEN_ROUNDED,
+                content=ft.Text("Browse files", size=tokens.FONT_SM),
+                on_click=lambda _e: _browse_files(cname),
+            ),
+            ft.PopupMenuItem(
                 icon=ft.Icons.INFO_OUTLINE_ROUNDED,
                 content=ft.Text("Inspect container", size=tokens.FONT_SM),
                 on_click=lambda _e: page.run_task(methods.inspect_container, cname),
             ),
         ]
+
+    def _browse_files(container: str) -> None:
+        from screens.files.modal import show_manage_files_modal
+
+        show_manage_files_modal(page, container)
 
     def _ask_rename(container: str) -> None:
         new_name = ft.TextField(
@@ -486,18 +499,42 @@ def DistroView() -> ft.Control:
             )
 
         def _remove(_e) -> None:
+            clean_cache_cb = ft.Checkbox(
+                label="Also remove cached download layers",
+                value=True,
+            )
+            is_submitting = False
+
             def _yes(_e) -> None:
+                nonlocal is_submitting
+                if is_submitting:
+                    return
+                is_submitting = True
                 page.pop_dialog()
-                page.run_task(methods.remove_container, cname)
+                should_clean = bool(clean_cache_cb.value)
+
+                async def _do_remove() -> None:
+                    await methods.remove_container(cname)
+                    if should_clean:
+                        await methods.clear_orphan_layers()
+
+                page.run_task(_do_remove)
 
             page.show_dialog(
                 ft.AlertDialog(
                     title=ft.Text(
                         f"Remove {cname}?", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
                     ),
-                    content=ft.Text(
-                        "The container files are deleted. Cached downloads stay.",
-                        size=tokens.FONT_SM,
+                    content=ft.Column(
+                        controls=[
+                            ft.Text(
+                                "Are you sure? This permanently deletes all files in this container.",
+                                size=tokens.FONT_SM,
+                            ),
+                            clean_cache_cb,
+                        ],
+                        tight=True,
+                        spacing=tokens.SPACE_SM,
                     ),
                     actions=[
                         ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
@@ -641,6 +678,12 @@ def DistroView() -> ft.Control:
     if not st.probe_passed:
         controls.append(probe_banner(st.probe_summary))
 
+    from components.install_progress_modal import build_active_install_banner
+
+    active_banner = build_active_install_banner(page)
+    if active_banner:
+        controls.append(active_banner)
+
     # Install first, the type-in box next, popular distros under it.
     controls.append(section_header("Install"))
     controls.append(install_bar)
@@ -656,6 +699,7 @@ def DistroView() -> ft.Control:
     if progress:
         controls.append(ft.Text(progress, size=tokens.FONT_SM, color=theme.accent()))
 
+    # Banner 1: after the Install section (install box, popular distros, logs).
     controls.append(pooled_banner_ad("home-1", page))
 
     # Installed containers section
@@ -674,8 +718,6 @@ def DistroView() -> ft.Control:
         controls.append(
             ft.Text(st.data_note, size=tokens.FONT_XS, color=theme.warn(), selectable=True)
         )
-
-    controls.append(pooled_banner_ad("home-2", page))
 
     # Separate search section (Docker Hub keyword search)
     search_bar = ft.Container(
@@ -761,8 +803,6 @@ def DistroView() -> ft.Control:
             )
         controls.extend(result_cards)
 
-    controls.append(pooled_banner_ad("home-3", page))
-
     # How It Works section matching CollabShell / DDGS
     controls.extend(
         [
@@ -793,6 +833,9 @@ def DistroView() -> ft.Control:
         ]
     )
 
+    # Banner 2: after How It Works.
+    controls.append(pooled_banner_ad("home-2", page))
+
     # Feature capabilities matching CollabShell home
     controls.extend(
         [
@@ -812,9 +855,12 @@ def DistroView() -> ft.Control:
                 "Container Backup & Sync",
                 "Backup snapshots to tar archives, synchronize folders, and inspect container configurations anytime.",
             ),
-            ft.Container(height=tokens.NAV_BAR_CLEARANCE),
         ]
     )
+
+    # Banner 3: after what Proot Distro can do — the last content banner.
+    controls.append(pooled_banner_ad("home-3", page))
+    controls.append(ft.Container(height=tokens.NAV_BAR_CLEARANCE))
 
     return ft.Column(
         controls=controls, spacing=tokens.SPACE_SM, expand=True, scroll=ft.ScrollMode.AUTO
@@ -1240,10 +1286,41 @@ def SettingsView() -> ft.Control:
         ]
     )
 
-    # 4. About & System Status Card (Sherlock pattern: Privacy Policy is here,
-    # and UMP ad consent is deliberately NOT a settings entry).
+    # 4. About & System Status Card (CollabShell pattern: brand icon + tagline
+    # at the top, version info, terms links, and system environment probe).
+    from components.brand_hero import app_icon_svg
+
     about_card = _settings_card(
         [
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Container(
+                            content=ft.Image(
+                                src=app_icon_svg(),
+                                width=tokens.HERO_ICON_SIZE,
+                                height=tokens.HERO_ICON_SIZE,
+                                fit=ft.BoxFit.CONTAIN,
+                                color=None if theme.is_light_theme() else ft.Colors.WHITE,
+                                color_blend_mode=ft.BlendMode.SRC_IN,
+                            ),
+                            alignment=ft.Alignment.CENTER,
+                            margin=ft.Margin(0, tokens.SPACE_SM, 0, tokens.SPACE_XS),
+                        ),
+                        ft.Text(
+                            "Linux on Android — no root",
+                            size=tokens.FONT_SM,
+                            color=theme.text_dim(),
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=tokens.SPACE_XXS,
+                ),
+                padding=tokens.SPACE_MD,
+                alignment=ft.Alignment.CENTER,
+            ),
+            ft.Divider(height=1, color=theme.glass_border()),
             _setting_row(
                 ft.Icons.INFO_OUTLINE_ROUNDED,
                 f"{APP_NAME} v{APP_VERSION} ({APP_BUILD_NUMBER})",
@@ -1288,14 +1365,18 @@ def SettingsView() -> ft.Control:
         controls=[
             section_header("Appearance & Theme"),
             appearance_card,
+            # Banner 1: after Appearance & Theme.
+            pooled_banner_ad("settings-1", page),
             section_header("Storage & Cache"),
             storage_card,
-            pooled_banner_ad("settings-1", page),
             section_header("Registry Authentication"),
             auth_card,
+            # Banner 2: after Registry Authentication.
+            pooled_banner_ad("settings-2", page),
             section_header("About & System Status"),
             about_card,
-            pooled_banner_ad("settings-2", page),
+            # Banner 3: the last thing on the page.
+            pooled_banner_ad("settings-3", page),
             ft.Container(height=tokens.NAV_BAR_CLEARANCE),
         ],
         spacing=tokens.SPACE_SM,

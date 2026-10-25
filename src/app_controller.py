@@ -184,12 +184,20 @@ class AppController:
             return
         state.installing = name or image
         state.install_stage = "preparing"
+        state.install_logs = []
+        state.install_completed = False
+        state.install_dialog_minimized = False
         state.busy_note = ""
 
         loop = self.page.loop
 
         def _apply_line(line: str) -> None:
-            state.install_stage = line.strip()
+            clean = line.strip()
+            state.install_stage = clean
+            if clean:
+                state.install_logs.append(clean)
+                if len(state.install_logs) > 500:
+                    state.install_logs.pop(0)
 
         def _on_line(line: str) -> None:
             loop.call_soon_threadsafe(_apply_line, line)
@@ -217,7 +225,10 @@ class AppController:
             state.installing = None
             await self.refresh_containers()
             if installed_now and outcome is not None and outcome.ok:
-                await self.ad_service.show_interstitial()
+                state.install_completed = True
+                state.last_installed = installed_now
+                with contextlib.suppress(Exception):
+                    await self.ad_service.show_interstitial()
 
     async def remove_container(self, name: str) -> None:
         outcome = await asyncio.to_thread(self.proot.remove_container, name)
@@ -624,6 +635,7 @@ class AppController:
             await asyncio.to_thread(self.session_manager.open, container)
         except Exception as exc:
             state.session_error = f"could not open {container}: {_reason(exc)}"
+            self.show_snack(state.session_error)
             return
         state.active_session = container
 

@@ -12,6 +12,7 @@ from core import theme
 from core.state import state
 from screens import (
     DistroView,
+    FilesView,
     OnboardingView,
     SessionSelectorView,
     SettingsView,
@@ -20,11 +21,13 @@ from screens import (
 
 TAB_DISTRO = 0
 TAB_TERMINAL = 1
-TAB_SETTINGS = 2
+TAB_FILES = 2
+TAB_SETTINGS = 3
 
 _TABS = (
     ("Distros", ft.Icons.APPS),
     ("Terminal", ft.Icons.TERMINAL),
+    ("Files", ft.Icons.FOLDER_OUTLINED),
     ("Settings", ft.Icons.SETTINGS),
 )
 
@@ -62,6 +65,8 @@ def AppShell() -> ft.Control:
         body = DistroView()
     elif active_tab == TAB_TERMINAL:
         body = SessionSelectorView()
+    elif active_tab == TAB_FILES:
+        body = FilesView()
     else:
         body = SettingsView()
 

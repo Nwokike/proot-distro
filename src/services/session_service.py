@@ -78,7 +78,7 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
         env["PROOT_L2S_DIR"] = str(l2s)
 
     # Hardened Android extensions (device-proven in M0 spike)
-    # Only injected before the inner guest command
+    # Only injected before the inner guest command on Android
     inner_idx = len(argv)
     for idx, arg in enumerate(argv[1:], start=1):
         if not arg.startswith("-"):
@@ -92,25 +92,27 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
         if flag not in head:
             head.append(flag)
 
-    _add_if_missing("--kill-on-exit")
-    _add_if_missing("--link2symlink")
-    _add_if_missing("--sysvipc")
-    _add_if_missing("-L")
+    is_android = bool(os.environ.get("ANDROID_NATIVE_LIBRARY_DIR") or Path("/data/app").exists())
+    if is_android:
+        _add_if_missing("--kill-on-exit")
+        _add_if_missing("--link2symlink")
+        _add_if_missing("--sysvipc")
+        _add_if_missing("-L")
 
-    uname_m = platform.machine() or "aarch64"
-    kernel_fake = f"--kernel-release=\\Linux\\localhost\\{platform.release()}\\#1 SMP PREEMPT_DYNAMIC Fri, 10 Oct 2025 00:00:00 +0000\\{uname_m}\\localdomain\\-1\\"
-    if not any(a.startswith("--kernel-release=") for a in head):
-        head.append(kernel_fake)
+        uname_m = platform.machine() or "aarch64"
+        kernel_fake = f"--kernel-release=\\Linux\\localhost\\{platform.release()}\\#1 SMP PREEMPT_DYNAMIC Fri, 10 Oct 2025 00:00:00 +0000\\{uname_m}\\localdomain\\-1\\"
+        if not any(a.startswith("--kernel-release=") for a in head):
+            head.append(kernel_fake)
 
-    # Standard devices & stdio streams required by proot on Android
-    _add_if_missing("--bind=/dev/urandom:/dev/random")
-    _add_if_missing("--bind=/proc/self/fd:/dev/fd")
-    _add_if_missing("--bind=/proc/self/fd/0:/dev/stdin")
-    _add_if_missing("--bind=/proc/self/fd/1:/dev/stdout")
-    _add_if_missing("--bind=/proc/self/fd/2:/dev/stderr")
+        # Standard devices & stdio streams required by proot on Android
+        _add_if_missing("--bind=/dev/urandom:/dev/random")
+        _add_if_missing("--bind=/proc/self/fd:/dev/fd")
+        _add_if_missing("--bind=/proc/self/fd/0:/dev/stdin")
+        _add_if_missing("--bind=/proc/self/fd/1:/dev/stdout")
+        _add_if_missing("--bind=/proc/self/fd/2:/dev/stderr")
 
-    if shm_bind:
-        _add_if_missing(shm_bind)
+        if shm_bind:
+            _add_if_missing(shm_bind)
 
     env.setdefault("TERM", "xterm-256color")
     env.setdefault("COLORTERM", "truecolor")

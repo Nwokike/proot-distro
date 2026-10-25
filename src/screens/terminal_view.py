@@ -257,6 +257,11 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
     if not entry.ready:
         status_indicators.append(ft.ProgressRing(width=14, height=14, stroke_width=2))
 
+    def _browse_files() -> None:
+        from screens.files.modal import show_manage_files_modal
+
+        show_manage_files_modal(page, entry.container)
+
     action_menu = ft.PopupMenuButton(
         icon=ft.Icons.MORE_VERT_ROUNDED,
         icon_size=tokens.ICON_MD,
@@ -291,6 +296,11 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
                 icon=ft.Icons.VISIBILITY_ROUNDED,
                 content=ft.Text("Toggle Cursor Blink", size=tokens.FONT_SM),
                 on_click=lambda _e: mt.toggle_cursor_blink(),
+            ),
+            ft.PopupMenuItem(
+                icon=ft.Icons.FOLDER_OPEN_ROUNDED,
+                content=ft.Text("Browse Files", size=tokens.FONT_SM),
+                on_click=lambda _e: _browse_files(),
             ),
             ft.PopupMenuItem(
                 icon=ft.Icons.CLOSE_ROUNDED,

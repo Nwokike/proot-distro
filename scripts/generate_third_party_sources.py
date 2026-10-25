@@ -6,10 +6,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent
+REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from build_flet_proot_wheel import _PINNED_SOURCES
+
 from core.constants import (
     APP_BUILD_NUMBER,
     APP_VERSION,

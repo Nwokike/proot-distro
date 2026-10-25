@@ -31,7 +31,13 @@ class Outcome:
 
 
 def bootstrap() -> None:
-    """Env contract + shims before the first proot_distro import (idempotent)."""
+    """Env contract + shims before the first proot_distro import (idempotent).
+
+    Also resolves the payload env (PD_PROOT_BIN / PROOT_LOADER /
+    LD_LIBRARY_PATH / PROOT_TMP_DIR) so every upstream call — including
+    `login --get-proot-cmd`, which needs the proot binary — finds the binary
+    even if the startup probe's native-dir lookup missed it.
+    """
     global _BOOTSTRAPPED
     if _BOOTSTRAPPED:
         return
@@ -39,6 +45,9 @@ def bootstrap() -> None:
 
     posixdb.ensure()
     os.environ.update(storage_paths.env_contract())
+    from core import proot_probe
+
+    proot_probe.ensure_proot_env()
     _BOOTSTRAPPED = True
 
 
@@ -417,7 +426,7 @@ class _CapturedStdout:
 _GET_PROOT_CMD_LOCK = threading.Lock()
 
 
-def get_proot_cmd(container: str) -> str:
+def get_proot_cmd(container: str, _retry: bool = True) -> str:
     """Upstream's own session command line: `pd login <c> --get-proot-cmd`.
 
     Calls `command_login` directly: `cli.main()` installs a SIGQUIT handler
@@ -445,6 +454,17 @@ def get_proot_cmd(container: str) -> str:
             if code != 0:
                 reason = errors.getvalue().strip().splitlines()
                 detail = reason[-1][:200] if reason else "no output"
+                # The payload env can resolve late on device (the probe's
+                # native-dir glob is not the only path). Re-resolve and retry
+                # once before surfacing the failure.
+                if _retry and "proot utility does not exist" in errors.getvalue().lower():
+                    from core import proot_probe
+
+                    if proot_probe.ensure_proot_env(force=True):
+                        logger.info("proot payload resolved on retry — reopening %s", container)
+                        sys.stdout = stdout_backup
+                        sys.stderr = stderr_backup
+                        return get_proot_cmd(container, _retry=False)
                 raise RuntimeError(f"login --get-proot-cmd exited {code} — {detail}") from exc
         finally:
             sys.stdout = stdout_backup

@@ -37,10 +37,10 @@ Every location must agree before tagging:
 Before pushing a release tag, verify all local gates:
 
 ```bash
-uv run ruff check src tests build_flet_proot_wheel.py check_elf_alignment.py generate_third_party_sources.py
-uv run ruff format --check src tests build_flet_proot_wheel.py check_elf_alignment.py generate_third_party_sources.py
+uv run ruff check src tests scripts/build_flet_proot_wheel.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
+uv run ruff format --check src tests scripts/build_flet_proot_wheel.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
 uv run pytest -q -m "not live"
-uv run python generate_third_party_sources.py
+uv run python scripts/generate_third_party_sources.py
 ```
 
 All commands must exit 0.
@@ -61,7 +61,7 @@ Triggered on push to `main` or via manual `workflow_dispatch`.
    - Native wheel assembly (`flet-proot`) with sha256 checksums and 16 KiB PT_LOAD alignment verification.
    - Keystore decoding from repository secrets (`KEYSTORE_BASE64`).
    - `flet build apk --split-per-abi` with environment-based signing.
-   - 16 KiB ELF alignment check on all output APKs (`check_elf_alignment.py`).
+   - 16 KiB ELF alignment check on all output APKs (`scripts/check_elf_alignment.py`).
    - GitHub Releases pre-release asset publication (`app-<run#>`).
 
 3. **`aab` job:**

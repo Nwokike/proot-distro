@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -84,12 +85,38 @@ def test_probe_reports_a_problem_without_native_libs(monkeypatch):
     from core import proot_probe
 
     monkeypatch.delenv("ANDROID_NATIVE_LIBRARY_DIR", raising=False)
+    monkeypatch.delenv("PD_PROOT_BIN", raising=False)
     result = proot_probe.ProbeResult()
     assert result.ok is True  # fresh result is fine
-    # bootstrap_env with no native dir must report the sensible problem.
-    monkeypatch.delenv("ANDROID_NATIVE_LIBRARY_DIR", raising=False)
+    # bootstrap_env with no native dir and no system proot must report the
+    # sensible problem (the desktop dev case; the APK always ships proot).
+    # A machine that happens to have system proot installed resolves instead.
     res = proot_probe.bootstrap_env(runtime_root=Path(os.environ.get("TMPDIR", ".")))
-    assert res.problems and "nativeLibraryDir" in res.problems[0]
+    if res.problems:
+        assert "proot" in res.problems[0].lower()
+    else:
+        assert res.payload_provenance.startswith("system proot")
+
+
+def test_ensure_proot_env_resolves_payload_once(monkeypatch):
+    """The guarantee every proot_distro call relies on (the device terminal bug)."""
+    from core import proot_probe
+
+    monkeypatch.delenv("ANDROID_NATIVE_LIBRARY_DIR", raising=False)
+    monkeypatch.delenv("PD_PROOT_BIN", raising=False)
+    # Force the Android payload branch with a staged fake native dir.
+    tmp = Path(tempfile.mkdtemp())
+    native = tmp / "lib" / "arm64"
+    native.mkdir(parents=True)
+    (native / "libproot.so").write_bytes(b"proot")
+    monkeypatch.setattr(proot_probe, "_native_library_dir", lambda: native)
+    monkeypatch.setattr(proot_probe, "_PAYLOAD_ENV_DONE", False)
+    assert proot_probe.ensure_proot_env() is True
+    assert os.environ["PD_PROOT_BIN"] == str(native / "libproot.so")
+    assert os.environ.get("PROOT_TMP_DIR")
+    # Idempotent: a second call does not redo the resolution.
+    monkeypatch.setattr(proot_probe, "_native_library_dir", lambda: None)
+    assert proot_probe.ensure_proot_env() is True
 
 
 def test_f2fs_probe_reports_a_verdict():

@@ -18,6 +18,10 @@ class AppState:
     containers: list = None  # list[dict] — installed containers
     installing: str | None = None  # what's installing (blocks a second install)
     install_stage: str = ""
+    install_logs: list = None  # list[str] — live lines from proot-distro install
+    install_completed: bool = False
+    last_installed: str = ""
+    install_dialog_minimized: bool = False
     busy_note: str = ""  # e.g. upstream reports another install holding the lock
     search_status: str = ""
     search_results: list = None  # list[dict] — Docker Hub hits
@@ -57,6 +61,7 @@ class AppState:
         self.search_results = []
         self.cached_images = []
         self.busy_locks = []
+        self.install_logs = []
 
 
 state = AppState()
