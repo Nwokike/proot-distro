@@ -619,6 +619,5 @@ def FilesView(
             card(file_list_content, padding=tokens.SPACE_SM),
         ],
         spacing=tokens.SPACE_SM,
-        expand=True,
         scroll=ft.ScrollMode.AUTO,
     )

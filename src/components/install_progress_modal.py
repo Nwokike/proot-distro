@@ -59,7 +59,7 @@ def show_install_progress_modal(page: ft.Page, target: str) -> None:
         title=ft.Text("Show Terminal Output", size=tokens.FONT_SM),
         leading=ft.Icon(ft.Icons.TERMINAL_ROUNDED, size=tokens.ICON_SM, color=theme.primary()),
         controls=[log_box],
-        initially_expanded=False,
+        expanded=False,
     )
 
     def _minimize(_e) -> None:

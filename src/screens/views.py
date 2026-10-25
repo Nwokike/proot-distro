@@ -188,9 +188,8 @@ def DistroView() -> ft.Control:
             ft.AlertDialog(
                 title=ft.Text(f"Install {image}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
                 content=ft.Text(
-                    "Download size is not known until the registry responds. "
-                    "The download starts only after you tap Install. Package "
-                    "downloads inside the container happen only when you run commands.",
+                    "Downloads official rootfs layers into private storage. "
+                    "The download starts only after you tap Install.",
                     size=tokens.FONT_XS,
                     color=theme.text_dim(),
                 ),
