@@ -264,37 +264,37 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
         items=[
             ft.PopupMenuItem(
                 icon=ft.Icons.ADD_ROUNDED,
-                text="New Terminal",
+                content=ft.Text("New Terminal", size=tokens.FONT_SM),
                 on_click=lambda _e: _open_new_session_sheet(),
             ),
             ft.PopupMenuItem(
                 icon=ft.Icons.COPY_ALL_ROUNDED,
-                text="Copy Selection",
+                content=ft.Text("Copy Selection", size=tokens.FONT_SM),
                 on_click=lambda _e: page.run_task(mt.copy_selection_async),
             ),
             ft.PopupMenuItem(
                 icon=ft.Icons.CONTENT_PASTE_ROUNDED,
-                text="Paste",
+                content=ft.Text("Paste", size=tokens.FONT_SM),
                 on_click=lambda _e: page.run_task(mt.paste_async),
             ),
             ft.PopupMenuItem(
                 icon=ft.Icons.CLEAR_ALL_ROUNDED,
-                text="Clear Terminal",
+                content=ft.Text("Clear Terminal", size=tokens.FONT_SM),
                 on_click=lambda _e: mt.clear(),
             ),
             ft.PopupMenuItem(
                 icon=ft.Icons.FIT_SCREEN_ROUNDED,
-                text="Reset Zoom",
+                content=ft.Text("Reset Zoom", size=tokens.FONT_SM),
                 on_click=lambda _e: mt.reset_zoom(),
             ),
             ft.PopupMenuItem(
                 icon=ft.Icons.VISIBILITY_ROUNDED,
-                text="Toggle Cursor Blink",
+                content=ft.Text("Toggle Cursor Blink", size=tokens.FONT_SM),
                 on_click=lambda _e: mt.toggle_cursor_blink(),
             ),
             ft.PopupMenuItem(
                 icon=ft.Icons.CLOSE_ROUNDED,
-                text="Close Shell",
+                content=ft.Text("Close Shell", size=tokens.FONT_SM),
                 on_click=lambda _e: _confirm_close(page, methods, entry.container),
             ),
         ],

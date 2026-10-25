@@ -139,6 +139,7 @@ def empty_state(icon: str, title: str, message: str = "") -> ft.Control:
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=tokens.SPACE_XS,
         ),
+        alignment=ft.Alignment.CENTER,
         padding=ft.Padding.symmetric(horizontal=tokens.SPACE_LG, vertical=tokens.SPACE_XXL),
     )
 

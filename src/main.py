@@ -42,6 +42,7 @@ def main(page) -> None:
         theme.follow_platform_brightness(page)
 
     page.on_platform_brightness_change = _on_brightness
+    page.on_resize = lambda _e: page.update()
     atexit.register(controller.session_manager.close_all)
     page.run_task(controller.init)
 

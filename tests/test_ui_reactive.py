@@ -156,13 +156,36 @@ def test_screens_contain_no_imperative_mutation():
     """The frozen-controls bug class, guarded at source level (house grep style)."""
     for path in sorted((ROOT / "src" / "screens").rglob("*.py")):
         src = path.read_text(encoding="utf-8")
-    for pattern in (
-        r"\.value\s*=",
-        r"page\.update\(",
-        r"\.controls\.(append|clear|extend)\(",
-        r"\.controls\s*=\s*\[",
-    ):
-        assert not re.search(pattern, src), f"imperative mutation in screens.py: {pattern}"
+        for pattern in (
+            r"\.value\s*=",
+            r"page\.update\(",
+            r"\.controls\.(append|clear|extend)\(",
+            r"\.controls\s*=\s*\[",
+        ):
+            assert not re.search(pattern, src), f"imperative mutation in {path.name}: {pattern}"
+
+
+def test_popup_menu_item_never_uses_text_kwarg():
+    """In Flet 1.0 PopupMenuItem takes content=, not text= (raises TypeError at runtime)."""
+    for path in sorted((ROOT / "src").rglob("*.py")):
+        src = path.read_text(encoding="utf-8")
+        assert not re.search(r"PopupMenuItem\([^)]*\btext\s*=", src), (
+            f"PopupMenuItem with text= found in {path} (Flet 1.0 requires content=)"
+        )
+
+
+def test_views_calls_valid_controller_methods():
+    """Guards against nonexistent ControllerMethods calls like search_images."""
+    from state.controller_ctx import ControllerMethods
+
+    valid_methods = set(ControllerMethods.__dataclass_fields__.keys())
+    for path in sorted((ROOT / "src" / "screens").rglob("*.py")):
+        src = path.read_text(encoding="utf-8")
+        matches = re.findall(r"methods\.([a-zA-Z0-9_]+)", src)
+        for m in matches:
+            assert m in valid_methods, (
+                f"Invalid controller method call 'methods.{m}' in {path.name}"
+            )
 
 
 def _walk(control):
