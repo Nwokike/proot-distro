@@ -83,6 +83,9 @@ def show_install_progress_modal(page: ft.Page, target: str) -> None:
             )
         ],
     )
+    # Store control references on the page so _apply_line can update them live.
+    page._install_stage_text = stage_text
+    page._install_logs_column = logs_column
     page.show_dialog(dialog)
 
 

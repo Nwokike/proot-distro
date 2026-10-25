@@ -198,6 +198,27 @@ class AppController:
                 state.install_logs.append(clean)
                 if len(state.install_logs) > 500:
                     state.install_logs.pop(0)
+            # Live-update the modal controls if the dialog is still open.
+            stage_ctrl = getattr(self.page, "_install_stage_text", None)
+            logs_ctrl = getattr(self.page, "_install_logs_column", None)
+            if stage_ctrl is not None:
+                stage_ctrl.value = clean or state.install_stage
+                with contextlib.suppress(Exception):
+                    stage_ctrl.update()
+            from core import tokens as _t
+
+            if logs_ctrl is not None:
+                logs_ctrl.controls = [
+                    ft.Text(
+                        ln,
+                        font_family="JetBrains Mono",
+                        size=_t.FONT_XXS,
+                        color=theme.text_dim(),
+                    )
+                    for ln in state.install_logs[-60:]
+                ]
+                with contextlib.suppress(Exception):
+                    logs_ctrl.update()
 
         def _on_line(line: str) -> None:
             loop.call_soon_threadsafe(_apply_line, line)
