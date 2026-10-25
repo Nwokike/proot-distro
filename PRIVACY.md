@@ -2,8 +2,8 @@
 
 **Last Updated:** October 19, 2026  
 **Application:** Proot Distro (`ng.kiri.prootdistro`)  
-**Developer:** Kiri Research Labs (`https://kiri.ng`)  
-**Contact:** `contact@nwokike.ng`
+**Developer:** Onyeka Nwokike 
+**Contact:** `onyeka@kiri.ng`
 
 ---
 
@@ -53,5 +53,5 @@ Proot Distro wraps open-source components including PRoot and `proot-distro`. In
 ## 5. Contact Us
 
 If you have questions regarding this Privacy Policy or your data, please contact:  
-- Email: `contact@nwokike.ng`  
+- Email: `onyeka@kiri.ng`  
 - Website: `https://kiri.ng`
