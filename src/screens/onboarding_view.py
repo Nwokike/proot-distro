@@ -1,127 +1,320 @@
-"""Onboarding — first-run presentation deck matching CollabShell and DDGS house design.
+"""OnboardingScreen — First-launch presentation matching CollabShell and DDGS house design.
 
-Three slides with animated dot indicators, 120px circular icon backdrops,
-full-screen gesture detection, and clean typography.
+Three structured slides with feature rows, step guides, animated indicator dots,
+back/next navigation controls, and full-screen swipe support.
 """
 
 from __future__ import annotations
 
 import flet as ft
 
-from components.brand_hero import app_icon_svg
+from components.brand_hero import build_brand_hero
 from core import theme, tokens
 from state.controller_ctx import ControllerMethodsCtx
 
-_SLIDES = (
-    {
-        "icon": None,
-        "title": "Linux on Android\nno root",
-        "body": (
-            "Run Debian, Ubuntu, Alpine, or any container image in an isolated, "
-            "rootless Linux environment directly on your device."
-        ),
-    },
-    {
-        "icon": ft.Icons.TERMINAL_ROUNDED,
-        "title": "Native Terminal\nwith Full Shell",
-        "body": (
-            "Interactive bash sessions with apt, compilers, development tools, "
-            "and multi-shell tabs without modifying Android partitions."
-        ),
-    },
-    {
-        "icon": ft.Icons.SHIELD_ROUNDED,
-        "title": "Private, Local\n& Containerized",
-        "body": (
-            "All container data and commands reside strictly in your private "
-            "storage sandbox. No accounts, no remote servers, no tracking."
-        ),
-    },
-)
+TOTAL_SLIDES = 3
 
-ICON_CONTAINER_SIZE = 120
+
+def _feature_row(icon: ft.IconData, title: str, subtitle: str) -> ft.Container:
+    """Feature row with icon container and description matching CollabShell."""
+    return ft.Container(
+        content=ft.Row(
+            controls=[
+                ft.Container(
+                    content=ft.Icon(icon, size=tokens.ICON_LG, color=theme.primary()),
+                    width=42,
+                    height=42,
+                    border_radius=tokens.RADIUS_MD,
+                    bgcolor=ft.Colors.with_opacity(0.12, theme.primary()),
+                    alignment=ft.Alignment.CENTER,
+                ),
+                ft.Column(
+                    controls=[
+                        ft.Text(
+                            title,
+                            size=tokens.FONT_MD,
+                            weight=ft.FontWeight.W_600,
+                            color=theme.text(),
+                        ),
+                        ft.Text(
+                            subtitle,
+                            size=tokens.FONT_XS,
+                            color=theme.text_dim(),
+                        ),
+                    ],
+                    spacing=tokens.SPACE_XXS,
+                    expand=True,
+                ),
+            ],
+            spacing=tokens.SPACE_LG,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        padding=ft.Padding(0, tokens.SPACE_SM, 0, tokens.SPACE_SM),
+    )
+
+
+def _onboarding_step_row(num: str, title: str, desc: str) -> ft.Row:
+    """Numbered step row for slide 2 guide."""
+    return ft.Row(
+        controls=[
+            ft.Container(
+                content=ft.Text(
+                    num,
+                    size=tokens.FONT_SM,
+                    weight=ft.FontWeight.BOLD,
+                    color=ft.Colors.WHITE,
+                ),
+                width=28,
+                height=28,
+                border_radius=tokens.RADIUS_PILL,
+                bgcolor=theme.primary(),
+                alignment=ft.Alignment.CENTER,
+            ),
+            ft.Column(
+                controls=[
+                    ft.Text(
+                        title,
+                        size=tokens.FONT_MD,
+                        weight=ft.FontWeight.W_600,
+                        color=theme.text(),
+                    ),
+                    ft.Text(
+                        desc,
+                        size=tokens.FONT_XS,
+                        color=theme.text_dim(),
+                    ),
+                ],
+                spacing=tokens.SPACE_XXS,
+                expand=True,
+            ),
+        ],
+        spacing=tokens.SPACE_MD,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+
+
+def _build_slide_1() -> ft.Column:
+    """Slide 1: Brand welcome and core capabilities."""
+    return ft.Column(
+        controls=[
+            build_brand_hero("Linux on Android — no root"),
+            ft.Container(height=tokens.SPACE_MD),
+            _feature_row(
+                ft.Icons.SECURITY_ROUNDED,
+                "Rootless Linux Containers",
+                "Run Debian, Ubuntu, or Alpine in an isolated userspace on your device.",
+            ),
+            _feature_row(
+                ft.Icons.TERMINAL_ROUNDED,
+                "Real Interactive Terminal",
+                "Native PTY shell with apt package manager, development tools, and extra keys.",
+            ),
+            _feature_row(
+                ft.Icons.FOLDER_COPY_ROUNDED,
+                "Container Backup & Sync",
+                "Create tar snapshot backups, synchronize folders, and manage OCI images.",
+            ),
+        ],
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        spacing=tokens.SPACE_SM,
+        scroll=ft.ScrollMode.AUTO,
+    )
+
+
+def _build_slide_2() -> ft.Column:
+    """Slide 2: How it works step guide."""
+    return ft.Column(
+        controls=[
+            ft.Container(height=tokens.SPACE_LG),
+            ft.Icon(
+                ft.Icons.ROCKET_LAUNCH_ROUNDED,
+                size=tokens.ICON_XXXL,
+                color=theme.primary(),
+            ),
+            ft.Container(height=tokens.SPACE_SM),
+            ft.Text(
+                "How It Works",
+                size=tokens.FONT_XL,
+                weight=ft.FontWeight.BOLD,
+                color=theme.text(),
+                text_align=ft.TextAlign.CENTER,
+            ),
+            ft.Container(height=tokens.SPACE_MD),
+            _onboarding_step_row(
+                "1",
+                "Choose a Distro",
+                "Select Debian, Ubuntu, Alpine or enter any public container image reference.",
+            ),
+            ft.Container(height=tokens.SPACE_SM),
+            _onboarding_step_row(
+                "2",
+                "One-Tap Download",
+                "Official layers are pulled directly from container registries to your device.",
+            ),
+            ft.Container(height=tokens.SPACE_SM),
+            _onboarding_step_row(
+                "3",
+                "Launch Your Shell",
+                "Open an interactive terminal session and execute commands as root.",
+            ),
+            ft.Container(height=tokens.SPACE_LG),
+            ft.Container(
+                content=ft.Text(
+                    "Tip: You can run multiple containers concurrently and switch between them seamlessly.",
+                    size=tokens.FONT_XS,
+                    color=theme.text_dim(),
+                    text_align=ft.TextAlign.CENTER,
+                ),
+                padding=tokens.SPACE_MD,
+                border_radius=tokens.RADIUS_MD,
+                bgcolor=ft.Colors.with_opacity(0.06, theme.text()),
+            ),
+        ],
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        spacing=0,
+        scroll=ft.ScrollMode.AUTO,
+    )
+
+
+def _build_slide_3() -> ft.Column:
+    """Slide 3: Privacy, security, and local sandbox verification."""
+    return ft.Column(
+        controls=[
+            ft.Container(height=tokens.SPACE_LG),
+            ft.Icon(
+                ft.Icons.SHIELD_ROUNDED,
+                size=tokens.ICON_XXXL,
+                color=theme.primary(),
+            ),
+            ft.Container(height=tokens.SPACE_SM),
+            ft.Text(
+                "Private & Local Sandbox",
+                size=tokens.FONT_XL,
+                weight=ft.FontWeight.BOLD,
+                color=theme.text(),
+                text_align=ft.TextAlign.CENTER,
+            ),
+            ft.Container(height=tokens.SPACE_SM),
+            ft.Text(
+                "All container data, installed packages, and terminal sessions stay strictly on your device.",
+                size=tokens.FONT_SM,
+                color=theme.text_dim(),
+                text_align=ft.TextAlign.CENTER,
+            ),
+            ft.Container(height=tokens.SPACE_XL),
+            ft.Container(
+                content=ft.Row(
+                    controls=[
+                        ft.Icon(
+                            ft.Icons.CHECK_CIRCLE_ROUNDED,
+                            size=tokens.ICON_MD,
+                            color=theme.ok(),
+                        ),
+                        ft.Text(
+                            "100% Local Sandbox · Zero Remote Tracking",
+                            size=tokens.FONT_SM,
+                            weight=ft.FontWeight.W_600,
+                            color=theme.text(),
+                        ),
+                    ],
+                    spacing=tokens.SPACE_MD,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                ),
+                padding=tokens.SPACE_MD,
+                border_radius=tokens.RADIUS_MD,
+                bgcolor=ft.Colors.with_opacity(0.08, theme.ok()),
+            ),
+            ft.Container(height=tokens.SPACE_LG),
+            ft.Text(
+                "No registration or accounts required. PRoot translates system calls entirely in user-space without root access.",
+                size=tokens.FONT_XS,
+                color=theme.text_dim(),
+                text_align=ft.TextAlign.CENTER,
+            ),
+        ],
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        spacing=0,
+        scroll=ft.ScrollMode.AUTO,
+    )
 
 
 @ft.component
 def OnboardingView() -> ft.Control:
     page = ft.context.page
     methods = ft.use_context(ControllerMethodsCtx)
-    index, set_index = ft.use_state(0)
-    total = len(_SLIDES)
-    slide = _SLIDES[index]
-    last = index == total - 1
+    slide_index, set_slide_index = ft.use_state(0)
+    is_last = slide_index == TOTAL_SLIDES - 1
 
     def _next(_e=None) -> None:
-        if last:
+        if is_last:
             page.run_task(methods.finish_onboarding)
-            return
-        set_index(index + 1)
+        else:
+            set_slide_index(slide_index + 1)
+
+    def _back(_e=None) -> None:
+        if slide_index > 0:
+            set_slide_index(slide_index - 1)
 
     def _skip(_e=None) -> None:
         page.run_task(methods.finish_onboarding)
 
-    def _swipe(e) -> None:
-        velocity = getattr(e, "primary_velocity", 0) or 0
-        if velocity < -200:
-            _next()
-        elif velocity > 200 and index > 0:
-            set_index(index - 1)
+    def _swipe(e: ft.DragEndEvent) -> None:
+        v = getattr(e, "primary_velocity", 0) or 0
+        if v < -200 and slide_index < TOTAL_SLIDES - 1:
+            set_slide_index(slide_index + 1)
+        elif v > 200 and slide_index > 0:
+            set_slide_index(slide_index - 1)
 
-    icon_control: ft.Control
-    if slide["icon"] is None:
-        icon_control = ft.Image(
-            src=app_icon_svg(),
-            width=64,
-            height=64,
-            fit=ft.BoxFit.CONTAIN,
-            color=None if theme.is_light_theme() else ft.Colors.WHITE,
-            color_blend_mode=ft.BlendMode.SRC_IN,
-            error_content=ft.Icon(ft.Icons.TERMINAL_ROUNDED, size=64),
+    def _render_current_slide() -> ft.Control:
+        if slide_index == 0:
+            return _build_slide_1()
+        if slide_index == 1:
+            return _build_slide_2()
+        return _build_slide_3()
+
+    # Indicator dots matching CollabShell / DDGS
+    dots = [
+        ft.Container(
+            width=18 if i == slide_index else 6,
+            height=6,
+            border_radius=3,
+            bgcolor=theme.primary()
+            if i == slide_index
+            else ft.Colors.with_opacity(0.24, theme.text()),
+            animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
         )
-    else:
-        icon_control = ft.Icon(
-            slide["icon"],
-            size=64,
-            color=theme.primary(),
-        )
+        for i in range(TOTAL_SLIDES)
+    ]
 
-    slide_art = ft.Container(
-        content=icon_control,
-        width=ICON_CONTAINER_SIZE,
-        height=ICON_CONTAINER_SIZE,
-        border_radius=ICON_CONTAINER_SIZE // 2,
-        bgcolor=ft.Colors.with_opacity(0.10, theme.primary()),
-        alignment=ft.Alignment.CENTER,
-    )
-
-    slide_content = ft.Column(
-        controls=[
-            slide_art,
-            ft.Container(height=tokens.SPACE_XL),
-            ft.Text(
-                slide["title"],
-                size=tokens.FONT_HERO,
-                weight=ft.FontWeight.BOLD,
-                color=theme.text(),
-                text_align=ft.TextAlign.CENTER,
-            ),
-            ft.Container(height=tokens.SPACE_MD),
-            ft.Text(
-                slide["body"],
-                size=tokens.FONT_MD,
-                color=theme.text_dim(),
-                text_align=ft.TextAlign.CENTER,
-                width=tokens.MESSAGE_MAX_WIDTH,
-            ),
-        ],
-        alignment=ft.MainAxisAlignment.CENTER,
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-        spacing=0,
+    nav_row = ft.Container(
+        content=ft.Row(
+            controls=[
+                ft.TextButton(
+                    "Back",
+                    on_click=_back,
+                    visible=slide_index > 0,
+                ),
+                ft.Row(
+                    controls=dots,
+                    spacing=tokens.SPACE_XS,
+                ),
+                ft.FilledButton(
+                    "Get Started" if is_last else "Next",
+                    on_click=_next,
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
+                    ),
+                ),
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        padding=ft.Padding(tokens.SPACE_LG, tokens.SPACE_SM, tokens.SPACE_LG, tokens.SPACE_MD),
     )
 
     gesture_area = ft.GestureDetector(
         on_horizontal_drag_end=_swipe,
-        content=slide_content,
+        content=_render_current_slide(),
         expand=True,
     )
 
@@ -129,50 +322,23 @@ def OnboardingView() -> ft.Control:
         content=ft.Container(
             content=ft.Column(
                 controls=[
-                    ft.Container(height=tokens.SPACE_SM),
-                    ft.Row(
-                        controls=[
-                            ft.Container(expand=True),
-                            ft.TextButton("Skip", on_click=_skip, visible=not last),
-                        ]
-                    ),
-                    gesture_area,
-                    ft.Row(
-                        controls=[
-                            ft.Container(
-                                width=24 if i == index else 8,
-                                height=8,
-                                border_radius=tokens.RADIUS_PILL,
-                                bgcolor=theme.primary() if i == index else theme.surface_alt(),
-                                animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
-                            )
-                            for i in range(total)
-                        ],
-                        alignment=ft.MainAxisAlignment.CENTER,
-                        spacing=tokens.SPACE_XS,
-                    ),
-                    ft.Container(height=tokens.SPACE_XL),
-                    ft.FilledButton(
-                        "Get Started" if last else "Next",
-                        width=240,
-                        height=48,
-                        on_click=_next,
-                        style=ft.ButtonStyle(
-                            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
+                    ft.Container(
+                        content=ft.Row(
+                            controls=[
+                                ft.Container(expand=True),
+                                ft.TextButton("Skip", on_click=_skip, visible=not is_last),
+                            ]
                         ),
+                        padding=ft.Padding(tokens.SPACE_SM, 0, tokens.SPACE_MD, 0),
                     ),
-                    ft.Container(height=tokens.SPACE_SM),
-                    ft.Text(
-                        "An independent utility wrapping open-source PRoot.",
-                        size=tokens.FONT_XS,
-                        color=theme.text_dim(),
-                        text_align=ft.TextAlign.CENTER,
-                        width=tokens.MESSAGE_MAX_WIDTH,
+                    ft.Container(
+                        content=gesture_area,
+                        expand=True,
+                        padding=ft.Padding(tokens.SPACE_LG, 0, tokens.SPACE_LG, 0),
                     ),
-                    ft.Container(height=tokens.SPACE_SM),
+                    nav_row,
                 ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=tokens.SPACE_SM,
+                spacing=0,
                 expand=True,
             ),
             bgcolor=theme.bg(),

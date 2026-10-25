@@ -230,9 +230,14 @@ class AppController:
         outcome = await asyncio.to_thread(self.proot.reset_container, name)
         self.show_snack(f"reset {name}" if outcome.ok else self.proot.friendly_job_error(outcome))
         await self.refresh_containers()
+        if outcome.ok:
+            with contextlib.suppress(Exception):
+                await self.ad_service.show_interstitial()
 
     async def search_distro(self, query: str) -> None:
         state.search_status = f"searching “{query}”…"
+        with contextlib.suppress(Exception):
+            await self.ad_service.show_interstitial()
         try:
             results = await asyncio.to_thread(self.proot.search_images, query)
         except Exception as exc:
@@ -427,6 +432,8 @@ class AppController:
             self.show_snack(f"backup staged at {staging}")
             return
         self.show_snack(f"backup written to {target}")
+        with contextlib.suppress(Exception):
+            await self.ad_service.show_interstitial()
 
     async def restore_container(self) -> None:
         if self.file_picker is None:
@@ -443,6 +450,9 @@ class AppController:
             "container restored" if outcome.ok else self.proot.friendly_job_error(outcome)
         )
         await self.refresh_containers()
+        if outcome.ok:
+            with contextlib.suppress(Exception):
+                await self.ad_service.show_interstitial()
 
     async def copy_path(self, source: str, destination: str) -> None:
         source = source.strip()
@@ -619,8 +629,12 @@ class AppController:
 
     async def leave_session(self) -> None:
         state.active_session = None
+        with contextlib.suppress(Exception):
+            await self.ad_service.show_interstitial()
 
     async def close_session(self, container: str) -> None:
         await asyncio.to_thread(self.session_manager.close, container)
         if state.active_session == container:
             state.active_session = None
+        with contextlib.suppress(Exception):
+            await self.ad_service.show_interstitial()
