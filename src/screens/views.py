@@ -171,13 +171,7 @@ def DistroView() -> ft.Control:
             return
         container_tag = (target_name or name or "").strip()
 
-        is_submitting = False
-
         def _confirm(_e) -> None:
-            nonlocal is_submitting
-            if is_submitting:
-                return
-            is_submitting = True
             page.pop_dialog()
             page.run_task(methods.install_distro, image, container_tag)
             from components.install_progress_modal import show_install_progress_modal
@@ -502,13 +496,8 @@ def DistroView() -> ft.Control:
                 label="Also remove cached download layers",
                 value=True,
             )
-            is_submitting = False
 
             def _yes(_e) -> None:
-                nonlocal is_submitting
-                if is_submitting:
-                    return
-                is_submitting = True
                 page.pop_dialog()
                 should_clean = bool(clean_cache_cb.value)
 
