@@ -37,7 +37,7 @@ GOLDEN_CMD_WRAPPED = (
 )
 
 
-def test_session_argv_parses_env_and_command(monkeypatch):
+async def test_session_argv_parses_env_and_command(monkeypatch):
     monkeypatch.setattr(
         session_service.proot_service, "get_proot_cmd", lambda container: GOLDEN_CMD
     )
@@ -45,7 +45,16 @@ def test_session_argv_parses_env_and_command(monkeypatch):
     # parse is deterministic (CI runners set LD_LIBRARY_PATH themselves).
     for key in session_service._HOST_ESSENTIALS:
         monkeypatch.delenv(key, raising=False)
-    env, argv = session_service.session_argv("debian")
+
+    # Create a mock page
+    class MockPage:
+        def run_task(self, func):
+            import asyncio
+            # func is a regular function, not a coroutine
+            asyncio.get_event_loop().call_soon(func)
+
+    mock_page = MockPage()
+    env, argv = await session_service.session_argv(mock_page, "debian")
 
     assert env["TERM"] == "xterm-256color"
     assert env["HOME"] == "/root"
@@ -56,30 +65,52 @@ def test_session_argv_parses_env_and_command(monkeypatch):
     assert argv[-2:] == ["/bin/bash", "-l"]
 
 
-def test_session_argv_merges_the_host_essentials(monkeypatch):
+async def test_session_argv_merges_the_host_essentials(monkeypatch):
     """Proot needs LD_LIBRARY_PATH/PROOT_LOADER; upstream's env is clean."""
     monkeypatch.setattr(
         session_service.proot_service, "get_proot_cmd", lambda container: GOLDEN_CMD
     )
     monkeypatch.setenv("LD_LIBRARY_PATH", "/data/data/app/files/usr/lib")
     monkeypatch.setenv("PROOT_LOADER", "/data/data/app/files/usr/lib/libproot-loader.so")
-    env, _argv = session_service.session_argv("debian")
+
+    class MockPage:
+        def run_task(self, func):
+            import asyncio
+            # func is a regular function, not a coroutine
+            asyncio.get_event_loop().call_soon(func)
+
+    mock_page = MockPage()
+    env, _argv = await session_service.session_argv(mock_page, "debian")
     assert env["LD_LIBRARY_PATH"] == "/data/data/app/files/usr/lib"
     assert env["PROOT_LOADER"].endswith("libproot-loader.so")
 
 
-def test_session_argv_rejects_garbage(monkeypatch):
+async def test_session_argv_rejects_garbage(monkeypatch):
     monkeypatch.setattr(
         session_service.proot_service, "get_proot_cmd", lambda container: "not-a-command"
     )
+
+    class MockPage:
+        def run_task(self, func):
+            import asyncio
+            asyncio.get_event_loop().call_soon(func)
+
+    mock_page = MockPage()
     with pytest.raises(RuntimeError):
-        session_service.session_argv("debian")
+        await session_service.session_argv(mock_page, "debian")
 
 
-def test_session_argv_rejects_empty_command(monkeypatch):
+async def test_session_argv_rejects_empty_command(monkeypatch):
     monkeypatch.setattr(session_service.proot_service, "get_proot_cmd", lambda c: "env -i")
+
+    class MockPage:
+        def run_task(self, func):
+            import asyncio
+            asyncio.get_event_loop().call_soon(func)
+
+    mock_page = MockPage()
     with pytest.raises(RuntimeError):
-        session_service.session_argv("debian")
+        await session_service.session_argv(mock_page, "debian")
 
 
 class _FakeProcess:
@@ -145,14 +176,21 @@ def test_session_entry_replay_sends_the_buffer_in_order():
     assert sent == [b"a", b"b"]
 
 
-def test_session_argv_handles_upstreams_wrapped_output(monkeypatch):
+async def test_session_argv_handles_upstreams_wrapped_output(monkeypatch):
     """The real --get-proot-cmd format is backslash-newline wrapped."""
     monkeypatch.setattr(
         session_service.proot_service, "get_proot_cmd", lambda container: GOLDEN_CMD_WRAPPED
     )
     for key in session_service._HOST_ESSENTIALS:
         monkeypatch.delenv(key, raising=False)
-    env, argv = session_service.session_argv("debian")
+
+    class MockPage:
+        def run_task(self, func):
+            import asyncio
+            asyncio.get_event_loop().call_soon(func)
+
+    mock_page = MockPage()
+    env, argv = await session_service.session_argv(mock_page, "debian")
     assert env["TERM"] == "xterm-256color"
     assert "n" not in argv
     assert argv[0].endswith("libproot.so")
@@ -187,7 +225,13 @@ class _FakeSession:
         self._on_exit(0)
 
 
-def test_live_output_is_forwarded_to_the_terminal(monkeypatch):
+class MockPage:
+    def run_task(self, func):
+        import asyncio
+        asyncio.get_event_loop().call_soon(func)
+
+
+async def test_live_output_is_forwarded_to_the_terminal(monkeypatch):
     """PTY bytes must reach the mounted terminal AND the scrollback deque —
     without the live send_bytes call the screen renders nothing after mount."""
     from services import session_manager as sm
@@ -196,8 +240,15 @@ def test_live_output_is_forwarded_to_the_terminal(monkeypatch):
     monkeypatch.setattr(
         session_service.proot_service, "get_proot_cmd", lambda container: GOLDEN_CMD
     )
+
+    class MockPage:
+        def run_task(self, func):
+            import asyncio
+            asyncio.get_event_loop().call_soon(func)
+
+    mock_page = MockPage()
     manager = sm.SessionManager()
-    entry = manager.open("debian")
+    entry = await manager.open(mock_page, "debian")
     stub = _StubTerminal()
     entry.mt = stub
 
@@ -213,7 +264,7 @@ def test_live_output_is_forwarded_to_the_terminal(monkeypatch):
     assert list(entry.scrollback) == [b"prompt $ ", b"hello\n"]
 
 
-def test_live_output_without_a_terminal_only_feeds_scrollback(monkeypatch):
+async def test_live_output_without_a_terminal_only_feeds_scrollback(monkeypatch):
     """Before mount (mt is None) bytes must not crash — replay covers them."""
     from services import session_manager as sm
 
@@ -221,8 +272,15 @@ def test_live_output_without_a_terminal_only_feeds_scrollback(monkeypatch):
     monkeypatch.setattr(
         session_service.proot_service, "get_proot_cmd", lambda container: GOLDEN_CMD
     )
+
+    class MockPage:
+        def run_task(self, func):
+            import asyncio
+            asyncio.get_event_loop().call_soon(func)
+
+    mock_page = MockPage()
     manager = sm.SessionManager()
-    entry = manager.open("debian")
+    entry = await manager.open(mock_page, "debian")
     entry.session._on_bytes(b"early\n")  # mt is None here
     assert list(entry.scrollback) == [b"prompt $ ", b"early\n"]
 
@@ -394,7 +452,7 @@ def test_proot_session_start_prevents_fd_leak_on_popen_failure(monkeypatch):
     assert session._master_fd is None
 
 
-def test_session_manager_replaces_dead_session(monkeypatch):
+async def test_session_manager_replaces_dead_session(monkeypatch):
     """When a session has died, open() cleanly stops the old process and starts fresh."""
     from services import session_manager as sm
 
@@ -403,12 +461,18 @@ def test_session_manager_replaces_dead_session(monkeypatch):
         session_service.proot_service, "get_proot_cmd", lambda container: GOLDEN_CMD
     )
 
+    class MockPage:
+        def run_task(self, func):
+            import asyncio
+            asyncio.get_event_loop().call_soon(func)
+
+    mock_page = MockPage()
     manager = sm.SessionManager()
-    entry = manager.open("debian")
+    entry = await manager.open(mock_page, "debian")
     old_session = entry.session
     old_session.alive = False  # simulate shell death
 
-    new_entry = manager.open("debian")
+    new_entry = await manager.open(mock_page, "debian")
     assert new_entry is entry
     assert new_entry.session is not old_session
     assert new_entry.session.alive is True

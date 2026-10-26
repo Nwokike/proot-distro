@@ -77,7 +77,8 @@ def is_newer(remote_build, remote_version=None) -> bool:
     try:
         if int(remote_build) > APP_BUILD_NUMBER:
             return True
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
+        # Invalid build number format, fall through to version comparison
         pass
     remote = _release_tuple(remote_version)
     local = _release_tuple(APP_VERSION)

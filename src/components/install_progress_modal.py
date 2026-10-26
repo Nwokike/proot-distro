@@ -6,8 +6,6 @@ option, and a sticky top-of-page banner for ongoing and completed installs.
 
 from __future__ import annotations
 
-import contextlib
-
 import flet as ft
 
 from core import theme, tokens
@@ -57,8 +55,10 @@ def show_install_progress_modal(page: ft.Page, target: str) -> None:
 
     def _minimize(_e) -> None:
         state.install_dialog_minimized = True
-        with contextlib.suppress(Exception):
+        try:
             page.pop_dialog()
+        except Exception:
+            pass
 
     dialog = ft.AlertDialog(
         modal=True,

@@ -63,7 +63,7 @@ class SessionManager:
                 self.entries[container] = entry
             return entry
 
-    def open(self, container: str) -> SessionEntry:
+    async def open(self, page: ft.Page, container: str) -> SessionEntry:
         with self._lock:
             entry = self.entry(container)
             if entry.session is not None:
@@ -74,7 +74,7 @@ class SessionManager:
                 entry.session = None
                 entry.ready = False
 
-            env, argv = session_service.session_argv(container)
+            env, argv = await session_service.session_argv(page, container)
 
             def _on_bytes(data: bytes) -> None:
                 entry.feed(data)

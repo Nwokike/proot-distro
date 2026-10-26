@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import importlib.metadata as importlib_metadata
 import logging
 from pathlib import Path
@@ -203,10 +202,12 @@ def DistroView() -> ft.Control:
     async def _on_paste(_e=None) -> None:
         clipboard = getattr(page, "clipboard", None)
         if clipboard is not None:
-            with contextlib.suppress(Exception):
+            try:
                 pasted = await clipboard.get()
                 if pasted and isinstance(pasted, str):
                     set_query(pasted.strip())
+            except Exception:
+                pass
 
     def _on_search(_e=None) -> None:
         q = query.strip()

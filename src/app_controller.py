@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 import os
 
@@ -203,8 +202,10 @@ class AppController:
             logs_ctrl = getattr(self.page, "_install_logs_column", None)
             if stage_ctrl is not None:
                 stage_ctrl.value = clean or state.install_stage
-                with contextlib.suppress(Exception):
+                try:
                     stage_ctrl.update()
+                except Exception:
+                    pass
             from core import tokens as _t
 
             if logs_ctrl is not None:
@@ -217,8 +218,10 @@ class AppController:
                     )
                     for ln in state.install_logs[-60:]
                 ]
-                with contextlib.suppress(Exception):
+                try:
                     logs_ctrl.update()
+                except Exception:
+                    pass
 
         def _on_line(line: str) -> None:
             loop.call_soon_threadsafe(_apply_line, line)
@@ -248,13 +251,17 @@ class AppController:
             # Close the install progress modal automatically when done, unless
             # the user already minimized it into the background banner.
             if not state.install_dialog_minimized:
-                with contextlib.suppress(Exception):
+                try:
                     self.page.pop_dialog()
+                except Exception:
+                    pass
             if installed_now and outcome is not None and outcome.ok:
                 state.install_completed = True
                 state.last_installed = installed_now
-                with contextlib.suppress(Exception):
+                try:
                     await self.ad_service.show_interstitial()
+                except Exception:
+                    pass
 
     async def remove_container(self, name: str) -> None:
         outcome = await asyncio.to_thread(self.proot.remove_container, name)
@@ -268,13 +275,17 @@ class AppController:
         self.show_snack(f"reset {name}" if outcome.ok else self.proot.friendly_job_error(outcome))
         await self.refresh_containers()
         if outcome.ok:
-            with contextlib.suppress(Exception):
+            try:
                 await self.ad_service.show_interstitial()
+            except Exception:
+                pass
 
     async def search_distro(self, query: str) -> None:
         state.search_status = f"searching “{query}”…"
-        with contextlib.suppress(Exception):
+        try:
             await self.ad_service.show_interstitial()
+        except Exception:
+            pass
         try:
             results = await asyncio.to_thread(self.proot.search_images, query)
         except Exception as exc:
@@ -341,8 +352,10 @@ class AppController:
         else:
             os.environ.pop("PD_DOCKER_AUTH", None)
         if self.prefs is not None:
-            with contextlib.suppress(Exception):
+            try:
                 await self.prefs.set("docker_token", token)
+            except Exception:
+                pass
         self.show_snack("Docker Hub token saved" if token else "Docker Hub token cleared")
 
     async def set_theme_mode(self, mode: str) -> None:
@@ -352,8 +365,10 @@ class AppController:
         state.theme_revision += 1
         theme.apply_theme_mode(self.page, mode)
         if self.prefs is not None:
-            with contextlib.suppress(Exception):
+            try:
                 await self.prefs.set("theme_mode", mode)
+            except Exception:
+                pass
 
     async def cycle_theme_mode(self) -> None:
         current = state.theme_mode if state.theme_mode in _THEME_ORDER else "system"
@@ -395,15 +410,19 @@ class AppController:
     async def finish_onboarding(self) -> None:
         state.onboarding_done = True
         if self.prefs is not None:
-            with contextlib.suppress(Exception):
+            try:
                 await self.prefs.set(STORAGE_ONBOARDING_DONE, "true")
+            except Exception:
+                pass
 
     async def dismiss_hints(self) -> None:
         """The hints card stays gone across launches, not per-render."""
         state.hints_dismissed = True
         if self.prefs is not None:
-            with contextlib.suppress(Exception):
+            try:
                 await self.prefs.set(STORAGE_HINTS_DISMISSED, "true")
+            except Exception:
+                pass
 
     async def _check_for_updates(self) -> None:
         """Silent background check; a newer build flips the header chip."""
@@ -469,8 +488,10 @@ class AppController:
             self.show_snack(f"backup staged at {staging}")
             return
         self.show_snack(f"backup written to {target}")
-        with contextlib.suppress(Exception):
+        try:
             await self.ad_service.show_interstitial()
+        except Exception:
+            pass
 
     async def restore_container(self) -> None:
         if self.file_picker is None:
@@ -488,8 +509,10 @@ class AppController:
         )
         await self.refresh_containers()
         if outcome.ok:
-            with contextlib.suppress(Exception):
+            try:
                 await self.ad_service.show_interstitial()
+            except Exception:
+                pass
 
     async def copy_path(self, source: str, destination: str) -> None:
         source = source.strip()
@@ -658,7 +681,7 @@ class AppController:
     async def open_session(self, container: str) -> None:
         state.session_error = ""
         try:
-            await asyncio.to_thread(self.session_manager.open, container)
+            await self.session_manager.open(self.page, container)
         except Exception as exc:
             state.session_error = f"could not open {container}: {_reason(exc)}"
             self.show_snack(state.session_error)
@@ -667,12 +690,16 @@ class AppController:
 
     async def leave_session(self) -> None:
         state.active_session = None
-        with contextlib.suppress(Exception):
+        try:
             await self.ad_service.show_interstitial()
+        except Exception:
+            pass
 
     async def close_session(self, container: str) -> None:
         await asyncio.to_thread(self.session_manager.close, container)
         if state.active_session == container:
             state.active_session = None
-        with contextlib.suppress(Exception):
+        try:
             await self.ad_service.show_interstitial()
+        except Exception:
+            pass

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import contextlib
+import importlib
 import os
 from pathlib import Path
 
@@ -72,9 +72,9 @@ def env_contract() -> dict[str, str]:
         "PROOT_TMP_DIR": str(proot_tmp_dir()),
         "PD_FORCE_NO_COLORS": "1",
     }
-    with contextlib.suppress(Exception):
-        import importlib
-
+    try:
         certifi = importlib.import_module("certifi")
         contract["SSL_CERT_FILE"] = certifi.where()
+    except Exception:
+        pass
     return contract

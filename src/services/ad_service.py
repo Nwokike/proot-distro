@@ -254,4 +254,5 @@ def _release_service(services: list, item) -> None:
     try:
         services.remove(item)
     except ValueError:
+        # Item not in list, nothing to release
         pass

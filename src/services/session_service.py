@@ -13,7 +13,6 @@ hands bytes to `on_bytes`, and TIOCSWINSZ resize.
 
 from __future__ import annotations
 
-import contextlib
 import os
 import platform
 import re
@@ -23,6 +22,8 @@ import subprocess
 import threading
 from collections.abc import Callable
 from pathlib import Path
+
+import flet as ft
 
 from services import proot_service
 
@@ -54,7 +55,7 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
 
     # If rootfs was relative or missing, query proot_service storage
     if rootfs_path is None or not rootfs_path.is_dir():
-        with contextlib.suppress(Exception):
+        try:
             from core import storage_paths
 
             candidate = (
@@ -62,19 +63,25 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
             )
             if candidate.is_dir():
                 rootfs_path = candidate
+        except Exception:
+            pass
 
     # Ensure shm and l2s directories on host filesystem
     shm_bind: str | None = None
     if rootfs_path and rootfs_path.is_dir():
         shm = rootfs_path / "tmp"
-        with contextlib.suppress(OSError):
+        try:
             shm.mkdir(parents=True, exist_ok=True)
             os.chmod(shm, 0o1777)  # noqa: S103 - sticky bit required for /dev/shm
+        except OSError:
+            pass
         shm_bind = f"--bind={shm}:/dev/shm"
 
         l2s = rootfs_path / ".l2s"
-        with contextlib.suppress(OSError):
+        try:
             l2s.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
         env["PROOT_L2S_DIR"] = str(l2s)
 
     # Hardened Android extensions (device-proven in M0 spike)
@@ -120,9 +127,27 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
     return env, head + tail
 
 
-def session_argv(container: str) -> tuple[Env, Argv]:
-    """The guest session's (env, argv) exactly as upstream builds it, hardened with M0 spike flags."""
-    line = proot_service.get_proot_cmd(container)
+async def session_argv(page: ft.Page, container: str) -> tuple[Env, Argv]:
+    """The guest session's (env, argv) exactly as upstream builds it, hardened with M0 spike flags.
+
+    Runs get_proot_cmd on the main thread to avoid "signal only works in main thread" error on Android.
+    """
+    import asyncio
+
+    # Run get_proot_cmd on the main thread
+    loop = asyncio.get_event_loop()
+    future = loop.create_future()
+
+    def _run_on_main_thread():
+        try:
+            line = proot_service.get_proot_cmd(container)
+            loop.call_soon_threadsafe(future.set_result, line)
+        except Exception as e:
+            loop.call_soon_threadsafe(future.set_exception, e)
+
+    # Schedule the task on the main thread
+    page.run_task(_run_on_main_thread)
+    line = await future
     # Upstream prints the command wrapped with backslash-newline continuations;
     # shlex would read the escaped newline as a literal "n", so the
     # continuations are folded into spaces before splitting.
@@ -183,11 +208,13 @@ class ProotSession:
         """Child process setup: own session + controlling TTY (proven in M0 spike-6)."""
         os.setsid()
         if self._slave_fd is not None:
-            with contextlib.suppress(OSError):
+            try:
                 import fcntl
                 import termios
 
                 fcntl.ioctl(self._slave_fd, termios.TIOCSCTTY, 0)
+            except OSError:
+                pass
 
     def start(self) -> None:
         if self._process is not None:
@@ -208,10 +235,14 @@ class ProotSession:
             )
         except Exception:
             self._slave_fd = None
-            with contextlib.suppress(OSError):
+            try:
                 os.close(slave_fd)
-            with contextlib.suppress(OSError):
+            except OSError:
+                pass
+            try:
                 os.close(master_fd)
+            except OSError:
+                pass
             raise
         self._slave_fd = None
         os.close(slave_fd)
@@ -258,27 +289,33 @@ class ProotSession:
     def resize(self, cols: int, rows: int) -> None:
         if self._master_fd is None or cols <= 0 or rows <= 0:
             return
-        with contextlib.suppress(Exception):
+        try:
             import fcntl
             import termios
 
             winsize = struct.pack("HHHH", rows, cols, 0, 0)
             fcntl.ioctl(self._master_fd, termios.TIOCSWINSZ, winsize)
+        except Exception:
+            pass
 
     def stop(self) -> None:
         process, self._process = self._process, None
         master_fd, self._master_fd = self._master_fd, None
         if master_fd is not None:
-            with contextlib.suppress(OSError):
+            try:
                 os.close(master_fd)
+            except OSError:
+                pass
         if process is not None and process.poll() is None:
             process.terminate()
             try:
                 process.wait(timeout=2.0)
             except subprocess.TimeoutExpired:
                 process.kill()
-                with contextlib.suppress(Exception):
+                try:
                     process.wait(timeout=1.0)
+                except Exception:
+                    pass
             self.returncode = process.poll()
         reader, self._reader = self._reader, None
         if reader is not None and reader.is_alive():

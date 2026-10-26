@@ -239,8 +239,10 @@ def _tree_bytes(path: Path) -> int:
     total = 0
     for dirpath, _dirnames, filenames in os.walk(path):
         for f in filenames:
-            with contextlib.suppress(OSError):
+            try:
                 total += (Path(dirpath) / f).stat().st_size
+            except OSError:
+                pass
     return total
 
 
@@ -253,8 +255,10 @@ def _container_rows() -> list[dict]:
     rows: list[dict] = []
     for name in sorted(paths.installed_container_names()):
         image, arch = "", ""
-        with contextlib.suppress(Exception):
+        try:
             image, arch = paths.container_image_origin(name)
+        except Exception:
+            pass
         rows.append(
             {
                 "name": name,
@@ -340,10 +344,12 @@ def cached_images() -> list[dict]:
     rows = []
     for image in cache.iter_cached_images():
         size = 0
-        with contextlib.suppress(Exception):
+        try:
             path = image.get("full_path") or image.get("path")
             if path and Path(path).is_dir():
                 size = _tree_bytes(Path(path))
+        except Exception:
+            pass
         rows.append(
             {
                 "identifier": image.get("image_ref") or image.get("id") or "?",
@@ -544,15 +550,19 @@ def inspect_container(name: str) -> dict:
 
     rootfs = paths.container_rootfs(name)
     origin_image, origin_arch = "", ""
-    with contextlib.suppress(Exception):
+    try:
         origin_image, origin_arch = paths.container_image_origin(name)
+    except Exception:
+        pass
 
     config = {}
-    with contextlib.suppress(Exception):
+    try:
         config = paths.container_image_config(name) or {}
+    except Exception:
+        pass
 
     os_release = {}
-    with contextlib.suppress(Exception):
+    try:
         raw = guestfile.read_guest_file(rootfs, "etc/os-release") or guestfile.read_guest_file(
             rootfs, "usr/lib/os-release"
         )
@@ -561,6 +571,8 @@ def inspect_container(name: str) -> dict:
                 if "=" in line and not line.startswith("#"):
                     k, _, v = line.partition("=")
                     os_release[k.strip()] = v.strip().strip('"').strip("'")
+    except Exception:
+        pass
 
     return {
         "name": name,

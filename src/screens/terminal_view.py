@@ -5,7 +5,6 @@ zoom/blink controls, full-width flat chrome, and hardened PTY lifecycle.
 
 from __future__ import annotations
 
-import contextlib
 import json
 
 import flet as ft
@@ -95,29 +94,34 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
     def _sync_wakelock():
         wl = getattr(page, "wakelock", None)
         if wl is not None:
-            with contextlib.suppress(Exception):
+            try:
                 page.run_task(wl.enable)
+            except Exception:
+                pass
 
-        def _cleanup():
-            if wl is not None:
-                with contextlib.suppress(Exception):
-                    page.run_task(wl.disable)
+            def _cleanup():
+                if wl is not None:
+                    try:
+                        page.run_task(wl.disable)
+                    except Exception:
+                        pass
 
-        return _cleanup
+            return _cleanup
+        return None
 
-    ft.on_mounted(_sync_wakelock)
+        ft.on_mounted(_sync_wakelock)
 
-    if entry.mt is None:
-        entry.mt = MobileTerminal(
-            show_extra_keys=True,
-            show_search=False,
-            show_settings=False,
-            scrollback=10000,
-            font_family="JetBrains Mono",
-            theme=BUILTIN_THEMES.get(_theme_name()),
-            auto_focus=False,
-            expand=True,
-        )
+        if entry.mt is None:
+            entry.mt = MobileTerminal(
+                show_extra_keys=True,
+                show_search=False,
+                show_settings=False,
+                scrollback=10000,
+                font_family="JetBrains Mono",
+                theme=BUILTIN_THEMES.get(_theme_name()),
+                auto_focus=False,
+                expand=True,
+            )
     mt = entry.mt
 
     if not entry.wired:
@@ -146,8 +150,10 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
         def _on_bell(_e) -> None:
             haptics = getattr(page, "haptics", None)
             if haptics is not None:
-                with contextlib.suppress(Exception):
+                try:
                     page.run_task(haptics.selection_click)
+                except Exception:
+                    pass
 
         def _on_shortcut(e) -> None:
             sc = getattr(e, "shortcut", "") or ""
@@ -185,17 +191,21 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
 
     def _apply_theme() -> None:
         name = _theme_name()
-        with contextlib.suppress(Exception):
+        try:
             mt.set_theme(name)
+        except Exception:
+            pass
 
-    ft.use_effect(_apply_theme, [state.theme_revision])
+        ft.use_effect(_apply_theme, [state.theme_revision])
 
-    def _cycle_terminal_theme() -> None:
-        cur = mt.theme_name or _theme_name()
-        idx = _THEME_PRESETS.index(cur) if cur in _THEME_PRESETS else 0
-        next_theme = _THEME_PRESETS[(idx + 1) % len(_THEME_PRESETS)]
-        with contextlib.suppress(Exception):
-            mt.set_theme(next_theme)
+        def _cycle_terminal_theme() -> None:
+            cur = mt.theme_name or _theme_name()
+            idx = _THEME_PRESETS.index(cur) if cur in _THEME_PRESETS else 0
+            next_theme = _THEME_PRESETS[(idx + 1) % len(_THEME_PRESETS)]
+            try:
+                mt.set_theme(next_theme)
+            except Exception:
+                pass
 
     def _quick(label: str, command: str) -> ft.Control:
         def _send(_e) -> None:
