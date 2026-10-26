@@ -96,6 +96,9 @@ markers = [
 filterwarnings = [
     "error::Warning:^(services|screens|components|core|state|hooks|tests)(\\.|$)",
 ]
+# session_argv/session_manager.open are async (they marshal get_proot_cmd onto
+# Flet's main thread), so the session tests are coroutine functions.
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
