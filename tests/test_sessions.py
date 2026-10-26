@@ -50,6 +50,7 @@ async def test_session_argv_parses_env_and_command(monkeypatch):
     class MockPage:
         def run_task(self, func):
             import asyncio
+
             # func is a regular function, not a coroutine
             asyncio.get_event_loop().call_soon(func)
 
@@ -76,6 +77,7 @@ async def test_session_argv_merges_the_host_essentials(monkeypatch):
     class MockPage:
         def run_task(self, func):
             import asyncio
+
             # func is a regular function, not a coroutine
             asyncio.get_event_loop().call_soon(func)
 
@@ -93,6 +95,7 @@ async def test_session_argv_rejects_garbage(monkeypatch):
     class MockPage:
         def run_task(self, func):
             import asyncio
+
             asyncio.get_event_loop().call_soon(func)
 
     mock_page = MockPage()
@@ -106,6 +109,7 @@ async def test_session_argv_rejects_empty_command(monkeypatch):
     class MockPage:
         def run_task(self, func):
             import asyncio
+
             asyncio.get_event_loop().call_soon(func)
 
     mock_page = MockPage()
@@ -187,6 +191,7 @@ async def test_session_argv_handles_upstreams_wrapped_output(monkeypatch):
     class MockPage:
         def run_task(self, func):
             import asyncio
+
             asyncio.get_event_loop().call_soon(func)
 
     mock_page = MockPage()
@@ -228,6 +233,7 @@ class _FakeSession:
 class MockPage:
     def run_task(self, func):
         import asyncio
+
         asyncio.get_event_loop().call_soon(func)
 
 
@@ -244,6 +250,7 @@ async def test_live_output_is_forwarded_to_the_terminal(monkeypatch):
     class MockPage:
         def run_task(self, func):
             import asyncio
+
             asyncio.get_event_loop().call_soon(func)
 
     mock_page = MockPage()
@@ -276,6 +283,7 @@ async def test_live_output_without_a_terminal_only_feeds_scrollback(monkeypatch)
     class MockPage:
         def run_task(self, func):
             import asyncio
+
             asyncio.get_event_loop().call_soon(func)
 
     mock_page = MockPage()
@@ -464,6 +472,7 @@ async def test_session_manager_replaces_dead_session(monkeypatch):
     class MockPage:
         def run_task(self, func):
             import asyncio
+
             asyncio.get_event_loop().call_soon(func)
 
     mock_page = MockPage()

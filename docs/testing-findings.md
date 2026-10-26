@@ -10,12 +10,20 @@ The first APK ever handed over crashed on the owner's phone with `module 'flet' 
 ## House activity-terminal log pattern (use in every device-facing app)
 From the owner's examples (flet-notifications / flet-yandex-ads):
 ```python
-TERMINAL_BG = "#0D0D0D"; TERMINAL_TEXT = "#A6E22E"
-log_text = ft.Text(value="", font_family="Courier New", size=11, color=TERMINAL_TEXT, selectable=True)
+TERMINAL_BG = "#0D0D0D"
+TERMINAL_TEXT = "#A6E22E"
+log_text = ft.Text(
+    value="", font_family="Courier New", size=11, color=TERMINAL_TEXT, selectable=True
+)
 log_col = ft.Column(controls=[log_text], scroll=ft.ScrollMode.AUTO, expand=True)
-log_terminal = ft.Container(content=log_col, bgcolor=TERMINAL_BG, padding=12,
+log_terminal = ft.Container(
+    content=log_col,
+    bgcolor=TERMINAL_BG,
+    padding=12,
     border=ft.Border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.WHITE)),
-    border_radius=8, height=340)
+    border_radius=8,
+    height=340,
+)
 # log(): "[%H:%M:%S] " prefix; page.update(log_text); then run_task scroll_to(offset=-1)
 ```
 Fixed-height scroll container is the scroll fix; timestamps make device screenshots self-documenting.

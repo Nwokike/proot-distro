@@ -49,6 +49,16 @@ def _compact_btn_style() -> ft.ButtonStyle:
     )
 
 
+def _cycle_terminal_theme(mt) -> None:
+    cur = mt.theme_name or _theme_name()
+    idx = _THEME_PRESETS.index(cur) if cur in _THEME_PRESETS else 0
+    next_theme = _THEME_PRESETS[(idx + 1) % len(_THEME_PRESETS)]
+    try:
+        mt.set_theme(next_theme)
+    except Exception:
+        pass
+
+
 def _confirm_close(page: ft.Page, methods, container: str) -> None:
     def _yes(_e) -> None:
         page.pop_dialog()
@@ -109,10 +119,10 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
             return _cleanup
         return None
 
-        ft.on_mounted(_sync_wakelock)
+    ft.on_mounted(_sync_wakelock)
 
-        if entry.mt is None:
-            entry.mt = MobileTerminal(
+    if entry.mt is None:
+        entry.mt = MobileTerminal(
                 show_extra_keys=True,
                 show_search=False,
                 show_settings=False,
@@ -122,6 +132,7 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
                 auto_focus=False,
                 expand=True,
             )
+
     mt = entry.mt
 
     if not entry.wired:
@@ -197,15 +208,6 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
             pass
 
         ft.use_effect(_apply_theme, [state.theme_revision])
-
-        def _cycle_terminal_theme() -> None:
-            cur = mt.theme_name or _theme_name()
-            idx = _THEME_PRESETS.index(cur) if cur in _THEME_PRESETS else 0
-            next_theme = _THEME_PRESETS[(idx + 1) % len(_THEME_PRESETS)]
-            try:
-                mt.set_theme(next_theme)
-            except Exception:
-                pass
 
     def _quick(label: str, command: str) -> ft.Control:
         def _send(_e) -> None:
@@ -441,7 +443,7 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
                     icon_size=tokens.ICON_SM,
                     tooltip="Cycle Terminal Theme",
                     style=_compact_btn_style(),
-                    on_click=lambda _e: _cycle_terminal_theme(),
+                    on_click=lambda _e: _cycle_terminal_theme(mt),
                 ),
                 ft.IconButton(
                     icon=ft.Icons.ZOOM_OUT,

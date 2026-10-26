@@ -26,9 +26,7 @@ def main() -> int:
 
     for lib in libs:
         align = lib.get("align")
-        assert align and align >= 0x4000, (
-            f"{lib['jni']}: PT_LOAD align {align!r} < 0x4000 (16 KiB)"
-        )
+        assert align and align >= 0x4000, f"{lib['jni']}: PT_LOAD align {align!r} < 0x4000 (16 KiB)"
 
     print(f"flet-proot {version} OK — payloads: {sorted(names)}")
     return 0

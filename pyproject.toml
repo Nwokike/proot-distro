@@ -116,3 +116,6 @@ ignore = ["E501", "EM101", "EM102", "EM103", "TRY003", "BLE001", "S110", "SIM105
 "scripts/build_flet_proot_wheel.py" = ["T201", "S310"]
 "scripts/check_elf_alignment.py" = ["T201"]
 "scripts/generate_third_party_sources.py" = ["T201", "E402"]
+# The mobile-forge recipe bundle is a standalone conda-forge recipe (not app
+# code): its test.py is a recipe smoke test that asserts and prints by design.
+"docs/requests/mobile-forge-recipe-flet-proot/**" = ["S101", "T201"]
