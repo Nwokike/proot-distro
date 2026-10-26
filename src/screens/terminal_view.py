@@ -123,15 +123,15 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
 
     if entry.mt is None:
         entry.mt = MobileTerminal(
-                show_extra_keys=True,
-                show_search=False,
-                show_settings=False,
-                scrollback=10000,
-                font_family="JetBrains Mono",
-                theme=BUILTIN_THEMES.get(_theme_name()),
-                auto_focus=False,
-                expand=True,
-            )
+            show_extra_keys=True,
+            show_search=False,
+            show_settings=False,
+            scrollback=10000,
+            font_family="JetBrains Mono",
+            theme=BUILTIN_THEMES.get(_theme_name()),
+            auto_focus=False,
+            expand=True,
+        )
 
     mt = entry.mt
 
