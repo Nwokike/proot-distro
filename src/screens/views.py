@@ -752,7 +752,7 @@ def DistroView() -> ft.Control:
         controls.append(ft.Text(st.search_status, size=tokens.FONT_XS, color=theme.text_dim()))
     if st.search_results:
         result_cards = []
-        for r in st.search_results:
+        for r in st.search_results[:8]:
             r_name = r.get("name", "")
             r_desc = r.get("description", "") or "No description"
             result_cards.append(
