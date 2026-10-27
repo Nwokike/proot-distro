@@ -44,6 +44,7 @@ def bootstrap() -> None:
     from core import posixdb
 
     posixdb.ensure()
+    posixdb.ensure_signal_safe()
     os.environ.update(storage_paths.env_contract())
     from core import proot_probe
 

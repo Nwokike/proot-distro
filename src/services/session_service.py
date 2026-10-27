@@ -23,8 +23,6 @@ import threading
 from collections.abc import Callable
 from pathlib import Path
 
-import flet as ft
-
 from services import proot_service
 
 Env = dict[str, str]
@@ -127,27 +125,9 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
     return env, head + tail
 
 
-async def session_argv(page: ft.Page, container: str) -> tuple[Env, Argv]:
-    """The guest session's (env, argv) exactly as upstream builds it, hardened with M0 spike flags.
-
-    Runs get_proot_cmd on the main thread to avoid "signal only works in main thread" error on Android.
-    """
-    import asyncio
-
-    # Run get_proot_cmd on the main thread
-    loop = asyncio.get_event_loop()
-    future = loop.create_future()
-
-    def _run_on_main_thread():
-        try:
-            line = proot_service.get_proot_cmd(container)
-            loop.call_soon_threadsafe(future.set_result, line)
-        except Exception as e:
-            loop.call_soon_threadsafe(future.set_exception, e)
-
-    # Schedule the task on the main thread
-    page.run_task(_run_on_main_thread)
-    line = await future
+def session_argv(container: str) -> tuple[Env, Argv]:
+    """The guest session's (env, argv) exactly as upstream builds it, hardened with M0 spike flags."""
+    line = proot_service.get_proot_cmd(container)
     # Upstream prints the command wrapped with backslash-newline continuations;
     # shlex would read the escaped newline as a literal "n", so the
     # continuations are folded into spaces before splitting.

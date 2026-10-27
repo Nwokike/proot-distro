@@ -129,3 +129,41 @@ def ensure() -> list[str]:
         sys.modules[name] = factory()
         shimmed.append(name)
     return shimmed
+
+
+_SIGNAL_GUARD_INSTALLED = False
+
+
+def ensure_signal_safe() -> None:
+    """Make signal.signal() a no-op off the main thread (idempotent).
+
+    proot-distro's l2s.rewrite_l2s_targets() installs SIGINT/SIGQUIT
+    handlers, and signal.signal() raises ValueError on any thread but the
+    main one. On Android the Python interpreter is never the main thread
+    (Flutter owns it), so every rename and every login would crash with
+    "signal only works in main thread of the main interpreter". The
+    handlers are decorative in this embedding — the PTY child is signalled
+    through the terminal, not the Python process — so skipping them is
+    behaviour-preserving.
+    """
+    global _SIGNAL_GUARD_INSTALLED
+    if _SIGNAL_GUARD_INSTALLED:
+        return
+    import signal
+    import threading
+
+    if threading.current_thread() is threading.main_thread():
+        # Desktop dev runs: the real signal.signal works, leave it alone.
+        _SIGNAL_GUARD_INSTALLED = True
+        return
+
+    real_signal = signal.signal
+
+    def _safe_signal(sig, handler):
+        try:
+            return real_signal(sig, handler)
+        except ValueError:
+            return None
+
+    signal.signal = _safe_signal
+    _SIGNAL_GUARD_INSTALLED = True

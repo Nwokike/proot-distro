@@ -681,7 +681,7 @@ class AppController:
     async def open_session(self, container: str) -> None:
         state.session_error = ""
         try:
-            await self.session_manager.open(self.page, container)
+            await self.session_manager.open(container)
         except Exception as exc:
             state.session_error = f"could not open {container}: {_reason(exc)}"
             self.show_snack(state.session_error)

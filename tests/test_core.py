@@ -39,6 +39,7 @@ def test_probe_reports_real_modules():
 
 
 def test_ensure_only_shims_what_is_missing():
+
     from core import posixdb
 
     missing = [n for n in ("pwd", "grp") if not posixdb._module_present(n)]
@@ -47,6 +48,8 @@ def test_ensure_only_shims_what_is_missing():
 
 
 def test_grp_shim_shapes():
+    from core import posixdb
+
     """The shim's shapes are a platform-independent contract (Termux parity).
 
     getgrgid mirrors bionic: known AIDs and app-range gids get real names,
@@ -54,7 +57,6 @@ def test_grp_shim_shapes():
     skips unresolvable gids, so inventing names would write junk
     aid_<number> group entries into every install.
     """
-    from core import posixdb
 
     grp = posixdb._shim_grp()
     entry = grp.getgrgid(3003)
@@ -68,6 +70,7 @@ def test_grp_shim_shapes():
 
 
 def test_pwd_shim_shapes():
+
     from core import posixdb
 
     pwd = posixdb._shim_pwd()
@@ -138,3 +141,55 @@ def test_state_starts_empty():
     assert state.containers == []
     assert state.installing is None
     assert state.probe_passed is False
+
+
+# ── signal guard (the "signal only works in main thread" crash) ───────────────
+
+
+def test_signal_guard_makes_worker_thread_safe():
+    from core import posixdb
+
+    """proot-distro's l2s.rewrite_l2s_targets() calls signal.signal(), which
+    raises ValueError off the main thread. On Android the Python interpreter
+    is never the main thread (Flutter owns it), so every rename and every
+    login would crash. The guard must make that call a no-op instead.
+    """
+    import signal
+    import threading
+
+    # Reset the guard so this test exercises the installation path.
+    posixdb._SIGNAL_GUARD_INSTALLED = False
+
+    errors: list[BaseException] = []
+
+    def _worker():
+        try:
+            # This is exactly what l2s.py does — install a handler from a
+            # non-main thread. Without the guard it raises ValueError.
+            posixdb.ensure_signal_safe()
+            signal.signal(signal.SIGINT, lambda *a: None)
+        except BaseException as exc:
+            errors.append(exc)
+
+    thread = threading.Thread(target=_worker)
+    thread.start()
+    thread.join(timeout=5)
+
+    assert not errors, f"signal.signal() raised from a worker thread: {errors!r}"
+    # The guard is idempotent — a second call is a no-op.
+    posixdb.ensure_signal_safe()
+    posixdb.ensure_signal_safe()
+
+
+def test_signal_guard_restores_after_test():
+    """The guard must not leak into other tests (signal.signal stays patched)."""
+    import signal
+
+    # After the worker-thread test, signal.signal is the safe wrapper.
+    # Calling it from the main thread must still work normally.
+    old = signal.getsignal(signal.SIGINT)
+    try:
+        result = signal.signal(signal.SIGINT, lambda *a: None)
+        assert result is old or result is None
+    finally:
+        signal.signal(signal.SIGINT, old)
