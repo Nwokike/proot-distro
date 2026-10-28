@@ -98,7 +98,6 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
         _add_if_missing("--link2symlink")
         _add_if_missing("--sysvipc")
         _add_if_missing("-L")
-        _add_if_missing("-0")  # --no-new-privs: prevent privilege escalation on Android
 
         uname_m = platform.machine() or "aarch64"
         kernel_fake = f"--kernel-release=\\Linux\\localhost\\{platform.release()}\\#1 SMP PREEMPT_DYNAMIC Fri, 10 Oct 2025 00:00:00 +0000\\{uname_m}\\localdomain\\-1\\"
