@@ -2,15 +2,8 @@ name: App Build
 
 on:
   push:
-    branches: [main]
-    paths:
-      - "src/**"
-      - "scripts/**"
-      - "tests/**"
-      - "LICENSES/**"
-      - "pyproject.toml"
-      - "uv.lock"
-      - ".github/workflows/app.yml"
+    tags: ["v*"]
+  pull_request:
   workflow_dispatch:
     inputs:
       build_version:
@@ -31,9 +24,6 @@ env:
   UV_PYTHON: "3.14"
   BUILD_VERSION: ${{ inputs.build_version || '1.0.0' }}
   BUILD_NUMBER: ${{ inputs.build_number || '1' }}
-  # One release tag for the whole run: the placeholder, the APKs and the AAB
-  # must all upload to the same tag (softprops fails on an empty tag_name).
-  TAG_NAME: app-${{ github.run_number }}
 
 jobs:
   quality:
@@ -118,19 +108,40 @@ jobs:
   prepare-release:
     needs: [quality]
     runs-on: ubuntu-latest
+    outputs:
+      TAG_NAME: ${{ steps.tag_info.outputs.TAG_NAME }}
+      RELEASE_NAME: ${{ steps.tag_info.outputs.RELEASE_NAME }}
+      IS_PRERELEASE: ${{ steps.tag_info.outputs.IS_PRERELEASE }}
+      MAKE_LATEST: ${{ steps.tag_info.outputs.MAKE_LATEST }}
     steps:
       - uses: actions/checkout@v7
+      - name: Generate Release Tag & Name
+        id: tag_info
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "TAG_NAME=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "RELEASE_NAME=Proot Distro ${{ github.ref_name }} (pre-release, pending approval)" >> $GITHUB_OUTPUT
+            echo "IS_PRERELEASE=true" >> $GITHUB_OUTPUT
+            echo "MAKE_LATEST=false" >> $GITHUB_OUTPUT
+          else
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+            echo "TAG_NAME=build-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "RELEASE_NAME=Automated Build (${SHORT_SHA})" >> $GITHUB_OUTPUT
+            echo "IS_PRERELEASE=true" >> $GITHUB_OUTPUT
+            echo "MAKE_LATEST=false" >> $GITHUB_OUTPUT
+          fi
       - name: Create Release Placeholder
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ env.TAG_NAME }}
-          name: "App build #${{ github.run_number }}"
+          tag_name: ${{ steps.tag_info.outputs.TAG_NAME }}
+          name: ${{ steps.tag_info.outputs.RELEASE_NAME }}
           body: |
             Automated multi-platform build generated from commit `${{ github.sha }}`.
 
             *Proot Distro: Linux on Android without root or Termux.*
-          prerelease: true
-          make_latest: false
+          prerelease: ${{ steps.tag_info.outputs.IS_PRERELEASE }}
+          make_latest: ${{ steps.tag_info.outputs.MAKE_LATEST }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -183,9 +194,10 @@ jobs:
         run: uv run python scripts/check_elf_alignment.py build/apk/*.apk
 
       - name: Upload APKs to Release
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ env.TAG_NAME }}
+          tag_name: ${{ needs.prepare-release.outputs.TAG_NAME }}
           files: build/apk/*.apk
 
   aab:
@@ -304,9 +316,10 @@ jobs:
         run: uv run python scripts/generate_third_party_sources.py
 
       - name: Upload AAB and Sources to Release
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ env.TAG_NAME }}
+          tag_name: ${{ needs.prepare-release.outputs.TAG_NAME }}
           files: |
             build/aab/*.aab
             THIRD-PARTY-SOURCES.md

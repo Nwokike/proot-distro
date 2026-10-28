@@ -7,6 +7,20 @@ from typing import Any
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def flet_storage(monkeypatch, tmp_path_factory):
+    """Stand in for `flet run`: set the three app-storage env vars.
+
+    The runtime contract (`.flet/README.md`) is that these variables name the
+    writable roots and there is no fallback — so every offline test runs as if
+    it were launched by Flet, against disposable per-test directories.
+    """
+    base = tmp_path_factory.mktemp("flet_storage")
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(base / "data"))
+    monkeypatch.setenv("FLET_APP_STORAGE_CACHE", str(base / "cache"))
+    monkeypatch.setenv("FLET_APP_STORAGE_TEMP", str(base / "temp"))
+
+
 class FakePage:
     """Enough of ft.Page for the controller branch — no client needed."""
 

@@ -209,7 +209,7 @@ class ContainerActions:
         # picker: on mobile `save_file` without `src_bytes` raises ValueError
         # (there is no writable shared path to stream to), which made the
         # backup action die silently on the only platform that ships.
-        staging = storage_paths.support_root() / "exports" / f"{container}.tar.gz"
+        staging = storage_paths.exports_root() / f"{container}.tar.gz"
 
         def _stage() -> object:
             staging.parent.mkdir(parents=True, exist_ok=True)

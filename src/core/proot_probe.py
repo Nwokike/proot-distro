@@ -206,8 +206,7 @@ def bootstrap_env(runtime_root: Path | None = None) -> ProbeResult:
             # proot payload, so this can only appear running unbundled source.
             res.problems.append(
                 "no proot binary for this dev run — the packaged APK bundles it. "
-                "For local source runs, install proot ('sudo dnf install proot' / "
-                "'sudo apt install proot') or set PD_PROOT_BIN to a proot binary."
+                "For local source runs, set PD_PROOT_BIN to a proot binary."
             )
             return res
 

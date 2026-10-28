@@ -59,9 +59,7 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
     if rootfs_path is None or not rootfs_path.is_dir():
         from core import storage_paths
 
-        candidate = (
-            storage_paths.xdg_data_home() / "proot-distro" / "containers" / container / "rootfs"
-        )
+        candidate = storage_paths.containers_dir() / container / "rootfs"
         if candidate.is_dir():
             rootfs_path = candidate
 

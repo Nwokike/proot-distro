@@ -359,3 +359,6 @@ Following owner review and device test findings, R6 resolves the terminal spawn 
 
 Exit state: 99 tests green, ruff clean, AST guard clean.
 
+
+## D-024 · 2026-10-28 · Storage = the Flet app-storage contract, nothing else
+`core/storage_paths.py` now reads only `FLET_APP_STORAGE_DATA` / `_CACHE` / `_TEMP` (per `.flet/README.md`): no `.proot-local` fallback (deleted, and the repo-root fallback removed), `XDG_DATA_HOME` = the data root and `XDG_CACHE_HOME` = the cache root directly (upstream still appends its own `proot-distro/` — the old `.local/share` mimicry and the double-nested `cache/proot-distro/proot-distro/` are gone), `PROOT_TMP_DIR` and backup-exports staging live under `temp/`. A run outside the Flet contract fails loudly (RuntimeError) instead of inventing a location. Layout change is a one-time break: containers previously installed under `data/.local/share/proot-distro/` are not seen by the new mapping and need a reinstall (or a manual move of `containers/` to `data/proot-distro/`). Offline tests now install a conftest `flet_storage` fixture that stands in for `flet run`.

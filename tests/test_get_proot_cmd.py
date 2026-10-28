@@ -13,14 +13,14 @@ def _hermetic_proot_distro(monkeypatch, tmp_path):
     import sys
 
     root = tmp_path / "pd-root"
-    # Match what proot_service.bootstrap() will export: XDG_DATA_HOME =
-    # <support>/.local/share, containers under <that>/proot-distro/containers.
-    data_home = root / ".local" / "share"
-    (data_home / "proot-distro" / "containers").mkdir(parents=True)
-    (root / ".local" / "cache").mkdir(parents=True)
+    # Mirror what proot_service.bootstrap() will export: XDG_DATA_HOME = the
+    # data root itself; containers under <root>/proot-distro/containers.
+    (root / "proot-distro" / "containers").mkdir(parents=True)
+    (root / "cache" / "proot-distro").mkdir(parents=True)
+    (root / "temp").mkdir(parents=True)
     monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(root))
-    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
-    monkeypatch.setenv("XDG_CACHE_HOME", str(root / ".local" / "cache"))
+    monkeypatch.setenv("FLET_APP_STORAGE_CACHE", str(root / "cache"))
+    monkeypatch.setenv("FLET_APP_STORAGE_TEMP", str(root / "temp"))
     fake_proot = tmp_path / "libproot.so"
     fake_proot.write_bytes(b"#!/bin/sh\nexit 0\n")
     fake_proot.chmod(0o755)
@@ -52,7 +52,7 @@ def test_get_proot_cmd_runs_the_real_upstream_path(monkeypatch, tmp_path):
 
     # A fake installed container: real ELF shell (the arch probe reads its
     # header), a passwd entry, a home dir.
-    rootfs = root / ".local" / "share" / "proot-distro" / "containers" / "demo" / "rootfs"
+    rootfs = root / "proot-distro" / "containers" / "demo" / "rootfs"
     (rootfs / "bin").mkdir(parents=True)
     (rootfs / "etc").mkdir()
     (rootfs / "root").mkdir()
