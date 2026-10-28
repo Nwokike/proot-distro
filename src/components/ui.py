@@ -6,6 +6,9 @@ import flet as ft
 
 from core import styles, theme, tokens
 
+NO_CONTAINERS_TITLE = "No containers installed"
+NO_CONTAINERS_MESSAGE = "Install a container first to explore and manage its files."
+
 
 def card(content: ft.Control, padding: int | ft.Padding = tokens.SPACE_MD) -> ft.Control:
     """The house surface (glass card)."""
@@ -20,6 +23,15 @@ def section_header(title: str, action: ft.Control | None = None) -> ft.Control:
 def empty_state(title: str, message: str = "", icon: str = ft.Icons.INBOX) -> ft.Control:
     """The house empty state."""
     return styles.empty_state(icon, title, message)
+
+
+def no_containers_empty_state() -> ft.Control:
+    """The shared empty state for screens that require an installed container."""
+    return empty_state(
+        NO_CONTAINERS_TITLE,
+        NO_CONTAINERS_MESSAGE,
+        icon=ft.Icons.FOLDER_OFF_ROUNDED,
+    )
 
 
 def probe_banner(summary: str) -> ft.Control:

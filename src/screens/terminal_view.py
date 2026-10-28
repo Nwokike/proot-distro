@@ -12,10 +12,17 @@ from flet_terminal import BUILTIN_THEMES, MobileTerminal
 
 from components.app_header import theme_button
 from components.banner_ad import pooled_banner_ad
-from components.ui import card, empty_state, section_header
+from components.ui import NO_CONTAINERS_MESSAGE, card
 from core import theme, tokens
 from core.state import state
 from core.styles import status_dot
+from screens.terminal_controls import (
+    _compact_btn_style,
+    _confirm_close,
+    _cycle_terminal_theme,
+    _theme_name,
+    _write,
+)
 from services.session_manager import SessionEntry
 from state.controller_ctx import ControllerMethodsCtx
 
@@ -29,62 +36,6 @@ _QUICK_COMMANDS = (
     ("clear", "clear\n"),
     ("exit", "exit\n"),
 )
-
-_THEME_PRESETS = ("JetBrains Dark", "Dracula", "Matrix Green", "Colab Light")
-
-
-def _theme_name() -> str:
-    return "Colab Light" if theme.is_light_theme() else "JetBrains Dark"
-
-
-def _write(entry: SessionEntry, payload: bytes) -> None:
-    if entry.session is not None:
-        entry.session.write(payload)
-
-
-def _compact_btn_style() -> ft.ButtonStyle:
-    return ft.ButtonStyle(
-        padding=ft.Padding(tokens.SPACE_XS, tokens.SPACE_XS, tokens.SPACE_XS, tokens.SPACE_XS),
-        visual_density=ft.VisualDensity.COMPACT,
-    )
-
-
-def _cycle_terminal_theme(mt) -> None:
-    cur = mt.theme_name or _theme_name()
-    idx = _THEME_PRESETS.index(cur) if cur in _THEME_PRESETS else 0
-    next_theme = _THEME_PRESETS[(idx + 1) % len(_THEME_PRESETS)]
-    mt.set_theme(next_theme)
-
-
-def _confirm_close(page: ft.Page, methods, container: str) -> None:
-    def _yes(_e) -> None:
-        page.pop_dialog()
-        page.run_task(methods.close_session, container)
-
-    page.show_dialog(
-        ft.AlertDialog(
-            title=ft.Text(
-                f"Close {container}?",
-                size=tokens.FONT_LG,
-                weight=ft.FontWeight.BOLD,
-            ),
-            content=ft.Text(
-                "The shell is terminated; unsaved work inside it is lost.",
-                size=tokens.FONT_SM,
-            ),
-            actions=[
-                ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
-                ft.FilledButton(
-                    "Close",
-                    on_click=_yes,
-                    style=ft.ButtonStyle(
-                        shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
-                        bgcolor=theme.warn(),
-                    ),
-                ),
-            ],
-        )
-    )
 
 
 @ft.component
@@ -208,7 +159,7 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
             msg = (
                 "All installed containers already have a running shell."
                 if installed
-                else "No containers installed yet. Install one from the Distros tab."
+                else NO_CONTAINERS_MESSAGE
             )
             page.show_dialog(
                 ft.AlertDialog(
@@ -524,147 +475,3 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
         controls.append(quick_strip)
 
     return ft.Column(controls=controls, spacing=tokens.SPACE_XS, expand=True)
-
-
-@ft.component
-def SessionSelectorView() -> ft.Control:
-    """The Terminal tab: open shells + every installed container that can open one."""
-    _st, _ = ft.use_state(state)
-    methods = ft.use_context(ControllerMethodsCtx)
-    page = ft.context.page
-    controller = getattr(page, "_controller", None)
-    manager = getattr(controller, "session_manager", None)
-
-    sections: list[ft.Control] = []
-    open_entries = list(manager.entries.values()) if manager else []
-    if open_entries:
-        rows = []
-        for entry in open_entries:
-
-            def _resume(_e, container=entry.container) -> None:
-                page.run_task(methods.open_session, container)
-
-            rows.append(
-                card(
-                    ft.Container(
-                        content=ft.Row(
-                            controls=[
-                                ft.Icon(
-                                    ft.Icons.TERMINAL_ROUNDED,
-                                    size=tokens.ICON_MD,
-                                    color=theme.ok() if entry.ready else theme.text_dim(),
-                                ),
-                                ft.Text(
-                                    entry.title,
-                                    size=tokens.FONT_LG,
-                                    weight=ft.FontWeight.W_600,
-                                    color=theme.text(),
-                                    expand=True,
-                                ),
-                                status_dot(entry.ready),
-                                ft.Text(
-                                    "live" if entry.ready else (entry.error or "idle"),
-                                    size=tokens.FONT_SM,
-                                    color=theme.text_dim(),
-                                ),
-                                ft.FilledButton(
-                                    "Resume",
-                                    on_click=_resume,
-                                    height=tokens.CONTROL_MD,
-                                    style=ft.ButtonStyle(
-                                        shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
-                                    ),
-                                ),
-                            ],
-                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                            spacing=tokens.SPACE_SM,
-                        ),
-                        on_click=_resume,
-                        ink=True,
-                    ),
-                    padding=tokens.SPACE_SM,
-                )
-            )
-        sections.append(
-            ft.Column(
-                controls=[section_header("Open shells"), *rows],
-                spacing=tokens.SPACE_SM,
-            )
-        )
-
-    containers = [row.get("name", "?") for row in state.containers]
-    if containers:
-        rows = []
-        for name in containers:
-            if manager and name in manager.entries:
-                continue
-
-            def _open(_e, container=name) -> None:
-                page.run_task(methods.open_session, container)
-
-            rows.append(
-                card(
-                    ft.Container(
-                        content=ft.Row(
-                            controls=[
-                                ft.Icon(
-                                    ft.Icons.APPS_ROUNDED,
-                                    size=tokens.ICON_MD,
-                                    color=theme.primary(),
-                                ),
-                                ft.Text(
-                                    name,
-                                    size=tokens.FONT_LG,
-                                    weight=ft.FontWeight.W_600,
-                                    color=theme.text(),
-                                    expand=True,
-                                ),
-                                ft.FilledButton(
-                                    "Open shell",
-                                    on_click=_open,
-                                    height=tokens.CONTROL_MD,
-                                    style=ft.ButtonStyle(
-                                        shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
-                                    ),
-                                ),
-                            ],
-                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                            spacing=tokens.SPACE_SM,
-                        ),
-                        on_click=_open,
-                        ink=True,
-                    ),
-                    padding=tokens.SPACE_SM,
-                )
-            )
-        sections.append(
-            ft.Column(
-                controls=[section_header("Installed containers"), *rows],
-                spacing=tokens.SPACE_SM,
-            )
-        )
-    else:
-        sections.append(
-            empty_state(
-                "No containers yet",
-                "Install one from the Distros tab first.",
-                icon=ft.Icons.INVENTORY_2_OUTLINED,
-            )
-        )
-    if state.session_error:
-        sections.append(
-            ft.Text(
-                state.session_error,
-                size=tokens.FONT_XS,
-                color=theme.warn(),
-                selectable=True,
-            )
-        )
-
-    sections.append(ft.Container(height=tokens.NAV_BAR_CLEARANCE))
-    return ft.Column(
-        controls=sections,
-        spacing=tokens.SPACE_SM,
-        expand=True,
-        scroll=ft.ScrollMode.AUTO,
-    )

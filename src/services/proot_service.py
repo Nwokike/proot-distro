@@ -13,6 +13,22 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from core import storage_paths
+from services.proot_namespaces import (
+    _ns_backup,
+    _ns_clear_cache,
+    _ns_copy,
+    _ns_install,
+    _ns_kill,
+    _ns_login_get_proot_cmd,
+    _ns_remove,
+    _ns_remove_image,
+    _ns_rename,
+    _ns_reset,
+    _ns_restore,
+    _ns_run,
+    _ns_sync,
+)
+from services.proot_runtime import _CapturedStdout, _LineTee
 
 logger = logging.getLogger(__name__)
 
@@ -61,32 +77,6 @@ def available() -> bool:
     return True
 
 
-class _LineTee(io.TextIOBase):
-    """A stderr stand-in that forwards each line to `on_line` as it is
-    written AND keeps the text for the final Outcome.
-
-    stdlib capture only — this is exactly `redirect_stderr` with a live hook,
-    not a patch of anything upstream."""
-
-    def __init__(self, on_line):
-        self._on_line = on_line
-        self._buf = io.StringIO()
-
-    def write(self, data: str) -> int:
-        self._buf.write(data)
-        if data.strip():
-            for line in data.splitlines():
-                if line.strip():
-                    self._on_line(line)
-        return len(data)
-
-    def flush(self) -> None:  # pragma: no cover - trivial
-        return None
-
-    def getvalue(self) -> str:
-        return self._buf.getvalue()
-
-
 def _run_command(
     module_name: str, fn_name: str, namespace: SimpleNamespace, on_line=None
 ) -> Outcome:
@@ -125,112 +115,6 @@ def _run_command(
 
 
 # ── argparse namespaces (the only fragile part; verified against parser.py) ──
-
-
-def _ns_install(image: str, name: str) -> SimpleNamespace:
-    return SimpleNamespace(
-        image_ref=image,
-        custom_container_name=name,
-        override_arch=None,
-        allow_insecure=False,
-    )
-
-
-def _ns_remove(name: str) -> SimpleNamespace:
-    # Verified: _remove defines target/--image/--architecture/-v/-q.
-    return SimpleNamespace(
-        target=name,
-        image=False,
-        override_arch=None,
-        verbose=False,
-        quiet=False,
-    )
-
-
-def _ns_reset(name: str) -> SimpleNamespace:
-    # Verified: _reset defines container_name/-q.
-    return SimpleNamespace(
-        container_name=name,
-        verbose=False,
-        quiet=False,
-    )
-
-
-def _ns_rename(orig: str, new: str) -> SimpleNamespace:
-    return SimpleNamespace(orig_name=orig, new_name=new)
-
-
-def _ns_backup(container: str, output: str, compression: str | None = None) -> SimpleNamespace:
-    return SimpleNamespace(
-        container_name=container,
-        output=output,
-        compression=compression,
-        verbose=False,
-        quiet=False,
-    )
-
-
-def _ns_restore(archive: str) -> SimpleNamespace:
-    return SimpleNamespace(archive=archive, verbose=False)
-
-
-def _ns_copy(
-    source: str, destination: str, move: bool = False, recursive: bool = True
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        source=source,
-        destination=destination,
-        verbose=False,
-        quiet=False,
-        move=move,
-        recursive=recursive,
-    )
-
-
-def _ns_kill(target: str, all_sessions: bool = False, signal: str | None = None) -> SimpleNamespace:
-    return SimpleNamespace(target=target, all=all_sessions, signal=signal)
-
-
-def _ns_clear_cache(orphan: bool = False, build_cache: bool = False) -> SimpleNamespace:
-    return SimpleNamespace(
-        orphan=orphan,
-        build_cache=build_cache,
-        verbose=False,
-        quiet=False,
-    )
-
-
-def _ns_sync(
-    source: str, destination: str, checksum: bool = True, delete: bool = False
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        source=source,
-        destination=destination,
-        checksum=checksum,
-        delete=delete,
-        verbose=False,
-        quiet=False,
-    )
-
-
-def _ns_run(container: str, run_args: list[str], work_dir: str | None = None) -> SimpleNamespace:
-    return SimpleNamespace(
-        container_name=container,
-        run_args=run_args,
-        work_dir=work_dir,
-        user="root",
-        redirect_ports=False,
-        shared_home=False,
-        shared_tmp=False,
-        shared_x11=False,
-        bind=[],
-        emulator=None,
-        kernel=None,
-        hostname=None,
-        env=[],
-        detach=False,
-        get_proot_cmd=False,
-    )
 
 
 # ── public API (plain data) ──────────────────────────────────────────────────
@@ -307,18 +191,6 @@ def reset_container(name: str) -> Outcome:
     )
 
 
-def _ns_remove_image(identifier: str) -> SimpleNamespace:
-    # Verified: remove.py defines target/--image/--architecture/-v/-q; --image
-    # targets a cached image rather than a container.
-    return SimpleNamespace(
-        target=identifier,
-        image=True,
-        override_arch=None,
-        verbose=False,
-        quiet=False,
-    )
-
-
 def remove_cached_image(identifier: str) -> Outcome:
     """Delete one cached image's layers (storage reclaim; containers stay)."""
     return _run_command(
@@ -377,57 +249,6 @@ def busy_locks() -> list[str]:
         return [hint for _path, hint in locking.busy_locks()]
     except Exception:
         return []
-
-
-def _ns_login_get_proot_cmd(container: str) -> SimpleNamespace:
-    # Verified against parser.py:116-160 (_add_login_or_run_common) + :262
-    # (_login): every field _login_with_rootfs reads from the namespace.
-    return SimpleNamespace(
-        container_name=container,
-        user="root",
-        redirect_ports=False,
-        fix_low_ports=False,
-        isolated=False,
-        minimal=False,
-        shared_home=False,
-        termux_home=False,
-        shared_tmp=False,
-        shared_x11=False,
-        bind=[],
-        no_link2symlink=False,
-        no_sysvipc=False,
-        no_kill_on_exit=False,
-        emulator="",
-        kernel="",
-        hostname="",
-        work_dir="",
-        env=[],
-        detach=False,
-        get_proot_cmd=True,
-        login_cmd=[],
-    )
-
-
-class _CapturedStdout:
-    """sys.stdout stand-in carrying the `.buffer` upstream's printer writes to.
-
-    login/__init__.py prints `--get-proot-cmd` output via
-    `sys.stdout.buffer.write(...)`; io.StringIO has no `.buffer`, which made
-    the previous capture raise AttributeError on every session open.
-    """
-
-    def __init__(self) -> None:
-        self.buffer = io.BytesIO()
-
-    def write(self, data: str) -> int:  # upstream writes through .buffer
-        return self.buffer.write(data.encode("utf-8", errors="replace"))
-
-    def flush(self) -> None:  # pragma: no cover - trivial
-        return None
-
-    @property
-    def value(self) -> str:
-        return self.buffer.getvalue().decode("utf-8", errors="replace")
 
 
 _GET_PROOT_CMD_LOCK = threading.Lock()
