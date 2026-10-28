@@ -116,6 +116,50 @@ def test_session_stop_is_safe_without_a_process():
     assert session.alive is False
 
 
+def test_session_preexec_surfaces_controlling_tty_errors(monkeypatch):
+    import fcntl
+
+    session = session_service.ProotSession(["/bin/true"], {}, lambda _b: None)
+    session._slave_fd = 9
+    monkeypatch.setattr(session_service.os, "setsid", lambda: None)
+
+    def fail_ioctl(*_args):
+        raise OSError("TIOCSCTTY failed")
+
+    monkeypatch.setattr(fcntl, "ioctl", fail_ioctl)
+
+    with pytest.raises(OSError, match="TIOCSCTTY failed"):
+        session._preexec()
+
+
+def test_session_write_surfaces_pty_errors(monkeypatch):
+    session = session_service.ProotSession(["/bin/true"], {}, lambda _b: None)
+    session._master_fd = 9
+
+    def fail_write(*_args):
+        raise OSError("PTY write failed")
+
+    monkeypatch.setattr(session_service.os, "write", fail_write)
+
+    with pytest.raises(OSError, match="PTY write failed"):
+        session.write(b"input")
+
+
+def test_session_resize_surfaces_pty_errors(monkeypatch):
+    import fcntl
+
+    session = session_service.ProotSession(["/bin/true"], {}, lambda _b: None)
+    session._master_fd = 9
+
+    def fail_ioctl(*_args):
+        raise OSError("TIOCSWINSZ failed")
+
+    monkeypatch.setattr(fcntl, "ioctl", fail_ioctl)
+
+    with pytest.raises(OSError, match="TIOCSWINSZ failed"):
+        session.resize(80, 24)
+
+
 def test_session_manager_keeps_one_entry_per_container(monkeypatch):
     from services import session_manager as sm
 
@@ -193,6 +237,8 @@ class _FakeSession:
 
 
 async def test_live_output_is_forwarded_to_the_terminal(monkeypatch):
+    import asyncio
+
     """PTY bytes must reach the mounted terminal AND the scrollback deque —
     without the live send_bytes call the screen renders nothing after mount."""
     from services import session_manager as sm
@@ -215,8 +261,34 @@ async def test_live_output_is_forwarded_to_the_terminal(monkeypatch):
 
     # Post-mount PTY output (the reader thread's callback): live delivery.
     entry.session._on_bytes(b"hello\n")
+    assert stub.sent == [b"prompt $ "]
+    await asyncio.sleep(0)
     assert stub.sent == [b"prompt $ ", b"hello\n"]
     assert list(entry.scrollback) == [b"prompt $ ", b"hello\n"]
+
+
+async def test_session_exit_updates_observable_entry_on_event_loop(monkeypatch):
+    import asyncio
+    import threading
+
+    from services import session_manager as sm
+
+    monkeypatch.setattr(session_service, "ProotSession", _FakeSession)
+    monkeypatch.setattr(
+        session_service.proot_service, "get_proot_cmd", lambda container: GOLDEN_CMD
+    )
+
+    manager = sm.SessionManager()
+    entry = await manager.open("debian")
+    worker = threading.Thread(target=entry.session._on_exit, args=(7,))
+    worker.start()
+    worker.join()
+
+    assert entry.ready is True
+    await asyncio.sleep(0)
+    assert entry.ready is False
+    assert entry.session is None
+    assert entry.error == "shell exited (7)"
 
 
 async def test_live_output_without_a_terminal_only_feeds_scrollback(monkeypatch):

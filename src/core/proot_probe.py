@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -158,12 +161,12 @@ def _f2fs_probe(base_dir: Path) -> str:
         for p in sorted(d.glob("*"), reverse=True):
             try:
                 p.unlink()
-            except OSError:
-                pass
+            except OSError as exc:
+                logger.debug("f2fs probe left %s behind: %r", p, exc)
         try:
             d.rmdir()
-        except OSError:
-            pass
+        except OSError as exc:
+            logger.debug("f2fs probe dir %s not removed: %r", d, exc)
 
 
 def bootstrap_env(runtime_root: Path | None = None) -> ProbeResult:

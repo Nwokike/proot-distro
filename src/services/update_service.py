@@ -74,12 +74,14 @@ def _release_tuple(version) -> tuple[int, ...] | None:
 
 def is_newer(remote_build, remote_version=None) -> bool:
     """True when the feed is newer by build number OR by version string."""
+    # An unparseable build number is not an error — the version-string
+    # comparison below is the authoritative check, so a malformed feed
+    # value simply skips the build-number shortcut.
     try:
         if int(remote_build) > APP_BUILD_NUMBER:
             return True
     except TypeError, ValueError:
-        # Invalid build number format, fall through to version comparison
-        pass
+        logger.debug("unparseable remote build number %r — comparing versions", remote_build)
     remote = _release_tuple(remote_version)
     local = _release_tuple(APP_VERSION)
     return bool(remote and local and remote > local)

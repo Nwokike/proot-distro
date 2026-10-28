@@ -14,6 +14,7 @@ from pathlib import Path
 import flet as ft
 
 from components import card, empty_state, section_header
+from components.banner_ad import pooled_banner_ad
 from components.file_item import build_file_item
 from core import theme, tokens
 from core.state import state
@@ -124,8 +125,8 @@ def FilesView(
                         read_only=True,
                         multiline=True,
                         text_size=tokens.FONT_XS,
-                        font_family="JetBrains Mono",
-                        height=320,
+                        font_family=tokens.MONO_FONT,
+                        height=tokens.FILE_LIST_HEIGHT,
                         border=ft.NoInputBorder(),
                     )
                 page.show_dialog(
@@ -451,10 +452,12 @@ def FilesView(
                     tokens.SPACE_MD, tokens.SPACE_XS, tokens.SPACE_MD, tokens.SPACE_XS
                 ),
                 border_radius=tokens.RADIUS_PILL,
-                bgcolor=ft.Colors.with_opacity(0.12, theme.primary())
+                bgcolor=ft.Colors.with_opacity(tokens.OPACITY_MEDIUM, theme.primary())
                 if is_sel
                 else theme.surface(),
-                border=ft.Border.all(1, theme.primary() if is_sel else theme.surface_alt()),
+                border=ft.Border.all(
+                    tokens.HAIRLINE, theme.primary() if is_sel else theme.surface_alt()
+                ),
                 ink=True,
                 on_click=lambda _e, name=c: set_selected_container(name),
             )
@@ -483,7 +486,7 @@ def FilesView(
             ),
         ],
         vertical_alignment=ft.CrossAxisAlignment.CENTER,
-        spacing=0,
+        spacing=tokens.SPACE_NONE,
     )
 
     # 3. Actions Toolbar
@@ -520,7 +523,7 @@ def FilesView(
                 ],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            bgcolor=ft.Colors.with_opacity(0.08, theme.primary()),
+            bgcolor=ft.Colors.with_opacity(tokens.OPACITY_LIGHT, theme.primary()),
             border_radius=tokens.RADIUS_MD,
             padding=ft.Padding(tokens.SPACE_MD, tokens.SPACE_XS, tokens.SPACE_MD, tokens.SPACE_XS),
         )
@@ -555,7 +558,9 @@ def FilesView(
                 ],
                 alignment=ft.MainAxisAlignment.END,
             ),
-            padding=ft.Padding(0, 0, tokens.SPACE_SM, 0),
+            padding=ft.Padding(
+                tokens.SPACE_NONE, tokens.SPACE_NONE, tokens.SPACE_SM, tokens.SPACE_NONE
+            ),
         )
 
     # 4. Files List
@@ -563,7 +568,7 @@ def FilesView(
         file_list_content = ft.Container(
             content=ft.Row(
                 controls=[
-                    ft.ProgressRing(width=24, height=24),
+                    ft.ProgressRing(width=tokens.PROGRESS_RING_LG, height=tokens.PROGRESS_RING_LG),
                     ft.Text("Scanning directory…", size=tokens.FONT_SM, color=theme.text_dim()),
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
@@ -607,17 +612,19 @@ def FilesView(
         file_list_content = ft.ListView(
             controls=file_items,
             spacing=tokens.SPACE_XXS,
-            height=340,
+            expand=True,
         )
 
     return ft.Column(
         controls=[
             ft.Row(controls=container_chips, scroll=ft.ScrollMode.AUTO, spacing=tokens.SPACE_SM),
+            pooled_banner_ad("files-1", page),
             nav_row,
             action_bar,
-            ft.Divider(height=1, color=theme.glass_border()),
+            ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
             card(file_list_content, padding=tokens.SPACE_SM),
         ],
         spacing=tokens.SPACE_SM,
+        expand=True,
         scroll=ft.ScrollMode.AUTO,
     )

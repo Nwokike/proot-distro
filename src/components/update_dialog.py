@@ -113,7 +113,7 @@ def show_update_dialog(page: ft.Page, update_data: dict | None = None) -> None:
         ft.AlertDialog(
             title=ft.Row(
                 controls=[
-                    ft.Icon(icon, size=20, color=theme.primary()),
+                    ft.Icon(icon, size=tokens.ICON_MD, color=theme.primary()),
                     ft.Text(title_text, size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
                 ],
                 spacing=tokens.SPACE_SM,

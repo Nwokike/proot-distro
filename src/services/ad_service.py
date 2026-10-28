@@ -251,8 +251,5 @@ class AdService:
 
 
 def _release_service(services: list, item) -> None:
-    try:
+    if item in services:
         services.remove(item)
-    except ValueError:
-        # Item not in list, nothing to release
-        pass

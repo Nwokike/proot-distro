@@ -16,7 +16,7 @@ import logging
 
 import flet as ft
 
-from core import theme
+from core import theme, tokens
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def show_snack(page: ft.Page, message: str) -> None:
     if message == "" or page is None:
         return
     snack = ft.SnackBar(
-        content=ft.Text(message, color=theme.text(), size=12),
+        content=ft.Text(message, color=theme.text(), size=tokens.FONT_SM),
         bgcolor=theme.surface_alt(),
         behavior=ft.SnackBarBehavior.FLOATING,
         show_close_icon=True,

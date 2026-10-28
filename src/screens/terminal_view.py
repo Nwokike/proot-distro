@@ -53,10 +53,7 @@ def _cycle_terminal_theme(mt) -> None:
     cur = mt.theme_name or _theme_name()
     idx = _THEME_PRESETS.index(cur) if cur in _THEME_PRESETS else 0
     next_theme = _THEME_PRESETS[(idx + 1) % len(_THEME_PRESETS)]
-    try:
-        mt.set_theme(next_theme)
-    except Exception:
-        pass
+    mt.set_theme(next_theme)
 
 
 def _confirm_close(page: ft.Page, methods, container: str) -> None:
@@ -104,17 +101,11 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
     def _sync_wakelock():
         wl = getattr(page, "wakelock", None)
         if wl is not None:
-            try:
-                page.run_task(wl.enable)
-            except Exception:
-                pass
+            page.run_task(wl.enable)
 
             def _cleanup():
                 if wl is not None:
-                    try:
-                        page.run_task(wl.disable)
-                    except Exception:
-                        pass
+                    page.run_task(wl.disable)
 
             return _cleanup
         return None
@@ -127,7 +118,7 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
             show_search=False,
             show_settings=False,
             scrollback=10000,
-            font_family="JetBrains Mono",
+            font_family=tokens.MONO_FONT,
             theme=BUILTIN_THEMES.get(_theme_name()),
             auto_focus=False,
             expand=True,
@@ -138,12 +129,9 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
     if not entry.wired:
 
         def _on_resize(e) -> None:
-            try:
-                data = json.loads(e.data)
-                cols = int(data.get("cols", 80))
-                rows = int(data.get("rows", 24))
-            except ValueError:
-                return
+            data = json.loads(e.data)
+            cols = int(data.get("cols", 80))
+            rows = int(data.get("rows", 24))
             if entry.session is not None:
                 entry.session.resize(cols, rows)
 
@@ -161,10 +149,7 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
         def _on_bell(_e) -> None:
             haptics = getattr(page, "haptics", None)
             if haptics is not None:
-                try:
-                    page.run_task(haptics.selection_click)
-                except Exception:
-                    pass
+                page.run_task(haptics.selection_click)
 
         def _on_shortcut(e) -> None:
             sc = getattr(e, "shortcut", "") or ""
@@ -202,10 +187,7 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
 
     def _apply_theme() -> None:
         name = _theme_name()
-        try:
-            mt.set_theme(name)
-        except Exception:
-            pass
+        mt.set_theme(name)
 
         ft.use_effect(_apply_theme, [state.theme_revision])
 
@@ -267,7 +249,13 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
 
     status_indicators: list[ft.Control] = [status_dot(entry.ready)]
     if not entry.ready:
-        status_indicators.append(ft.ProgressRing(width=14, height=14, stroke_width=2))
+        status_indicators.append(
+            ft.ProgressRing(
+                width=tokens.PROGRESS_RING_XS,
+                height=tokens.PROGRESS_RING_XS,
+                stroke_width=tokens.PROGRESS_RING_STROKE,
+            )
+        )
 
     def _browse_files() -> None:
         from screens.files.modal import show_manage_files_modal
@@ -403,14 +391,14 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
                         tokens.SPACE_SM, tokens.SPACE_XXS, tokens.SPACE_XS, tokens.SPACE_XXS
                     ),
                     border_radius=tokens.RADIUS_SM,
-                    bgcolor=ft.Colors.with_opacity(0.12, theme.primary())
+                    bgcolor=ft.Colors.with_opacity(tokens.OPACITY_MEDIUM, theme.primary())
                     if is_active
-                    else ft.Colors.TRANSPARENT,
+                    else theme.TRANSPARENT,
                     border=ft.Border.all(
                         1,
-                        ft.Colors.with_opacity(0.24, theme.primary())
+                        ft.Colors.with_opacity(tokens.OPACITY_SELECTED, theme.primary())
                         if is_active
-                        else ft.Colors.with_opacity(0.08, theme.text_dim()),
+                        else ft.Colors.with_opacity(tokens.OPACITY_LIGHT, theme.text_dim()),
                     ),
                     on_click=lambda _evt, c=cname: setattr(state, "active_session", c),
                     ink=True,
@@ -467,11 +455,11 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
                     on_click=lambda _e: mt.toggle_search(),
                 ),
             ],
-            spacing=0,
+            spacing=tokens.SPACE_NONE,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
         padding=ft.Padding(tokens.SPACE_SM, 0, tokens.SPACE_SM, 0),
-        bgcolor=ft.Colors.with_opacity(0.04, theme.text()),
+        bgcolor=ft.Colors.with_opacity(tokens.OPACITY_WHISPER, theme.text()),
     )
 
     quick_strip = ft.Container(
@@ -582,7 +570,7 @@ def SessionSelectorView() -> ft.Control:
                                 ft.FilledButton(
                                     "Resume",
                                     on_click=_resume,
-                                    height=36,
+                                    height=tokens.CONTROL_MD,
                                     style=ft.ButtonStyle(
                                         shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
                                     ),
@@ -634,7 +622,7 @@ def SessionSelectorView() -> ft.Control:
                                 ft.FilledButton(
                                     "Open shell",
                                     on_click=_open,
-                                    height=36,
+                                    height=tokens.CONTROL_MD,
                                     style=ft.ButtonStyle(
                                         shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
                                     ),

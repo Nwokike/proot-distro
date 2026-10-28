@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import flet as ft
 
-from core import theme
+from core import theme, tokens
 
 
 def app_icon_svg() -> bytes:
@@ -36,8 +36,6 @@ def build_brand_hero(tagline: str | None = None) -> ft.Control:
     tagline at FONT_SM. The tint needs SRC_IN to actually recolor the
     artwork (color alone is not a guaranteed recolor in flet 1.0.4).
     """
-    from core import tokens
-
     controls: list[ft.Control] = [
         ft.Container(height=tokens.SPACE_LG),
         ft.Image(
@@ -47,7 +45,7 @@ def build_brand_hero(tagline: str | None = None) -> ft.Control:
             fit=ft.BoxFit.CONTAIN,
             # Color-invert with the theme: white on dark, artwork's own
             # colors on light (the owner's requested behavior).
-            color=None if theme.is_light_theme() else ft.Colors.WHITE,
+            color=None if theme.is_light_theme() else theme.WHITE,
             color_blend_mode=ft.BlendMode.SRC_IN,
             error_content=ft.Icon(ft.Icons.TERMINAL, size=tokens.ICON_HERO),
         ),
@@ -69,6 +67,6 @@ def build_brand_hero(tagline: str | None = None) -> ft.Control:
         content=ft.Column(
             controls=controls,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=0,
+            spacing=tokens.SPACE_NONE,
         ),
     )

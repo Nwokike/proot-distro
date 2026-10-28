@@ -6,10 +6,14 @@ option, and a sticky top-of-page banner for ongoing and completed installs.
 
 from __future__ import annotations
 
+import logging
+
 import flet as ft
 
 from core import theme, tokens
 from core.state import state
+
+logger = logging.getLogger(__name__)
 
 
 def show_install_progress_modal(page: ft.Page, target: str) -> None:
@@ -18,7 +22,7 @@ def show_install_progress_modal(page: ft.Page, target: str) -> None:
         controls=[
             ft.Text(
                 line,
-                font_family="JetBrains Mono",
+                font_family=tokens.MONO_FONT,
                 size=tokens.FONT_XXS,
                 color=theme.text_dim(),
             )
@@ -26,7 +30,7 @@ def show_install_progress_modal(page: ft.Page, target: str) -> None:
         ],
         spacing=tokens.SPACE_NANO,
         scroll=ft.ScrollMode.AUTO,
-        height=180,
+        height=tokens.LOG_BOX_HEIGHT,
     )
 
     stage_text = ft.Text(
@@ -37,7 +41,11 @@ def show_install_progress_modal(page: ft.Page, target: str) -> None:
         expand=True,
     )
 
-    progress_ring = ft.ProgressRing(width=22, height=22, stroke_width=2.5)
+    progress_ring = ft.ProgressRing(
+        width=tokens.PROGRESS_RING_MD,
+        height=tokens.PROGRESS_RING_MD,
+        stroke_width=tokens.PROGRESS_RING_STROKE_THIN,
+    )
 
     status_row = ft.Row(
         controls=[progress_ring, stage_text],
@@ -47,21 +55,29 @@ def show_install_progress_modal(page: ft.Page, target: str) -> None:
 
     log_box = ft.Container(
         content=logs_column,
-        bgcolor=ft.Colors.with_opacity(0.06, theme.text()),
-        border=ft.Border.all(1, theme.surface_alt()),
+        bgcolor=ft.Colors.with_opacity(tokens.OPACITY_TEXT_HINT, theme.text()),
+        border=ft.Border.all(tokens.HAIRLINE, theme.surface_alt()),
         border_radius=tokens.RADIUS_SM,
         padding=tokens.SPACE_SM,
     )
 
     def _minimize(_e) -> None:
         state.install_dialog_minimized = True
-        try:
-            page.pop_dialog()
-        except Exception:
-            pass
+        page.pop_dialog()
+        _clear_install_controls()
+
+    def _clear_install_controls() -> None:
+        if getattr(page, "_install_dialog", None) is dialog:
+            page._install_dialog = None
+            page._install_stage_text = None
+            page._install_logs_column = None
+
+    def _on_dismiss(_e) -> None:
+        _clear_install_controls()
 
     dialog = ft.AlertDialog(
         modal=True,
+        on_dismiss=_on_dismiss,
         title=ft.Row(
             controls=[
                 ft.Icon(ft.Icons.DOWNLOAD_ROUNDED, color=theme.primary(), size=tokens.ICON_MD),
@@ -86,6 +102,7 @@ def show_install_progress_modal(page: ft.Page, target: str) -> None:
     # Store control references on the page so _apply_line can update them live.
     page._install_stage_text = stage_text
     page._install_logs_column = logs_column
+    page._install_dialog = dialog
     page.show_dialog(dialog)
 
 
@@ -122,7 +139,7 @@ def build_active_install_banner(page: ft.Page) -> ft.Control | None:
                         "Open shell",
                         icon=ft.Icons.TERMINAL_ROUNDED,
                         on_click=_open,
-                        height=34,
+                        height=tokens.CONTROL_SM,
                         style=ft.ButtonStyle(
                             shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
                         ),
@@ -137,8 +154,10 @@ def build_active_install_banner(page: ft.Page) -> ft.Control | None:
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=tokens.SPACE_SM,
             ),
-            bgcolor=ft.Colors.with_opacity(0.12, theme.ok()),
-            border=ft.Border.all(1, ft.Colors.with_opacity(0.3, theme.ok())),
+            bgcolor=ft.Colors.with_opacity(tokens.OPACITY_MEDIUM, theme.ok()),
+            border=ft.Border.all(
+                tokens.HAIRLINE, ft.Colors.with_opacity(tokens.OPACITY_BORDER, theme.ok())
+            ),
             padding=tokens.SPACE_SM,
             border_radius=tokens.RADIUS_MD,
         )
@@ -152,7 +171,11 @@ def build_active_install_banner(page: ft.Page) -> ft.Control | None:
         return ft.Container(
             content=ft.Row(
                 controls=[
-                    ft.ProgressRing(width=18, height=18, stroke_width=2),
+                    ft.ProgressRing(
+                        width=tokens.PROGRESS_RING_SM,
+                        height=tokens.PROGRESS_RING_SM,
+                        stroke_width=tokens.PROGRESS_RING_STROKE,
+                    ),
                     ft.Column(
                         controls=[
                             ft.Text(
@@ -168,7 +191,7 @@ def build_active_install_banner(page: ft.Page) -> ft.Control | None:
                                 max_lines=1,
                             ),
                         ],
-                        spacing=0,
+                        spacing=tokens.SPACE_NONE,
                         expand=True,
                     ),
                     ft.TextButton(
@@ -181,7 +204,7 @@ def build_active_install_banner(page: ft.Page) -> ft.Control | None:
                 spacing=tokens.SPACE_SM,
             ),
             bgcolor=theme.glass_bg(),
-            border=ft.Border.all(1, theme.primary()),
+            border=ft.Border.all(tokens.HAIRLINE, theme.primary()),
             padding=tokens.SPACE_SM,
             border_radius=tokens.RADIUS_MD,
         )

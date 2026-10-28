@@ -26,7 +26,7 @@ def build_empty_dir_view(on_upload) -> ft.Control:
                 ft.Icon(
                     ft.Icons.FOLDER_OPEN_ROUNDED,
                     size=tokens.ICON_XXL,
-                    color=ft.Colors.with_opacity(0.3, theme.text_dim()),
+                    color=ft.Colors.with_opacity(tokens.OPACITY_BORDER, theme.text_dim()),
                 ),
                 ft.Text(
                     "Empty directory",
@@ -76,7 +76,9 @@ def build_breadcrumbs(path: str, on_navigate) -> ft.Control:
             "/",
             on_click=lambda _e: on_navigate("/"),
             style=ft.ButtonStyle(
-                padding=ft.Padding(4, 2, 4, 2),
+                padding=ft.Padding.symmetric(
+                    horizontal=tokens.SPACE_XS, vertical=tokens.SPACE_MICRO
+                ),
                 color=theme.primary(),
             ),
         )
@@ -109,9 +111,11 @@ def build_breadcrumbs(path: str, on_navigate) -> ft.Control:
                     part,
                     on_click=lambda _e, p=captured: on_navigate(p),
                     style=ft.ButtonStyle(
-                        padding=ft.Padding(4, 2, 4, 2),
+                        padding=ft.Padding.symmetric(
+                            horizontal=tokens.SPACE_XS, vertical=tokens.SPACE_MICRO
+                        ),
                         color=theme.primary(),
                     ),
                 )
             )
-    return ft.Row(controls=crumbs, spacing=0, scroll=ft.ScrollMode.AUTO)
+    return ft.Row(controls=crumbs, spacing=tokens.SPACE_NONE, scroll=ft.ScrollMode.AUTO)

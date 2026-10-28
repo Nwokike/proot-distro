@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import importlib
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 PACKAGE_NAME = "ng.kiri.prootdistro"
 
@@ -75,6 +78,9 @@ def env_contract() -> dict[str, str]:
     try:
         certifi = importlib.import_module("certifi")
         contract["SSL_CERT_FILE"] = certifi.where()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(
+            "certifi unavailable — OCI layer pulls will not validate registry certificates: %r",
+            exc,
+        )
     return contract

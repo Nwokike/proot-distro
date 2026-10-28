@@ -34,7 +34,7 @@ def probe_banner(summary: str) -> ft.Control:
             spacing=tokens.SPACE_XS,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
-        bgcolor=ft.Colors.with_opacity(0.10, warn_color),
+        bgcolor=ft.Colors.with_opacity(tokens.OPACITY_TINT, warn_color),
         border_radius=tokens.RADIUS_SM,
         padding=ft.Padding.symmetric(horizontal=tokens.SPACE_MD, vertical=tokens.SPACE_SM),
     )
@@ -73,7 +73,7 @@ def hints_card(dismissed: bool, on_dismiss) -> ft.Control:
             spacing=tokens.SPACE_XS,
         ),
         bgcolor=theme.glass_bg(),
-        border=ft.Border.all(1, theme.glass_border()),
+        border=ft.Border.all(tokens.HAIRLINE, theme.glass_border()),
         border_radius=tokens.RADIUS_LG,
         padding=ft.Padding.symmetric(horizontal=tokens.SPACE_MD, vertical=tokens.SPACE_SM),
     )

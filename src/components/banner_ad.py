@@ -1,7 +1,7 @@
 """BannerAd — single canonical banner ad builder (mobile only).
 
 Matches the Sherlock pattern:
-- Pre-checks `page.platform.is_mobile()` and returns `ft.Container(width=0, height=0)` on desktop/web.
+- Pre-checks `page.platform.is_mobile()` and returns `ft.Container(width=tokens.HIDDEN, height=tokens.HIDDEN)` on desktop/web.
 - Caches created banner instances in `_BANNER_POOL` by slot string so rebuilds don't recreate them.
 - Full-width wrapper with glass/surface styling and centered 320x50 native ad.
 """
@@ -51,23 +51,23 @@ def build_banner_ad(page: ft.Page | None = None) -> Control:
         try:
             page = ft.context.page
         except Exception:
-            return ft.Container(width=0, height=0)
+            return ft.Container(width=tokens.HIDDEN, height=tokens.HIDDEN)
 
     if not page or not hasattr(page, "platform"):
-        return ft.Container(width=0, height=0)
+        return ft.Container(width=tokens.HIDDEN, height=tokens.HIDDEN)
 
     try:
         if not page.platform.is_mobile() or page.web:
-            return ft.Container(width=0, height=0)
+            return ft.Container(width=tokens.HIDDEN, height=tokens.HIDDEN)
     except Exception:
-        return ft.Container(width=0, height=0)
+        return ft.Container(width=tokens.HIDDEN, height=tokens.HIDDEN)
 
     # Consent gate: the banner must never request an ad before (or without)
     # a UMP verdict — this is the same gate the interstitial path uses.
     from core.state import state
 
     if not state.can_request_ads:
-        return ft.Container(width=0, height=0)
+        return ft.Container(width=tokens.HIDDEN, height=tokens.HIDDEN)
 
     try:
         import flet_ads as fta
@@ -79,20 +79,24 @@ def build_banner_ad(page: ft.Page | None = None) -> Control:
 
         ad = fta.BannerAd(
             unit_id=banner_unit_id(),
-            width=320,
-            height=50,
+            width=tokens.BANNER_WIDTH,
+            height=tokens.BANNER_HEIGHT,
             on_load=lambda _e: logger.info("BannerAd loaded"),
             on_error=lambda e: logger.warning("BannerAd load error: %s", getattr(e, "data", e)),
             on_paid=_on_paid,
         )
     except Exception as e:
         logger.warning("Failed to load BannerAd: %s", e)
-        return ft.Container(width=0, height=0)
+        return ft.Container(width=tokens.HIDDEN, height=tokens.HIDDEN)
 
     banner = ft.Container(
         content=ft.Column(
             [
-                ft.Container(content=ad, width=320, height=50),
+                ft.Container(
+                    content=ad,
+                    width=tokens.BANNER_WIDTH,
+                    height=tokens.BANNER_HEIGHT,
+                ),
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=tokens.SPACE_XS,
@@ -102,7 +106,7 @@ def build_banner_ad(page: ft.Page | None = None) -> Control:
         padding=tokens.SPACE_SM,
         border_radius=tokens.RADIUS_LG,
         bgcolor=theme.glass_bg(),
-        border=ft.Border.all(1, theme.glass_border()),
+        border=ft.Border.all(tokens.HAIRLINE, theme.glass_border()),
     )
 
     return ft.Container(

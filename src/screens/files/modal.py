@@ -22,7 +22,7 @@ def show_manage_files_modal(page: ft.Page, container: str, initial_path: str = "
         content=ft.Container(
             content=FilesView(default_container=container, default_path=initial_path),
             width=tokens.DIALOG_WIDTH_LG + 120,
-            height=480,
+            height=tokens.FILE_MODAL_HEIGHT,
         ),
         actions=[
             ft.TextButton("Close", on_click=lambda _e: page.pop_dialog()),

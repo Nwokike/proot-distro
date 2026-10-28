@@ -102,6 +102,11 @@ M4 shipped (owner-approved plan: full terminal parity, the CollabShell header, t
 3. **Sessions live on observable entries, not on widgets** (CollabShell's `TerminalEntry`): the
    process and a 2000-chunk scrollback live on the entry, so switching tabs re-renders the widget
    and replays the buffer instead of killing the shell. Concurrency is capped at 4 shells.
+   **Threading rule:** the PTY reader thread must marshal terminal output and observable session
+   state changes onto the asyncio event loop captured by `SessionManager.open`; Flet 1.0.4
+   observable listeners execute synchronously. Direct worker-thread mutation can therefore invoke
+   UI listeners off-thread. Unexpected PTY read/write/resize and controlling-TTY errors must remain
+   visible; only PTY `EIO` and `EBADF` after an explicit stop are normal reader-loop termination.
 4. **Both input paths are wired**: `set_on_bytes` (binary DataChannel) AND `on_data` (the string
    path Android's soft keyboard uses). Missing the second path is why characters silently vanish
    on a phone while delete still works — the example's note is now ours.
@@ -353,5 +358,4 @@ Following owner review and device test findings, R6 resolves the terminal spawn 
    - Rewrote slide copy in `src/screens/onboarding_view.py` matching CollabShell and DDGS house design.
 
 Exit state: 99 tests green, ruff clean, AST guard clean.
-
 

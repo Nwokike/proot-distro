@@ -7,7 +7,7 @@ theme flip) never kills the shell — the buffer replays on mount.
 
 from __future__ import annotations
 
-import logging
+import asyncio
 import threading
 from collections import deque
 from typing import Any
@@ -15,8 +15,6 @@ from typing import Any
 import flet as ft
 
 from services import session_service
-
-logger = logging.getLogger(__name__)
 
 MAX_CONCURRENT_SESSIONS = 4
 SCROLLBACK_CHUNKS = 2000
@@ -64,6 +62,7 @@ class SessionManager:
             return entry
 
     async def open(self, container: str) -> SessionEntry:
+        loop = asyncio.get_running_loop()
         with self._lock:
             entry = self.entry(container)
             if entry.session is not None:
@@ -80,22 +79,15 @@ class SessionManager:
                 entry.feed(data)
                 mt = entry.mt
                 if mt is not None:
-                    page = getattr(mt, "page", None)
-                    if page is not None and hasattr(page, "loop") and page.loop is not None:
-                        try:
-                            page.loop.call_soon_threadsafe(mt.send_bytes, data)
-                        except Exception:
-                            mt.send_bytes(data)
-                    else:
-                        try:
-                            mt.send_bytes(data)
-                        except Exception:
-                            pass
+                    loop.call_soon_threadsafe(mt.send_bytes, data)
 
-            def _on_exit(returncode: int | None) -> None:
+            def _record_exit(returncode: int | None) -> None:
                 entry.ready = False
                 entry.session = None
                 entry.error = f"shell exited ({returncode})"
+
+            def _on_exit(returncode: int | None) -> None:
+                loop.call_soon_threadsafe(_record_exit, returncode)
 
             session = session_service.ProotSession(argv, env, _on_bytes, _on_exit)
             session.start()

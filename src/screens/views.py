@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib.metadata as importlib_metadata
-import logging
 from pathlib import Path
 
 import flet as ft
@@ -22,8 +21,6 @@ from core.constants import (
 from core.shared_services import launch_url
 from core.state import state
 from state.controller_ctx import ControllerMethodsCtx
-
-logger = logging.getLogger(__name__)
 
 _LICENSES_DIR = Path(__file__).resolve().parent.parent / "LICENSES"
 _NATIVE_LICENSES = {
@@ -84,10 +81,10 @@ def _step_row(num: str, title: str, desc: str) -> ft.Row:
                     num,
                     size=tokens.FONT_SM,
                     weight=ft.FontWeight.BOLD,
-                    color=ft.Colors.WHITE,
+                    color=theme.WHITE,
                 ),
-                width=26,
-                height=26,
+                width=tokens.CONTROL_XS,
+                height=tokens.CONTROL_XS,
                 border_radius=tokens.RADIUS_PILL,
                 bgcolor=theme.primary(),
                 alignment=ft.Alignment.CENTER,
@@ -118,10 +115,10 @@ def _feature_card(icon: ft.IconData, title: str, desc: str) -> ft.Container:
             controls=[
                 ft.Container(
                     content=ft.Icon(icon, size=tokens.ICON_LG, color=theme.primary()),
-                    width=42,
-                    height=42,
+                    width=tokens.CONTROL_XL,
+                    height=tokens.CONTROL_XL,
                     border_radius=tokens.RADIUS_MD,
-                    bgcolor=ft.Colors.with_opacity(0.12, theme.primary()),
+                    bgcolor=ft.Colors.with_opacity(tokens.OPACITY_MEDIUM, theme.primary()),
                     alignment=ft.Alignment.CENTER,
                 ),
                 ft.Column(
@@ -202,12 +199,9 @@ def DistroView() -> ft.Control:
     async def _on_paste(_e=None) -> None:
         clipboard = getattr(page, "clipboard", None)
         if clipboard is not None:
-            try:
-                pasted = await clipboard.get()
-                if pasted and isinstance(pasted, str):
-                    set_query(pasted.strip())
-            except Exception:
-                pass
+            pasted = await clipboard.get()
+            if pasted and isinstance(pasted, str):
+                set_query(pasted.strip())
 
     def _on_search(_e=None) -> None:
         q = query.strip()
@@ -228,10 +222,10 @@ def DistroView() -> ft.Control:
                             size=tokens.ICON_MD,
                             color=theme.primary(),
                         ),
-                        width=38,
-                        height=38,
+                        width=tokens.CONTROL_LG,
+                        height=tokens.CONTROL_LG,
                         border_radius=tokens.RADIUS_SM,
-                        bgcolor=ft.Colors.with_opacity(0.10, theme.primary()),
+                        bgcolor=ft.Colors.with_opacity(tokens.OPACITY_TINT, theme.primary()),
                         alignment=ft.Alignment.CENTER,
                     ),
                     ft.Text(
@@ -244,7 +238,7 @@ def DistroView() -> ft.Control:
                     ft.FilledButton(
                         "Install",
                         on_click=lambda _e, r=ref: _consent_install(r, ref),
-                        height=34,
+                        height=tokens.CONTROL_SM,
                         style=ft.ButtonStyle(
                             shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
                         ),
@@ -300,7 +294,7 @@ def DistroView() -> ft.Control:
             label="New name",
             value=container,
             text_size=tokens.FONT_SM,
-            height=44,
+            height=tokens.CONTROL_INPUT,
             border=ft.OutlineInputBorder(
                 border_radius=tokens.RADIUS_MD,
                 side=ft.BorderSide(1, theme.surface_alt()),
@@ -335,7 +329,7 @@ def DistroView() -> ft.Control:
             label="Archive name",
             value=f"{container}-backup.tar.gz",
             text_size=tokens.FONT_SM,
-            height=44,
+            height=tokens.CONTROL_INPUT,
             border=ft.OutlineInputBorder(
                 border_radius=tokens.RADIUS_MD,
                 side=ft.BorderSide(1, theme.surface_alt()),
@@ -369,7 +363,7 @@ def DistroView() -> ft.Control:
         source = ft.TextField(
             hint_text="source (container:/path)",
             text_size=tokens.FONT_SM,
-            height=44,
+            height=tokens.CONTROL_INPUT,
             border=ft.OutlineInputBorder(
                 border_radius=tokens.RADIUS_MD,
                 side=ft.BorderSide(1, theme.surface_alt()),
@@ -378,7 +372,7 @@ def DistroView() -> ft.Control:
         destination = ft.TextField(
             hint_text="destination (container:/path)",
             text_size=tokens.FONT_SM,
-            height=44,
+            height=tokens.CONTROL_INPUT,
             border=ft.OutlineInputBorder(
                 border_radius=tokens.RADIUS_MD,
                 side=ft.BorderSide(1, theme.surface_alt()),
@@ -412,7 +406,7 @@ def DistroView() -> ft.Control:
         source = ft.TextField(
             hint_text="source folder (host or container:/path)",
             text_size=tokens.FONT_SM,
-            height=44,
+            height=tokens.CONTROL_INPUT,
             border=ft.OutlineInputBorder(
                 border_radius=tokens.RADIUS_MD,
                 side=ft.BorderSide(1, theme.surface_alt()),
@@ -421,7 +415,7 @@ def DistroView() -> ft.Control:
         dest = ft.TextField(
             hint_text="destination folder",
             text_size=tokens.FONT_SM,
-            height=44,
+            height=tokens.CONTROL_INPUT,
             border=ft.OutlineInputBorder(
                 border_radius=tokens.RADIUS_MD,
                 side=ft.BorderSide(1, theme.surface_alt()),
@@ -553,20 +547,20 @@ def DistroView() -> ft.Control:
                     color=theme.text_dim(),
                 ),
             ],
-            spacing=0,
+            spacing=tokens.SPACE_NONE,
             expand=not is_narrow,
         )
 
         btn_shell = ft.FilledButton(
             "Open shell",
             on_click=lambda _e: page.run_task(methods.open_session, cname),
-            height=34,
+            height=tokens.CONTROL_SM,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
             ),
         )
-        btn_reset = ft.Button("Reset", on_click=_reset, height=34)
-        btn_remove = ft.Button("Remove", on_click=_remove, height=34)
+        btn_reset = ft.Button("Reset", on_click=_reset, height=tokens.CONTROL_SM)
+        btn_remove = ft.Button("Remove", on_click=_remove, height=tokens.CONTROL_SM)
         menu_btn = ft.PopupMenuButton(
             icon=ft.Icons.MORE_VERT,
             icon_size=tokens.ICON_MD,
@@ -622,7 +616,7 @@ def DistroView() -> ft.Control:
                     hint_text="docker image ref (e.g. debian)",
                     value=query,
                     text_size=tokens.FONT_SM,
-                    height=44,
+                    height=tokens.CONTROL_INPUT,
                     expand=True,
                     border=ft.NoInputBorder(),
                     on_change=lambda e: set_query(e.control.value),
@@ -637,7 +631,7 @@ def DistroView() -> ft.Control:
                 ft.FilledButton(
                     "Install",
                     on_click=lambda _e: _consent_install(),
-                    height=34,
+                    height=tokens.CONTROL_SM,
                     style=ft.ButtonStyle(
                         shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
                     ),
@@ -647,7 +641,7 @@ def DistroView() -> ft.Control:
             spacing=tokens.SPACE_XS,
         ),
         bgcolor=theme.glass_bg(),
-        border=ft.Border.all(1, theme.glass_border()),
+        border=ft.Border.all(tokens.HAIRLINE, theme.glass_border()),
         border_radius=tokens.RADIUS_MD,
         padding=ft.Padding(tokens.SPACE_MD, tokens.SPACE_XS, tokens.SPACE_SM, tokens.SPACE_XS),
     )
@@ -717,7 +711,7 @@ def DistroView() -> ft.Control:
                     hint_text="search Docker Hub (e.g. archlinux)",
                     value=query,
                     text_size=tokens.FONT_SM,
-                    height=44,
+                    height=tokens.CONTROL_INPUT,
                     expand=True,
                     border=ft.NoInputBorder(),
                     on_change=lambda e: set_query(e.control.value),
@@ -732,7 +726,7 @@ def DistroView() -> ft.Control:
                 ft.FilledButton(
                     "Search",
                     on_click=_on_search,
-                    height=34,
+                    height=tokens.CONTROL_SM,
                     style=ft.ButtonStyle(
                         shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
                     ),
@@ -742,7 +736,7 @@ def DistroView() -> ft.Control:
             spacing=tokens.SPACE_XS,
         ),
         bgcolor=theme.glass_bg(),
-        border=ft.Border.all(1, theme.glass_border()),
+        border=ft.Border.all(tokens.HAIRLINE, theme.glass_border()),
         border_radius=tokens.RADIUS_MD,
         padding=ft.Padding(tokens.SPACE_MD, tokens.SPACE_XS, tokens.SPACE_SM, tokens.SPACE_XS),
     )
@@ -753,7 +747,7 @@ def DistroView() -> ft.Control:
         controls.append(ft.Text(st.search_status, size=tokens.FONT_XS, color=theme.text_dim()))
     if st.search_results:
         result_cards = []
-        for r in st.search_results[:8]:
+        for r in st.search_results:
             r_name = r.get("name", "")
             r_desc = r.get("description", "") or "No description"
             result_cards.append(
@@ -778,7 +772,7 @@ def DistroView() -> ft.Control:
                             ft.FilledButton(
                                 "Install",
                                 on_click=lambda _e, target=r_name: _consent_install(target),
-                                height=32,
+                                height=tokens.CONTROL_COMPACT,
                                 style=ft.ButtonStyle(
                                     shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
                                 ),
@@ -862,10 +856,10 @@ def DistroView() -> ft.Control:
 def _settings_card(controls: list[ft.Control]) -> ft.Container:
     """Grouped settings card with Material 3 glass surface matching Sherlock."""
     return ft.Container(
-        content=ft.Column(controls=controls, spacing=0),
+        content=ft.Column(controls=controls, spacing=tokens.SPACE_NONE),
         border_radius=tokens.RADIUS_LG,
         bgcolor=theme.glass_bg(),
-        border=ft.Border.all(width=1, color=theme.glass_border()),
+        border=ft.Border.all(width=tokens.HAIRLINE, color=theme.glass_border()),
         clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
     )
 
@@ -884,10 +878,10 @@ def _setting_row(
             size=tokens.ICON_MD,
             color=theme.primary(),
         ),
-        width=36,
-        height=36,
+        width=tokens.CONTROL_MD,
+        height=tokens.CONTROL_MD,
         border_radius=tokens.RADIUS_SM,
-        bgcolor=ft.Colors.with_opacity(0.12, theme.primary()),
+        bgcolor=ft.Colors.with_opacity(tokens.OPACITY_MEDIUM, theme.primary()),
         alignment=ft.Alignment.CENTER,
     )
     text_col = ft.Column(
@@ -911,10 +905,10 @@ def _setting_row(
     if stacked:
         trailing_line = ft.Row(
             controls=[
-                ft.Container(width=36 + tokens.SPACE_MD),
+                ft.Container(width=tokens.CONTROL_MD + tokens.SPACE_MD),
                 trailing,
             ],
-            spacing=0,
+            spacing=tokens.SPACE_NONE,
         )
         content = ft.Column(
             controls=[
@@ -974,9 +968,11 @@ def SettingsView() -> ft.Control:
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=tokens.SPACE_XS,
             ),
-            bgcolor=ft.Colors.with_opacity(0.12, theme.primary()) if selected else theme.surface(),
+            bgcolor=ft.Colors.with_opacity(tokens.OPACITY_MEDIUM, theme.primary())
+            if selected
+            else theme.surface(),
             border=ft.Border.all(
-                1,
+                tokens.HAIRLINE,
                 theme.primary() if selected else theme.surface_alt(),
             ),
             border_radius=tokens.RADIUS_MD,
@@ -1177,7 +1173,7 @@ def SettingsView() -> ft.Control:
                 ft.TextButton("Clear all cache", on_click=lambda _e: _clear_cache()),
                 stacked=is_narrow,
             ),
-            ft.Divider(height=1, color=theme.glass_border()),
+            ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
             _setting_row(
                 ft.Icons.CLEANING_SERVICES_ROUNDED,
                 "Sweep Orphan Layers",
@@ -1203,10 +1199,10 @@ def SettingsView() -> ft.Control:
                                 size=tokens.ICON_MD,
                                 color=theme.primary(),
                             ),
-                            width=36,
-                            height=36,
+                            width=tokens.CONTROL_MD,
+                            height=tokens.CONTROL_MD,
                             border_radius=tokens.RADIUS_SM,
-                            bgcolor=ft.Colors.with_opacity(0.12, theme.primary()),
+                            bgcolor=ft.Colors.with_opacity(tokens.OPACITY_MEDIUM, theme.primary()),
                             alignment=ft.Alignment.CENTER,
                         ),
                         ft.Column(
@@ -1257,7 +1253,7 @@ def SettingsView() -> ft.Control:
                         ft.FilledButton(
                             "Save",
                             on_click=lambda _e: _save_token(),
-                            height=44,
+                            height=tokens.CONTROL_INPUT,
                             style=ft.ButtonStyle(
                                 shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_SM)
                             ),
@@ -1290,7 +1286,7 @@ def SettingsView() -> ft.Control:
                                 width=tokens.HERO_ICON_SIZE,
                                 height=tokens.HERO_ICON_SIZE,
                                 fit=ft.BoxFit.CONTAIN,
-                                color=None if theme.is_light_theme() else ft.Colors.WHITE,
+                                color=None if theme.is_light_theme() else theme.WHITE,
                                 color_blend_mode=ft.BlendMode.SRC_IN,
                             ),
                             alignment=ft.Alignment.CENTER,
@@ -1309,7 +1305,7 @@ def SettingsView() -> ft.Control:
                 padding=tokens.SPACE_MD,
                 alignment=ft.Alignment.CENTER,
             ),
-            ft.Divider(height=1, color=theme.glass_border()),
+            ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
             _setting_row(
                 ft.Icons.INFO_OUTLINE_ROUNDED,
                 f"{APP_NAME} v{APP_VERSION} ({APP_BUILD_NUMBER})",
@@ -1317,7 +1313,7 @@ def SettingsView() -> ft.Control:
                 ft.TextButton("Changelog", on_click=_open_changelog),
                 stacked=is_narrow,
             ),
-            ft.Divider(height=1, color=theme.glass_border()),
+            ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
             _setting_row(
                 ft.Icons.GAVEL_ROUNDED,
                 "Open-Source Licenses",
@@ -1325,7 +1321,7 @@ def SettingsView() -> ft.Control:
                 ft.TextButton("View Licenses", on_click=_licenses),
                 stacked=is_narrow,
             ),
-            ft.Divider(height=1, color=theme.glass_border()),
+            ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
             _setting_row(
                 ft.Icons.POLICY_ROUNDED,
                 "Privacy Policy",
@@ -1333,11 +1329,11 @@ def SettingsView() -> ft.Control:
                 ft.OutlinedButton(
                     "View Policy",
                     on_click=lambda _e: page.run_task(launch_url, PRIVACY_POLICY_URL, page),
-                    height=36,
+                    height=tokens.CONTROL_MD,
                 ),
                 stacked=is_narrow,
             ),
-            ft.Divider(height=1, color=theme.glass_border()),
+            ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
             _setting_row(
                 ft.Icons.CHECK_CIRCLE_OUTLINE_ROUNDED
                 if st.probe_passed

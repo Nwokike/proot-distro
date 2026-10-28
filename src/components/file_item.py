@@ -103,9 +103,9 @@ def build_file_item(
         )
 
     return ft.Container(
-        bgcolor=ft.Colors.with_opacity(0.12, theme.primary())
+        bgcolor=ft.Colors.with_opacity(tokens.OPACITY_MEDIUM, theme.primary())
         if is_selected
-        else ft.Colors.TRANSPARENT,
+        else theme.TRANSPARENT,
         border_radius=tokens.RADIUS_MD,
         content=ft.Row(
             controls=controls,

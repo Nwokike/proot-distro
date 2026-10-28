@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import flet as ft
 
+from core.tokens import OPACITY_CONTAINER
+
 
 class AppColors:
+    WHITE = ft.Colors.WHITE
     # Terminal-native brand: Catppuccin-derived dark, clean light.
     LIGHT_BG = "#F4F4F8"
     LIGHT_SURFACE = "#FFFFFF"
@@ -32,6 +35,7 @@ class AppColors:
     WARN = "#F38BA8"
     OK = "#A6E3A1"
     TERMINAL_BG = "#0D0D0D"
+    TRANSPARENT = ft.Colors.TRANSPARENT
 
     # Light-mode status colors — the dark pastels fail 3:1 on white
     # (measured 1.49/2.32 in the design-system audit); these are the ≥3:1
@@ -130,11 +134,11 @@ def build_theme() -> tuple[ft.Theme, ft.Theme]:
     def scheme(primary_c, surface_c, on_surface_c, on_surface_variant_c, warn_c) -> ft.ColorScheme:
         return ft.ColorScheme(
             primary=primary_c,
-            on_primary="#FFFFFF",
-            primary_container=ft.Colors.with_opacity(0.14, primary_c),
+            on_primary=AppColors.WHITE,
+            primary_container=ft.Colors.with_opacity(OPACITY_CONTAINER, primary_c),
             on_primary_container=primary_c,
             secondary=primary_c,
-            on_secondary="#FFFFFF",
+            on_secondary=AppColors.WHITE,
             surface=surface_c,
             on_surface=on_surface_c,
             surface_container=AppColors.LIGHT_SURFACE_ALT
@@ -142,7 +146,7 @@ def build_theme() -> tuple[ft.Theme, ft.Theme]:
             else AppColors.DARK_SURFACE_ALT,
             on_surface_variant=on_surface_variant_c,
             error=warn_c,
-            on_error="#FFFFFF",
+            on_error=AppColors.WHITE,
             outline=on_surface_variant_c,
         )
 
@@ -175,6 +179,10 @@ def glass_bg() -> str:
 
 def glass_border() -> str:
     return AppColors.LIGHT_GLASS_BORDER if is_light_theme() else AppColors.DARK_GLASS_BORDER
+
+
+WHITE = AppColors.WHITE
+TRANSPARENT = AppColors.TRANSPARENT
 
 
 def apply_theme_mode(page: ft.Page, mode: str) -> None:

@@ -242,8 +242,8 @@ def _tree_bytes(path: Path) -> int:
         for f in filenames:
             try:
                 total += (Path(dirpath) / f).stat().st_size
-            except OSError:
-                pass
+            except OSError as exc:
+                logger.debug("size walk skipped %s: %r", Path(dirpath) / f, exc)
     return total
 
 
@@ -258,8 +258,8 @@ def _container_rows() -> list[dict]:
         image, arch = "", ""
         try:
             image, arch = paths.container_image_origin(name)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("image origin unavailable for %s: %r", name, exc)
         rows.append(
             {
                 "name": name,
@@ -349,8 +349,8 @@ def cached_images() -> list[dict]:
             path = image.get("full_path") or image.get("path")
             if path and Path(path).is_dir():
                 size = _tree_bytes(Path(path))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("cached image size unavailable: %r", exc)
         rows.append(
             {
                 "identifier": image.get("image_ref") or image.get("id") or "?",
@@ -553,14 +553,14 @@ def inspect_container(name: str) -> dict:
     origin_image, origin_arch = "", ""
     try:
         origin_image, origin_arch = paths.container_image_origin(name)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("image origin unavailable for %s: %r", name, exc)
 
     config = {}
     try:
         config = paths.container_image_config(name) or {}
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("OCI config unavailable for %s: %r", name, exc)
 
     os_release = {}
     try:
@@ -572,8 +572,8 @@ def inspect_container(name: str) -> dict:
                 if "=" in line and not line.startswith("#"):
                     k, _, v = line.partition("=")
                     os_release[k.strip()] = v.strip().strip('"').strip("'")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("guest os-release unreadable for %s: %r", name, exc)
 
     return {
         "name": name,

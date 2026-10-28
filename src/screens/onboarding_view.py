@@ -22,10 +22,10 @@ def _feature_row(icon: ft.IconData, title: str, subtitle: str) -> ft.Container:
             controls=[
                 ft.Container(
                     content=ft.Icon(icon, size=tokens.ICON_LG, color=theme.primary()),
-                    width=42,
-                    height=42,
+                    width=tokens.ONBOARDING_ICON,
+                    height=tokens.ONBOARDING_ICON,
                     border_radius=tokens.RADIUS_MD,
-                    bgcolor=ft.Colors.with_opacity(0.12, theme.primary()),
+                    bgcolor=ft.Colors.with_opacity(tokens.OPACITY_MEDIUM, theme.primary()),
                     alignment=ft.Alignment.CENTER,
                 ),
                 ft.Column(
@@ -49,7 +49,7 @@ def _feature_row(icon: ft.IconData, title: str, subtitle: str) -> ft.Container:
             spacing=tokens.SPACE_LG,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
-        padding=ft.Padding(0, tokens.SPACE_SM, 0, tokens.SPACE_SM),
+        padding=ft.Padding.symmetric(horizontal=tokens.SPACE_NONE, vertical=tokens.SPACE_SM),
     )
 
 
@@ -62,10 +62,10 @@ def _onboarding_step_row(num: str, title: str, desc: str) -> ft.Row:
                     num,
                     size=tokens.FONT_SM,
                     weight=ft.FontWeight.BOLD,
-                    color=ft.Colors.WHITE,
+                    color=theme.WHITE,
                 ),
-                width=28,
-                height=28,
+                width=tokens.ONBOARDING_ICON_SM,
+                height=tokens.ONBOARDING_ICON_SM,
                 border_radius=tokens.RADIUS_PILL,
                 bgcolor=theme.primary(),
                 alignment=ft.Alignment.CENTER,
@@ -167,11 +167,11 @@ def _build_slide_2() -> ft.Column:
                 ),
                 padding=tokens.SPACE_MD,
                 border_radius=tokens.RADIUS_MD,
-                bgcolor=ft.Colors.with_opacity(0.06, theme.text()),
+                bgcolor=ft.Colors.with_opacity(tokens.OPACITY_TEXT_HINT, theme.text()),
             ),
         ],
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-        spacing=0,
+        spacing=tokens.SPACE_NONE,
         scroll=ft.ScrollMode.AUTO,
     )
 
@@ -222,7 +222,7 @@ def _build_slide_3() -> ft.Column:
                 ),
                 padding=tokens.SPACE_MD,
                 border_radius=tokens.RADIUS_MD,
-                bgcolor=ft.Colors.with_opacity(0.08, theme.ok()),
+                bgcolor=ft.Colors.with_opacity(tokens.OPACITY_LIGHT, theme.ok()),
             ),
             ft.Container(height=tokens.SPACE_LG),
             ft.Text(
@@ -233,7 +233,7 @@ def _build_slide_3() -> ft.Column:
             ),
         ],
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-        spacing=0,
+        spacing=tokens.SPACE_NONE,
         scroll=ft.ScrollMode.AUTO,
     )
 
@@ -275,12 +275,12 @@ def OnboardingView() -> ft.Control:
     # Indicator dots matching CollabShell / DDGS
     dots = [
         ft.Container(
-            width=18 if i == slide_index else 6,
-            height=6,
-            border_radius=3,
+            width=tokens.DOT_ACTIVE if i == slide_index else tokens.DOT_INACTIVE,
+            height=tokens.DOT_HEIGHT,
+            border_radius=tokens.DOT_RADIUS,
             bgcolor=theme.primary()
             if i == slide_index
-            else ft.Colors.with_opacity(0.24, theme.text()),
+            else ft.Colors.with_opacity(tokens.OPACITY_SELECTED, theme.text()),
             animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
         )
         for i in range(TOTAL_SLIDES)
@@ -338,7 +338,7 @@ def OnboardingView() -> ft.Control:
                     ),
                     nav_row,
                 ],
-                spacing=0,
+                spacing=tokens.SPACE_NONE,
                 expand=True,
             ),
             bgcolor=theme.bg(),

@@ -13,6 +13,8 @@ hands bytes to `on_bytes`, and TIOCSWINSZ resize.
 
 from __future__ import annotations
 
+import errno
+import logging
 import os
 import platform
 import re
@@ -24,6 +26,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 from services import proot_service
+
+logger = logging.getLogger(__name__)
 
 Env = dict[str, str]
 Argv = list[str]
@@ -53,33 +57,24 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
 
     # If rootfs was relative or missing, query proot_service storage
     if rootfs_path is None or not rootfs_path.is_dir():
-        try:
-            from core import storage_paths
+        from core import storage_paths
 
-            candidate = (
-                storage_paths.xdg_data_home() / "proot-distro" / "containers" / container / "rootfs"
-            )
-            if candidate.is_dir():
-                rootfs_path = candidate
-        except Exception:
-            pass
+        candidate = (
+            storage_paths.xdg_data_home() / "proot-distro" / "containers" / container / "rootfs"
+        )
+        if candidate.is_dir():
+            rootfs_path = candidate
 
     # Ensure shm and l2s directories on host filesystem
     shm_bind: str | None = None
     if rootfs_path and rootfs_path.is_dir():
         shm = rootfs_path / "tmp"
-        try:
-            shm.mkdir(parents=True, exist_ok=True)
-            os.chmod(shm, 0o1777)  # noqa: S103 - sticky bit required for /dev/shm
-        except OSError:
-            pass
+        shm.mkdir(parents=True, exist_ok=True)
+        os.chmod(shm, 0o1777)  # noqa: S103 - sticky bit required for /dev/shm
         shm_bind = f"--bind={shm}:/dev/shm"
 
         l2s = rootfs_path / ".l2s"
-        try:
-            l2s.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            pass
+        l2s.mkdir(parents=True, exist_ok=True)
         env["PROOT_L2S_DIR"] = str(l2s)
 
     # Hardened Android extensions (device-proven in M0 spike)
@@ -188,13 +183,10 @@ class ProotSession:
         """Child process setup: own session + controlling TTY (proven in M0 spike-6)."""
         os.setsid()
         if self._slave_fd is not None:
-            try:
-                import fcntl
-                import termios
+            import fcntl
+            import termios
 
-                fcntl.ioctl(self._slave_fd, termios.TIOCSCTTY, 0)
-            except OSError:
-                pass
+            fcntl.ioctl(self._slave_fd, termios.TIOCSCTTY, 0)
 
     def start(self) -> None:
         if self._process is not None:
@@ -217,12 +209,12 @@ class ProotSession:
             self._slave_fd = None
             try:
                 os.close(slave_fd)
-            except OSError:
-                pass
+            except OSError as exc:
+                logger.debug("slave fd already closed: %r", exc)
             try:
                 os.close(master_fd)
-            except OSError:
-                pass
+            except OSError as exc:
+                logger.debug("master fd already closed: %r", exc)
             raise
         self._slave_fd = None
         os.close(slave_fd)
@@ -238,8 +230,12 @@ class ProotSession:
                     break
                 try:
                     data = os.read(master_fd, 4096)
-                except OSError, ValueError:
-                    break
+                except OSError as exc:
+                    if exc.errno == errno.EIO or (
+                        exc.errno == errno.EBADF and self._master_fd is None
+                    ):
+                        break
+                    raise
                 if data:
                     self._on_bytes(data)
                 else:
@@ -258,44 +254,32 @@ class ProotSession:
         total = len(payload)
         offset = 0
         while offset < total:
-            try:
-                written = os.write(master_fd, payload[offset:])
-                if written <= 0:
-                    break
-                offset += written
-            except OSError, ValueError:
-                break
+            written = os.write(master_fd, payload[offset:])
+            if written <= 0:
+                raise OSError("PTY write returned no bytes")
+            offset += written
 
     def resize(self, cols: int, rows: int) -> None:
         if self._master_fd is None or cols <= 0 or rows <= 0:
             return
-        try:
-            import fcntl
-            import termios
+        import fcntl
+        import termios
 
-            winsize = struct.pack("HHHH", rows, cols, 0, 0)
-            fcntl.ioctl(self._master_fd, termios.TIOCSWINSZ, winsize)
-        except Exception:
-            pass
+        winsize = struct.pack("HHHH", rows, cols, 0, 0)
+        fcntl.ioctl(self._master_fd, termios.TIOCSWINSZ, winsize)
 
     def stop(self) -> None:
         process, self._process = self._process, None
         master_fd, self._master_fd = self._master_fd, None
         if master_fd is not None:
-            try:
-                os.close(master_fd)
-            except OSError:
-                pass
+            os.close(master_fd)
         if process is not None and process.poll() is None:
             process.terminate()
             try:
                 process.wait(timeout=2.0)
             except subprocess.TimeoutExpired:
                 process.kill()
-                try:
-                    process.wait(timeout=1.0)
-                except Exception:
-                    pass
+                process.wait(timeout=1.0)
             self.returncode = process.poll()
         reader, self._reader = self._reader, None
         if reader is not None and reader.is_alive():

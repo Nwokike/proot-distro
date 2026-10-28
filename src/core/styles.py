@@ -18,7 +18,7 @@ def glass_card(content: ft.Control, padding: int | ft.Padding = tokens.SPACE_MD)
         padding=padding,
         border_radius=tokens.RADIUS_LG,
         bgcolor=theme.glass_bg(),
-        border=ft.Border.all(1, theme.glass_border()),
+        border=ft.Border.all(tokens.HAIRLINE, theme.glass_border()),
     )
 
 
@@ -29,7 +29,7 @@ def section_header(title: str, action: ft.Control | None = None) -> ft.Control:
         size=tokens.FONT_SM,
         weight=ft.FontWeight.BOLD,
         color=theme.primary(),
-        style=ft.TextStyle(letter_spacing=1),
+        style=ft.TextStyle(letter_spacing=tokens.LETTER_SPACING),
     )
     if action is None:
         return ft.Container(
@@ -93,7 +93,9 @@ def chip(
         ),
         border_radius=tokens.RADIUS_SM,
         bgcolor=(
-            ft.Colors.with_opacity(0.12, tint) if active else ft.Colors.with_opacity(0.05, tint)
+            ft.Colors.with_opacity(tokens.OPACITY_MEDIUM, tint)
+            if active
+            else ft.Colors.with_opacity(tokens.OPACITY_SUBTLE, tint)
         ),
     )
 
@@ -149,7 +151,7 @@ def loading_state(label: str = "Loading…") -> ft.Control:
     return ft.Container(
         content=ft.Column(
             controls=[
-                ft.ProgressRing(width=28, height=28),
+                ft.ProgressRing(width=tokens.PROGRESS_RING_XL, height=tokens.PROGRESS_RING_XL),
                 ft.Text(label, size=tokens.FONT_SM, color=theme.text_dim()),
             ],
             alignment=ft.MainAxisAlignment.CENTER,

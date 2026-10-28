@@ -8,7 +8,7 @@ from __future__ import annotations
 import flet as ft
 
 from components.app_header import AppHeader
-from core import theme
+from core import theme, tokens
 from core.state import state
 from screens import (
     DistroView,
@@ -93,12 +93,12 @@ def AppShell() -> ft.Control:
                 selected_index=active_tab,
                 on_change=_on_change,
                 bgcolor=theme.surface(),
-                indicator_color=ft.Colors.with_opacity(0.12, theme.primary()),
+                indicator_color=ft.Colors.with_opacity(tokens.OPACITY_MEDIUM, theme.primary()),
                 label_behavior=ft.NavigationBarLabelBehavior.ALWAYS_SHOW,
             )
         )
 
     return ft.SafeArea(
-        content=ft.Column(controls=chrome, spacing=0, expand=True),
+        content=ft.Column(controls=chrome, spacing=tokens.SPACE_NONE, expand=True),
         expand=True,
     )

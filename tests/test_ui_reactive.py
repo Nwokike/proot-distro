@@ -121,6 +121,52 @@ def test_state_changes_rerender_without_frozen_errors():
     assert _render(screens.SettingsView) is not None
 
 
+def test_distro_view_renders_more_than_eight_search_results():
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    import screens
+    from core.state import state
+    from state.controller_ctx import ControllerMethods, ControllerMethodsCtx
+
+    names = [f"library/image-{i}" for i in range(12)]
+    state.search_results = [{"name": name, "description": "test image"} for name in names]
+
+    class DesktopPlatform:
+        def is_mobile(self):
+            return False
+
+    page = SimpleNamespace(platform=DesktopPlatform(), width=900, web=False)
+    renderer = Renderer()
+    with (
+        patch.object(type(ft.context), "page", property(lambda _self: page)),
+        renderer.with_context(),
+    ):
+        renderer.push_context(ControllerMethodsCtx, ControllerMethods())
+        component = renderer.render_component(screens.DistroView.__component_impl__, (), {})
+        component.before_update()
+        renderer.pop_context(ControllerMethodsCtx)
+
+    view = component._b
+    rendered_names = {
+        control.value
+        for control in _walk(view)
+        if isinstance(control, ft.Text) and isinstance(control.value, str)
+    }
+
+    assert set(names) <= rendered_names
+
+
+def test_files_view_keeps_responsive_list_and_banner():
+    source = (ROOT / "src" / "screens" / "files" / "__init__.py").read_text(encoding="utf-8")
+
+    assert 'pooled_banner_ad("files-1", page)' in source
+    assert re.search(
+        r"ft\.ListView\(\s*controls=file_items,\s*spacing=tokens\.SPACE_XXS,\s*expand=True",
+        source,
+    )
+
+
 def test_licenses_view_has_compliance_content():
     import screens
 

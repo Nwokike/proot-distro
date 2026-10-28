@@ -109,35 +109,24 @@ class AppController:
     def _mount_services(self) -> None:
         mounted = shared_services.mount_shared_services(self.page)
         self.prefs = mounted.get("prefs")
-        try:
-            self.file_picker = ft.FilePicker()
-            self.page.services.append(self.file_picker)
-        except Exception as exc:
-            logger.debug("file picker unavailable: %s", exc)
-            self.file_picker = None
-        try:
-            self.connectivity = ft.Connectivity()
-            self.connectivity.on_change = self._on_connectivity
-            self.page.services.append(self.connectivity)
-        except Exception as exc:
-            logger.debug("connectivity unavailable: %s", exc)
-            self.connectivity = None
+        self.file_picker = ft.FilePicker()
+        self.page.services.append(self.file_picker)
+        self.connectivity = ft.Connectivity()
+        self.connectivity.on_change = self._on_connectivity
+        self.page.services.append(self.connectivity)
 
     async def _restore_prefs(self) -> None:
         if self.prefs is None:
             return
-        try:
-            mode = await self.prefs.get("theme_mode")
-            if isinstance(mode, str) and mode in _THEME_MODES:
-                state.theme_mode = mode
-                theme.apply_theme_mode(self.page, mode)
-            token = await self.prefs.get("docker_token")
-            if isinstance(token, str):
-                state.docker_token = token
-                if token:
-                    os.environ["PD_DOCKER_AUTH"] = token
-        except Exception as exc:
-            logger.debug("prefs restore failed: %r", exc)
+        mode = await self.prefs.get("theme_mode")
+        if isinstance(mode, str) and mode in _THEME_MODES:
+            state.theme_mode = mode
+            theme.apply_theme_mode(self.page, mode)
+        token = await self.prefs.get("docker_token")
+        if isinstance(token, str):
+            state.docker_token = token
+            if token:
+                os.environ["PD_DOCKER_AUTH"] = token
         state.theme_revision += 1
 
     def _noop_cancel(self) -> None:
@@ -150,30 +139,13 @@ class AppController:
     # ── actions (state-only mutations) ────────────────────────────────────────
 
     async def refresh_containers(self) -> None:
-        notes: list[str] = []
-        try:
-            state.containers = await asyncio.to_thread(self.proot.list_containers)
-        except Exception as exc:
-            state.containers = []
-            notes.append(f"container list unavailable: {_reason(exc)}")
-        try:
-            state.storage_bytes = await asyncio.to_thread(self.proot.storage_bytes)
-        except Exception as exc:
-            state.storage_bytes = 0
-            notes.append(f"storage size unavailable: {_reason(exc)}")
-        try:
-            cached = await asyncio.to_thread(self.proot.cached_images)
-            state.cached_count = len(cached)
-            state.cached_images = cached
-        except Exception as exc:
-            state.cached_count = 0
-            state.cached_images = []
-            notes.append(f"cached-image list unavailable: {_reason(exc)}")
-        try:
-            state.busy_locks = await asyncio.to_thread(self.proot.busy_locks)
-        except Exception:
-            state.busy_locks = []
-        state.data_note = " · ".join(notes)
+        state.containers = await asyncio.to_thread(self.proot.list_containers)
+        state.storage_bytes = await asyncio.to_thread(self.proot.storage_bytes)
+        cached = await asyncio.to_thread(self.proot.cached_images)
+        state.cached_count = len(cached)
+        state.cached_images = cached
+        state.busy_locks = await asyncio.to_thread(self.proot.busy_locks)
+        state.data_note = ""
 
     async def install_distro(self, image: str, name: str) -> None:
         if state.installing:
@@ -202,10 +174,7 @@ class AppController:
             logs_ctrl = getattr(self.page, "_install_logs_column", None)
             if stage_ctrl is not None:
                 stage_ctrl.value = clean or state.install_stage
-                try:
-                    stage_ctrl.update()
-                except Exception:
-                    pass
+                stage_ctrl.update()
             from core import tokens as _t
 
             if logs_ctrl is not None:
@@ -218,10 +187,10 @@ class AppController:
                     )
                     for ln in state.install_logs[-60:]
                 ]
-                try:
-                    logs_ctrl.update()
-                except Exception:
-                    pass
+                logs_ctrl.update()
+            dialog = getattr(self.page, "_install_dialog", None)
+            if dialog is not None and dialog.open:
+                dialog.update()
 
         def _on_line(line: str) -> None:
             loop.call_soon_threadsafe(_apply_line, line)
@@ -244,6 +213,8 @@ class AppController:
         except Exception as exc:
             state.install_stage = f"install failed: {exc!r}"
             self.show_snack(state.install_stage)
+            logger.exception("Could not install %s", image)
+            raise
         finally:
             installed_now = state.installing
             state.installing = None
@@ -251,17 +222,16 @@ class AppController:
             # Close the install progress modal automatically when done, unless
             # the user already minimized it into the background banner.
             if not state.install_dialog_minimized:
-                try:
-                    self.page.pop_dialog()
-                except Exception:
-                    pass
+                self.page.pop_dialog()
+            dialog = getattr(self.page, "_install_dialog", None)
+            if dialog is not None and not dialog.open:
+                self.page._install_dialog = None
+                self.page._install_stage_text = None
+                self.page._install_logs_column = None
             if installed_now and outcome is not None and outcome.ok:
                 state.install_completed = True
                 state.last_installed = installed_now
-                try:
-                    await self.ad_service.show_interstitial()
-                except Exception:
-                    pass
+                await self.ad_service.show_interstitial()
 
     async def remove_container(self, name: str) -> None:
         outcome = await asyncio.to_thread(self.proot.remove_container, name)
@@ -275,23 +245,18 @@ class AppController:
         self.show_snack(f"reset {name}" if outcome.ok else self.proot.friendly_job_error(outcome))
         await self.refresh_containers()
         if outcome.ok:
-            try:
-                await self.ad_service.show_interstitial()
-            except Exception:
-                pass
+            await self.ad_service.show_interstitial()
 
     async def search_distro(self, query: str) -> None:
         state.search_status = f"searching “{query}”…"
-        try:
-            await self.ad_service.show_interstitial()
-        except Exception:
-            pass
+        await self.ad_service.show_interstitial()
         try:
             results = await asyncio.to_thread(self.proot.search_images, query)
         except Exception as exc:
             state.search_results = []
             state.search_status = f"search failed: {_reason(exc)}"
-            return
+            logger.exception("Distro search failed for %r", query)
+            raise
         state.search_results = results
         state.search_status = (
             f"{len(results)} result(s) — tap one to fill the fields"
@@ -310,6 +275,8 @@ class AppController:
             )
         except Exception as exc:
             self.show_snack(f"cache clear failed: {exc!r}")
+            logger.exception("Could not clear the image cache")
+            raise
         finally:
             state.cache_busy = False
             await self.refresh_containers()
@@ -325,6 +292,8 @@ class AppController:
             )
         except Exception as exc:
             self.show_snack(f"orphan sweep failed: {exc!r}")
+            logger.exception("Could not sweep orphan image layers")
+            raise
         finally:
             state.cache_busy = False
             await self.refresh_containers()
@@ -340,6 +309,8 @@ class AppController:
             )
         except Exception as exc:
             self.show_snack(f"image remove failed: {exc!r}")
+            logger.exception("Could not remove cached image %s", identifier)
+            raise
         finally:
             state.cache_busy = False
             await self.refresh_containers()
@@ -352,10 +323,7 @@ class AppController:
         else:
             os.environ.pop("PD_DOCKER_AUTH", None)
         if self.prefs is not None:
-            try:
-                await self.prefs.set("docker_token", token)
-            except Exception:
-                pass
+            await self.prefs.set("docker_token", token)
         self.show_snack("Docker Hub token saved" if token else "Docker Hub token cleared")
 
     async def set_theme_mode(self, mode: str) -> None:
@@ -365,10 +333,7 @@ class AppController:
         state.theme_revision += 1
         theme.apply_theme_mode(self.page, mode)
         if self.prefs is not None:
-            try:
-                await self.prefs.set("theme_mode", mode)
-            except Exception:
-                pass
+            await self.prefs.set("theme_mode", mode)
 
     async def cycle_theme_mode(self) -> None:
         current = state.theme_mode if state.theme_mode in _THEME_ORDER else "system"
@@ -398,31 +363,22 @@ class AppController:
         """The deck shows until it is dismissed once."""
         if self.prefs is None:
             return
-        try:
-            done = await self.prefs.get(STORAGE_ONBOARDING_DONE)
-            state.onboarding_done = done == "true"
-            hints = await self.prefs.get(STORAGE_HINTS_DISMISSED)
-            if hints == "true":
-                state.hints_dismissed = True
-        except Exception as exc:
-            logger.debug("onboarding restore failed: %r", exc)
+        done = await self.prefs.get(STORAGE_ONBOARDING_DONE)
+        state.onboarding_done = done == "true"
+        hints = await self.prefs.get(STORAGE_HINTS_DISMISSED)
+        if hints == "true":
+            state.hints_dismissed = True
 
     async def finish_onboarding(self) -> None:
         state.onboarding_done = True
         if self.prefs is not None:
-            try:
-                await self.prefs.set(STORAGE_ONBOARDING_DONE, "true")
-            except Exception:
-                pass
+            await self.prefs.set(STORAGE_ONBOARDING_DONE, "true")
 
     async def dismiss_hints(self) -> None:
         """The hints card stays gone across launches, not per-render."""
         state.hints_dismissed = True
         if self.prefs is not None:
-            try:
-                await self.prefs.set(STORAGE_HINTS_DISMISSED, "true")
-            except Exception:
-                pass
+            await self.prefs.set(STORAGE_HINTS_DISMISSED, "true")
 
     async def _check_for_updates(self) -> None:
         """Silent background check; a newer build flips the header chip."""
@@ -430,9 +386,9 @@ class AppController:
 
         try:
             data = await check_for_update()
-        except Exception as exc:
-            logger.debug("Startup update check skipped: %s", exc)
-            return
+        except Exception:
+            logger.exception("Startup update check failed")
+            raise
         if not data:
             return
         state.update_available = True
@@ -488,10 +444,7 @@ class AppController:
             self.show_snack(f"backup staged at {staging}")
             return
         self.show_snack(f"backup written to {target}")
-        try:
-            await self.ad_service.show_interstitial()
-        except Exception:
-            pass
+        await self.ad_service.show_interstitial()
 
     async def restore_container(self) -> None:
         if self.file_picker is None:
@@ -509,10 +462,7 @@ class AppController:
         )
         await self.refresh_containers()
         if outcome.ok:
-            try:
-                await self.ad_service.show_interstitial()
-            except Exception:
-                pass
+            await self.ad_service.show_interstitial()
 
     async def copy_path(self, source: str, destination: str) -> None:
         source = source.strip()
@@ -685,21 +635,16 @@ class AppController:
         except Exception as exc:
             state.session_error = f"could not open {container}: {_reason(exc)}"
             self.show_snack(state.session_error)
-            return
+            logger.exception("Could not open shell for %s", container)
+            raise
         state.active_session = container
 
     async def leave_session(self) -> None:
         state.active_session = None
-        try:
-            await self.ad_service.show_interstitial()
-        except Exception:
-            pass
+        await self.ad_service.show_interstitial()
 
     async def close_session(self, container: str) -> None:
         await asyncio.to_thread(self.session_manager.close, container)
         if state.active_session == container:
             state.active_session = None
-        try:
-            await self.ad_service.show_interstitial()
-        except Exception:
-            pass
+        await self.ad_service.show_interstitial()
