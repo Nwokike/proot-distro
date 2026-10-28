@@ -152,6 +152,19 @@ def session_argv(container: str) -> tuple[Env, Argv]:
             env[key] = value
 
     env, argv = _harden_session(env, argv, container)
+
+    # Align with M0-spike: use /bin/sh -i instead of /bin/bash -l for Android
+    # M0-spike used hardcoded argv with /bin/sh -i and it worked on device
+    is_android = bool(os.environ.get("ANDROID_NATIVE_LIBRARY_DIR") or Path("/data/app").exists())
+    if is_android:
+        # Replace the shell command at the end of argv with /bin/sh -i
+        # Upstream typically ends with /bin/bash -l or similar
+        for i in range(len(argv) - 1, -1, -1):
+            if argv[i] in ("/bin/bash", "/bin/sh", "bash", "sh"):
+                # Replace with /bin/sh -i
+                argv[i:] = ["/bin/sh", "-i"]
+                break
+
     return env, argv
 
 
