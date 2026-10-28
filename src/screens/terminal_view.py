@@ -1,6 +1,7 @@
-"""The terminal view — MobileTerminal in the component tree, wired once per
-session. CollabShell pattern: in-screen switcher tabs, action cluster,
-zoom/blink controls, full-width flat chrome, and hardened PTY lifecycle.
+"""The terminal view — Terminal in the component tree, wired once per
+session. M0-spike pattern: plain Terminal control (not MobileTerminal) to avoid
+renderer context issues on Android. CollabShell pattern: in-screen switcher tabs,
+action cluster, zoom/blink controls, full-width flat chrome, and hardened PTY lifecycle.
 """
 
 from __future__ import annotations
@@ -8,7 +9,7 @@ from __future__ import annotations
 import json
 
 import flet as ft
-from flet_terminal import BUILTIN_THEMES, MobileTerminal
+from flet_terminal import BUILTIN_THEMES, Terminal
 
 from components.app_header import theme_button
 from components.banner_ad import pooled_banner_ad
@@ -63,11 +64,10 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
 
     ft.on_mounted(_sync_wakelock)
 
+    # Use plain Terminal control (M0-spike pattern) instead of MobileTerminal
+    # to avoid "no current renderer is set" issues on Android
     if entry.mt is None:
-        entry.mt = MobileTerminal(
-            show_extra_keys=True,
-            show_search=False,
-            show_settings=False,
+        entry.mt = Terminal(
             scrollback=10000,
             font_family=tokens.MONO_FONT,
             theme=BUILTIN_THEMES.get(_theme_name()),
@@ -104,24 +104,18 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
 
         def _on_shortcut(e) -> None:
             sc = getattr(e, "shortcut", "") or ""
-            if sc == "toggle_search":
-                mt.toggle_search()
-            elif sc == "zoom_in":
-                mt.zoom_in()
-            elif sc == "zoom_out":
-                mt.zoom_out()
-            elif sc == "zoom_reset":
-                mt.reset_zoom()
-            elif sc == "clear":
+            if sc == "clear":
                 mt.clear()
             elif sc == "copy":
-                page.run_task(mt.copy_selection_async)
+                # Plain Terminal doesn't have copy_selection_async
+                pass
             elif sc == "paste":
                 page.run_task(mt.paste_async)
             elif sc == "new_terminal":
                 _open_new_session_sheet()
             elif sc == "close_terminal":
                 _confirm_close(page, methods, entry.container)
+            # Note: toggle_search, zoom_in, zoom_out, zoom_reset not available on plain Terminal
 
         mt.set_on_bytes(lambda payload: _write(entry, payload))
         mt.on_data = lambda e: _write(
@@ -224,11 +218,6 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
                 on_click=lambda _e: _open_new_session_sheet(),
             ),
             ft.PopupMenuItem(
-                icon=ft.Icons.COPY_ALL_ROUNDED,
-                content=ft.Text("Copy Selection", size=tokens.FONT_SM),
-                on_click=lambda _e: page.run_task(mt.copy_selection_async),
-            ),
-            ft.PopupMenuItem(
                 icon=ft.Icons.CONTENT_PASTE_ROUNDED,
                 content=ft.Text("Paste", size=tokens.FONT_SM),
                 on_click=lambda _e: page.run_task(mt.paste_async),
@@ -237,11 +226,6 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
                 icon=ft.Icons.CLEAR_ALL_ROUNDED,
                 content=ft.Text("Clear Terminal", size=tokens.FONT_SM),
                 on_click=lambda _e: mt.clear(),
-            ),
-            ft.PopupMenuItem(
-                icon=ft.Icons.FIT_SCREEN_ROUNDED,
-                content=ft.Text("Reset Zoom", size=tokens.FONT_SM),
-                on_click=lambda _e: mt.reset_zoom(),
             ),
             ft.PopupMenuItem(
                 icon=ft.Icons.VISIBILITY_ROUNDED,
