@@ -94,63 +94,10 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
 
     is_android = bool(os.environ.get("ANDROID_NATIVE_LIBRARY_DIR") or Path("/data/app").exists())
     if is_android:
-        # M0-spike minimal working argv: proot -0 -r rootfs -b /dev -b /proc -b /sys -w / /bin/sh -i
-        # Upstream adds many extra binds/flags that may cause Android kernel to kill process
-        # We strip to minimal working set proven in M0 spike
-
-        # Keep only essential flags from upstream
-        essential_flags = {
-            "--rootfs",
-            "--cwd",
-            "--bind=/dev",
-            "--bind=/proc",
-            "--bind=/sys",
-            "--change-id",
-            "--link2symlink",
-            "--sysvipc",
-            "--kill-on-exit",
-            "-L",
-            "--kernel-release",
-            "--bind=/dev/urandom:/dev/random",
-            "--bind=/proc/self/fd:/dev/fd",
-            "--bind=/proc/self/fd/0:/dev/stdin",
-            "--bind=/proc/self/fd/1:/dev/stdout",
-            "--bind=/proc/self/fd/2:/dev/stderr",
-        }
-
-        # Filter head to keep only essential flags
-        filtered_head = []
-        for flag in head:
-            # Keep flag if it's essential or starts with essential prefix
-            keep = False
-            for essential in essential_flags:
-                if flag == essential or flag.startswith(essential + "="):
-                    keep = True
-                    break
-            if keep:
-                filtered_head.append(flag)
-
-        # Ensure critical M0-spike flags are present
-        _add_if_missing("-0")  # --no-new-privs: critical for Android security
         _add_if_missing("--kill-on-exit")
         _add_if_missing("--link2symlink")
         _add_if_missing("--sysvipc")
         _add_if_missing("-L")
-
-        # Ensure basic binds are present (upstream should have them but verify)
-        _add_if_missing("--bind=/dev")
-        _add_if_missing("--bind=/proc")
-        _add_if_missing("--bind=/sys")
-
-        # Ensure working directory is root (M0-spike used -w /)
-        has_cwd = any(f.startswith("--cwd=") for f in filtered_head)
-        if not has_cwd:
-            filtered_head.append("--cwd=/")
-
-        # Ensure shell is /bin/sh -i (M0-spike used this, not /bin/bash -l)
-        # This will be handled by replacing tail below
-
-        head = filtered_head
 
         uname_m = platform.machine() or "aarch64"
         kernel_fake = f"--kernel-release=\\Linux\\localhost\\{platform.release()}\\#1 SMP PREEMPT_DYNAMIC Fri, 10 Oct 2025 00:00:00 +0000\\{uname_m}\\localdomain\\-1\\"
@@ -205,19 +152,6 @@ def session_argv(container: str) -> tuple[Env, Argv]:
             env[key] = value
 
     env, argv = _harden_session(env, argv, container)
-
-    # Align with M0-spike: use /bin/sh -i instead of /bin/bash -l for Android
-    # M0-spike used hardcoded argv with /bin/sh -i and it worked on device
-    is_android = bool(os.environ.get("ANDROID_NATIVE_LIBRARY_DIR") or Path("/data/app").exists())
-    if is_android:
-        # Replace the shell command at the end of argv with /bin/sh -i
-        # Upstream typically ends with /bin/bash -l or similar
-        for i in range(len(argv) - 1, -1, -1):
-            if argv[i] in ("/bin/bash", "/bin/sh", "bash", "sh"):
-                # Replace with /bin/sh -i
-                argv[i:] = ["/bin/sh", "-i"]
-                break
-
     return env, argv
 
 
