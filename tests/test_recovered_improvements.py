@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import flet as ft
 import pytest
@@ -117,3 +118,93 @@ async def test_open_session_logs_and_reraises_the_original_error(caplog):
     assert state.session_error == "could not open debian: session startup failed"
     assert snacks == [state.session_error]
     assert any(record.exc_info for record in caplog.records)
+
+
+@pytest.mark.parametrize(
+    ("method_name", "args"),
+    [
+        ("clear_cache", ()),
+        ("clear_orphan_layers", ()),
+        ("remove_cached_image", ("sha256:abc",)),
+        ("copy_path", ("/source", "/destination")),
+        ("sync_path", ("/source", "/destination")),
+        ("kill_all_sessions", ()),
+        ("kill_session", ("123",)),
+    ],
+)
+@pytest.mark.asyncio
+async def test_maintenance_actions_do_not_trigger_interstitials(method_name, args):
+    class ProotStub:
+        def clear_cache(self, orphan=False):
+            return SimpleNamespace(ok=True)
+
+        def remove_cached_image(self, _identifier):
+            return SimpleNamespace(ok=True)
+
+        def copy_path(self, _source, _destination):
+            return SimpleNamespace(ok=True)
+
+        def sync_path(self, _source, _destination, _checksum, _delete):
+            return SimpleNamespace(ok=True)
+
+        def kill_session(self, _pid, _all=False):
+            return SimpleNamespace(ok=True)
+
+        @staticmethod
+        def friendly_job_error(_outcome):
+            return "operation failed"
+
+    controller = object.__new__(AppController)
+    controller.proot = ProotStub()
+    controller.ad_service = SimpleNamespace(show_interstitial=AsyncMock())
+    controller.show_snack = lambda _message: None
+    controller.refresh_containers = AsyncMock()
+    state.cache_busy = False
+
+    await getattr(controller, method_name)(*args)
+
+    controller.ad_service.show_interstitial.assert_not_awaited()
+
+    state.cache_busy = False
+
+
+@pytest.mark.asyncio
+async def test_distro_search_does_not_interrupt_with_interstitial():
+    class ProotStub:
+        @staticmethod
+        def search_images(_query):
+            return []
+
+    controller = object.__new__(AppController)
+    controller.proot = ProotStub()
+    controller.ad_service = SimpleNamespace(show_interstitial=AsyncMock())
+
+    await controller.search_distro("alpine")
+
+    controller.ad_service.show_interstitial.assert_not_awaited()
+
+
+@pytest.mark.parametrize("succeeded", [True, False])
+@pytest.mark.asyncio
+async def test_container_rename_shows_interstitial_only_after_success(succeeded):
+    class ProotStub:
+        @staticmethod
+        def rename_container(_original, _new):
+            return SimpleNamespace(ok=succeeded)
+
+        @staticmethod
+        def friendly_job_error(_outcome):
+            return "rename failed"
+
+    controller = object.__new__(AppController)
+    controller.proot = ProotStub()
+    controller.ad_service = SimpleNamespace(show_interstitial=AsyncMock())
+    controller.show_snack = lambda _message: None
+    controller.refresh_containers = AsyncMock()
+
+    await controller.rename_container("old", "new")
+
+    if succeeded:
+        controller.ad_service.show_interstitial.assert_awaited_once()
+    else:
+        controller.ad_service.show_interstitial.assert_not_awaited()

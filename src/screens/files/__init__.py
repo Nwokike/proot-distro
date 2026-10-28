@@ -115,11 +115,15 @@ def FilesView(
     if not installed:
         return ft.Column(
             controls=[
-                no_containers_empty_state(),
+                ft.Container(
+                    content=no_containers_empty_state(),
+                    alignment=ft.Alignment.CENTER,
+                    expand=True,
+                ),
+                pooled_banner_ad("files-empty", page),
+                ft.Container(height=tokens.NAV_BAR_CLEARANCE),
             ],
-            alignment=ft.MainAxisAlignment.CENTER,
             expand=True,
-            scroll=ft.ScrollMode.AUTO,
         )
 
     # No container open yet — the picker, mirroring the Terminal tab: each
@@ -181,11 +185,16 @@ def FilesView(
         return ft.Column(
             controls=[
                 section_header("Browse a container"),
-                *picker_rows,
+                ft.ListView(
+                    controls=picker_rows,
+                    spacing=tokens.SPACE_SM,
+                    expand=True,
+                ),
+                pooled_banner_ad("files-picker", page),
+                ft.Container(height=tokens.NAV_BAR_CLEARANCE),
             ],
             spacing=tokens.SPACE_SM,
             expand=True,
-            scroll=ft.ScrollMode.AUTO,
         )
 
     # 1. Top container switcher chips
@@ -408,9 +417,12 @@ def FilesView(
             nav_row,
             action_bar,
             ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
-            card(file_list_content, padding=tokens.SPACE_SM),
+            ft.Container(
+                content=card(file_list_content, padding=tokens.SPACE_SM),
+                expand=True,
+            ),
+            ft.Container(height=tokens.NAV_BAR_CLEARANCE),
         ],
         spacing=tokens.SPACE_SM,
         expand=True,
-        scroll=ft.ScrollMode.AUTO,
     )

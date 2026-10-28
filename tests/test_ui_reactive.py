@@ -161,8 +161,14 @@ def test_files_view_keeps_responsive_list_and_banner():
     source = (ROOT / "src" / "screens" / "files" / "__init__.py").read_text(encoding="utf-8")
 
     assert 'pooled_banner_ad("files-1", page)' in source
+    assert 'pooled_banner_ad("files-picker", page)' in source
+    assert source.count("scroll=ft.ScrollMode.AUTO") == 1
     assert re.search(
         r"ft\.ListView\(\s*controls=file_items,\s*spacing=tokens\.SPACE_XXS,\s*expand=True",
+        source,
+    )
+    assert re.search(
+        r"content=card\(file_list_content, padding=tokens\.SPACE_SM\),\s*expand=True",
         source,
     )
 

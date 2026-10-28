@@ -122,7 +122,6 @@ class DistroActions:
 
     async def search_distro(self, query: str) -> None:
         state.search_status = f"searching “{query}”…"
-        await self.ad_service.show_interstitial()
         try:
             results = await asyncio.to_thread(self.proot.search_images, query)
         except Exception as exc:
@@ -199,6 +198,8 @@ class ContainerActions:
             f"renamed to {new}" if outcome.ok else self.proot.friendly_job_error(outcome)
         )
         await self.refresh_containers()
+        if outcome.ok:
+            await self.ad_service.show_interstitial()
 
     async def backup_container(self, container: str) -> None:
         if self.file_picker is None:
