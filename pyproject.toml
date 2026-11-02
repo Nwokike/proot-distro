@@ -53,6 +53,7 @@ package_files = ["oauthlib/**"]
 "android.permission.ACCESS_NETWORK_STATE" = true
 "android.permission.FOREGROUND_SERVICE" = true
 "android.permission.FOREGROUND_SERVICE_SPECIAL_USE" = true
+"android.permission.POST_NOTIFICATIONS" = true
 
 [tool.flet.android.service."com.dexterous.flutterlocalnotifications.ForegroundService"]
 exported = false

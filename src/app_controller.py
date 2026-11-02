@@ -116,6 +116,18 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             await self.ad_service.preload_interstitial()
 
         self.page.run_task(_consent_and_preload)
+
+        # Request notification permission at startup (Android 13+ requires a
+        # runtime prompt for POST_NOTIFICATIONS). If the user denies, we
+        # re-request each time a foreground service is about to start.
+        async def _request_notification_permission() -> None:
+            try:
+                await self.notifications.request_permissions()
+            except Exception as exc:
+                logger.debug("Notification permission request failed: %s", exc)
+
+        self.page.run_task(_request_notification_permission)
+
         await self.refresh_containers()
 
     def _mount_services(self) -> None:

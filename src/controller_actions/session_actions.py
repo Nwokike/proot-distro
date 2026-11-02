@@ -16,6 +16,21 @@ logger = logging.getLogger(__name__)
 
 
 class SessionActions:
+    async def _ensure_notification_permission(self) -> bool:
+        """Request POST_NOTIFICATIONS (Android 13+) before starting the FGS.
+        Returns True when notifications are available."""
+        notifications = getattr(self, "notifications", None)
+        if notifications is None:
+            return False
+        try:
+            granted = await notifications.request_permissions()
+            if not granted:
+                logger.warning("Notification permission denied by user")
+            return granted
+        except Exception as exc:
+            logger.debug("Notification permission request failed: %s", exc)
+            return False
+
     async def _start_fgs(self, container: str) -> None:
         """Start the Termux-style foreground service notification (keeps the
         app alive in the background while Linux sessions are running)."""
@@ -25,6 +40,7 @@ class SessionActions:
         try:
             from flet_notifications import AndroidForegroundServiceType, AndroidServiceStartType
 
+            await self._ensure_notification_permission()
             await notifications.start_foreground_service(
                 id=1,
                 title="Proot Distro",
@@ -32,8 +48,9 @@ class SessionActions:
                 start_type=AndroidServiceStartType.STICKY,
                 service_types=[AndroidForegroundServiceType.SPECIAL_USE],
             )
+            logger.info("FGS started for %s", container)
         except Exception as exc:
-            logger.debug("FGS start failed (non-Android or no permission): %s", exc)
+            logger.warning("FGS start failed: %s", exc)
 
     async def _stop_fgs(self) -> None:
         notifications = getattr(self, "notifications", None)
@@ -41,6 +58,7 @@ class SessionActions:
             return
         try:
             await notifications.stop_foreground_service()
+            logger.info("FGS stopped")
         except Exception as exc:
             logger.debug("FGS stop failed: %s", exc)
 

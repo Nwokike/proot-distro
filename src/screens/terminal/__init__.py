@@ -110,27 +110,24 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
         show_manage_files_modal(page, entry.container)
 
     # All terminal actions in a page-level FAB (CollabShell build_session_fab).
-    # Hidden in fullscreen (no FAB over the terminal). The slot mutation is
-    # pushed with a view-level update so the FAB appears/disappears immediately,
-    # not on the next event.
+    # The FAB is ALWAYS visible, including in fullscreen — it has "Exit Full
+    # Screen" as an option. The slot mutation is pushed with a view-level
+    # update so the FAB appears immediately, not on the next event.
     def _sync_fab():
         try:
             view = page.views[0]
         except Exception:
             return None
-        if fullscreen:
-            view.floating_action_button = None
-        else:
-            view.floating_action_button = menu.build_terminal_fab(
-                page,
-                methods,
-                entry,
-                manager,
-                fullscreen,
-                _toggle_fullscreen,
-                _browse_files,
-                _open_new_session_sheet,
-            )
+        view.floating_action_button = menu.build_terminal_fab(
+            page,
+            methods,
+            entry,
+            manager,
+            fullscreen,
+            _toggle_fullscreen,
+            _browse_files,
+            _open_new_session_sheet,
+        )
         try:
             view.update()
         except Exception:
