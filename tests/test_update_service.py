@@ -72,15 +72,16 @@ def test_host_trusted_after_normalization(url):
 
 
 def test_is_newer_version_comparison():
+    # Current app: build 2, version 1.0.1
     # Newer by build number
-    assert is_newer(2, "1.0.0") is True
+    assert is_newer(3, "1.0.1") is True
     # Same build number, same version
-    assert is_newer(1, "1.0.0") is False
-    # Same version string format (1.0 vs 1.0.0 normalized)
-    assert is_newer(1, "1.0") is False
+    assert is_newer(2, "1.0.1") is False
+    # Same version string format (1.0.1 vs 1.0.1.0 normalized)
+    assert is_newer(2, "1.0.1") is False
     # Newer version string
-    assert is_newer(1, "1.1.0") is True
-    assert is_newer(1, "2.0.0") is True
+    assert is_newer(2, "1.1.0") is True
+    assert is_newer(2, "2.0.0") is True
 
 
 def test_check_for_update_returns_data_when_newer():
@@ -111,7 +112,7 @@ def test_check_for_update_returns_data_when_newer():
 
 def test_check_for_update_returns_none_when_up_to_date():
     feed_data = {
-        "version": "1.0.0",
+        "version": "1.0.1",
         "build_number": 1,
         "type": "update",
     }

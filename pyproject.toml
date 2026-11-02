@@ -2,7 +2,7 @@
 # The uv project name must differ from the wrapped dependency "proot-distro"
 # (uv rejects self-dependencies); the repo itself is Nwokike/proot-distro.
 name = "proot-distro-flet"
-version = "1.0.0"
+version = "1.0.1"
 description = "Run Debian, Ubuntu, Alpine and any Docker image on your phone — no root, no Termux. Built with Flet."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -22,7 +22,7 @@ package = false
 org = "ng.kiri"
 product = "Proot Distro"
 company = "Kiri Research Labs"
-build_number = 1
+build_number = 2
 icon = "src/assets/icon.png"
 
 [tool.flet.app]

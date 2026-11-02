@@ -3,6 +3,15 @@
 from __future__ import annotations
 
 CHANGELOG: dict[str, str] = {
+    "1.0.1": (
+        "• Background running: persistent notification keeps sessions alive\n"
+        "• Exit App button in Settings\n"
+        "• Live Activity Terminal in Settings for on-device diagnostics\n"
+        "• Fixed container names for namespaced Docker images\n"
+        "• Files modal crash fix, downloads and uploads working\n"
+        "• Search results under the search bar, banner placement fixed\n"
+        "• Terminal: real Clear, Select All, FAB in non-fullscreen"
+    ),
     "1.0.0": (
         "• Real Linux containers on Android — no root, no Termux\n"
         "• Install any Docker image: type a reference or search Docker Hub\n"

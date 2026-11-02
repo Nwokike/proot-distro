@@ -9,11 +9,11 @@ on:
       build_version:
         description: "Build version"
         required: true
-        default: "1.0.0"
+        default: "1.0.1"
       build_number:
         description: "Build number"
         required: true
-        default: "1"
+        default: "2"
 
 permissions:
   contents: write
