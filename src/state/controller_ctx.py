@@ -1,0 +1,77 @@
+"""Controller bridge — AppController populates, views read via context.
+
+No-op defaults mean a view can always call a method during the first render;
+AppController fills the real implementations before `page.render`.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+
+import flet as ft
+
+
+def _noop(*_args, **_kwargs) -> None:
+    # Absorbs any arity: defaults are called with the real methods' signatures.
+    return None
+
+
+async def _noop_async(*_args, **_kwargs) -> None:
+    return None
+
+
+@dataclass
+class ControllerMethods:
+    # Distro manager
+    refresh_containers: Callable[[], Awaitable[None]] = _noop_async
+    install_distro: Callable[[str, str, str, bool], Awaitable[None]] = field(default=_noop_async)
+    cancel_install: Callable[[], None] = field(default=_noop)
+    remove_container: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    reset_container: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    search_distro: Callable[[str, int], Awaitable[None]] = field(default=_noop_async)
+    # One-shot command inside a container (Entrypoint/Cmd + args), PTY-captured
+    run_container: Callable[[str, str], Awaitable[None]] = field(default=_noop_async)
+
+    # Settings
+    clear_cache: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    clear_orphan_layers: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    clear_build_cache: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    remove_cached_image: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    storage_detail: Callable[[], Awaitable[dict]] = field(default=_noop_async)
+    refresh_storage_detail: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    set_docker_token: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    set_theme_mode: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    cycle_theme_mode: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    check_probe: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    show_privacy_options: Callable[[], Awaitable[None]] = field(default=_noop_async)
+
+    # Shell-level
+    show_snack: Callable[[str], None] = field(default=_noop)
+
+    # Container actions
+    rename_container: Callable[[str, str], Awaitable[None]] = field(default=_noop_async)
+    backup_container: Callable[[str, str | None], Awaitable[None]] = field(default=_noop_async)
+    restore_container: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    copy_path: Callable[[str, str, bool, bool], Awaitable[None]] = field(default=_noop_async)
+    sync_path: Callable[[str, str, bool, bool], Awaitable[None]] = field(default=_noop_async)
+    inspect_container: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    list_sessions: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    kill_session: Callable[[str, str | None], Awaitable[None]] = field(default=_noop_async)
+    kill_all_sessions: Callable[[str | None], Awaitable[None]] = field(default=_noop_async)
+
+    # Onboarding + hints
+    finish_onboarding: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    dismiss_hints: Callable[[], Awaitable[None]] = field(default=_noop_async)
+
+    # Terminal sessions
+    open_session: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    leave_session: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    close_session: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+
+    # Build / push (Dockerfile → OCI image → registry)
+    run_build: Callable[[dict], Awaitable[None]] = field(default=_noop_async)
+    push_image: Callable[[str, str, bool], Awaitable[None]] = field(default=_noop_async)
+
+
+ControllerMethodsCtx = ft.create_context(ControllerMethods())

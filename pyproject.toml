@@ -1,0 +1,124 @@
+[project]
+# The uv project name must differ from the wrapped dependency "proot-distro"
+# (uv rejects self-dependencies); the repo itself is Nwokike/proot-distro.
+name = "proot-distro-flet"
+version = "1.0.0"
+description = "Run Debian, Ubuntu, Alpine and any Docker image on your phone — no root, no Termux. Built with Flet."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "flet>=1.0.4",
+    "flet-ads>=1.0.4",
+    "httpx>=0.28.1",
+    "flet-terminal==0.4.2",
+    "proot-distro>=5.10.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.flet]
+org = "ng.kiri"
+# Product name is the placeholder (O-1: brand decision pending); the bundle id
+# follows the same placeholder and renames as one line when decided.
+product = "Proot Distro"
+company = "Kiri Research Labs"
+build_number = 1
+# The brand icon the platform-assets pipeline derives every OS icon set from.
+icon = "src/assets/icon.png"
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.boot_screen]
+name = "flet"
+
+[tool.flet.boot_screen.flet]
+startup_message = "Starting the container engine…"
+
+[tool.flet.splash]
+color = "#121218"
+dark_color = "#121218"
+
+[tool.flet.android]
+bundle_id = "ng.kiri.prootdistro"
+split_per_abi = true
+# Native libs must extract from the APK (SELinux allows execve only from
+# nativeLibraryDir); shipping x86_64 covers emulator QA.
+legacy_packaging = true
+target_arch = ["arm64-v8a", "x86_64"]
+# The sha256-pinned native payload wheel (M2) — resolved from the CI-provided
+# PIP_FIND_LINKS directory built by scripts/build_flet_proot_wheel.py.
+dependencies = ["flet-proot==5.1.107.102"]
+
+# Signing is env-only, exactly like ffmpeg (no pyproject signing block): CI
+# decodes KEYSTORE_BASE64 -> kiri_keystore.jks and passes the house
+# FLET_ANDROID_SIGNING_* variables. flet-cli prefers a pyproject key_store over
+# the env var and resolves it relative to the generated Flutter module — which
+# is the complexity that broke the build; the env path is absolute and correct.
+
+# oauthlib is pulled by flet for Page.login() only — we ship no login flow
+# (licensing A4). ~1 MB saved; breaks only Page.login().
+[tool.flet.cleanup]
+package_files = ["oauthlib/**"]
+
+[tool.flet.android.permission]
+"android.permission.INTERNET" = true
+"android.permission.ACCESS_NETWORK_STATE" = true
+
+# AdMob application id. flet-ads' Dart extension initializes the Mobile Ads
+# SDK at app launch, so an app that depends on flet-ads MUST declare this or
+# the process dies instantly on device (the app-5 crash). Production app ID
+# (owner's AdMob account); the CI quality gate fails the build if Google's
+# public test ID appears anywhere (FFmpeg precedent).
+[tool.flet.android.meta_data]
+"com.google.android.gms.ads.APPLICATION_ID" = "ca-app-pub-5679949845754640~7325028963"
+
+[dependency-groups]
+dev = [
+    "flet-cli>=1.0.4",
+    "flet-desktop>=1.0.4",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.1",
+    "pytest-timeout>=2.4.0",
+    "ruff>=0.17.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+addopts = ["-ra", "-q"]
+timeout = 60
+strict_markers = true
+strict_config = true
+markers = [
+    "live: hits the real device or network (deselected on desktop CI)",
+]
+filterwarnings = [
+    "error::Warning:^(services|screens|components|core|state|hooks|tests)(\\.|$)",
+]
+# session_argv/session_manager.open are async (they marshal get_proot_cmd onto
+# Flet's main thread), so the session tests are coroutine functions.
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "UP", "B", "Q", "C4", "PERF", "ERA", "I", "T20", "DTZ", "RUF", "S", "TRY", "BLE", "EM", "A", "SIM", "RET", "RSE"]
+ignore = ["E501", "EM101", "EM102", "EM103", "TRY003", "BLE001", "S110", "SIM105", "TRY300", "TRY301"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+# The API guard is a CLI-style script that reports to stdout; its test drives
+# it with the current interpreter.
+"tests/check_flet_api.py" = ["T201"]
+"tests/test_flet_api_guard.py" = ["S603"]
+# The wheel builder and build/inspection tools are host-side CLIs: progress
+# output and pinned-URL fetches are their job.
+"scripts/build_flet_proot_wheel.py" = ["T201", "S310"]
+"scripts/check_elf_alignment.py" = ["T201"]
+"scripts/generate_third_party_sources.py" = ["T201", "E402"]
+# The mobile-forge recipe bundle is a standalone conda-forge recipe (not app
+# code): its test.py is a recipe smoke test that asserts and prints by design.
+"docs/requests/mobile-forge-recipe-flet-proot/**" = ["S101", "T201"]

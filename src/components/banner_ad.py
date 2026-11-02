@@ -1,0 +1,118 @@
+"""BannerAd — single canonical banner ad builder (mobile only).
+
+Matches the Sherlock pattern:
+- Pre-checks `page.platform.is_mobile()` and returns `ft.Container(width=tokens.HIDDEN, height=tokens.HIDDEN)` on desktop/web.
+- Caches created banner instances in `_BANNER_POOL` by slot string so rebuilds don't recreate them.
+- Full-width wrapper with glass/surface styling and centered 320x50 native ad.
+"""
+
+from __future__ import annotations
+
+import logging
+
+import flet as ft
+from flet import Control
+
+from core import theme, tokens
+
+logger = logging.getLogger(__name__)
+
+# Production unit ID (owner's AdMob account) — v1.0.0 ships this only; the CI
+# quality gate fails the build if Google's test IDs appear anywhere.
+BANNER_ID_ANDROID = "ca-app-pub-5679949845754640/4029827969"
+
+_BANNER_POOL: dict[str, Control] = {}
+
+
+def banner_unit_id() -> str:
+    return BANNER_ID_ANDROID
+
+
+def pooled_banner_ad(slot: str, page: ft.Page | None = None) -> Control:
+    # The consent verdict is part of the cache key: a slot pooled as a
+    # pre-consent placeholder must be rebuilt once consent lands (and vice
+    # versa), or the pool would serve the stale shape forever.
+    from core.state import state
+
+    key = f"{slot}:{int(state.can_request_ads)}"
+    ad = _BANNER_POOL.get(key)
+    if ad is None:
+        ad = build_banner_ad(page)
+        _BANNER_POOL[key] = ad
+    return ad
+
+
+def clear_banner_pool() -> None:
+    _BANNER_POOL.clear()
+
+
+def build_banner_ad(page: ft.Page | None = None) -> Control:
+    if page is None:
+        try:
+            page = ft.context.page
+        except Exception:
+            return ft.Container(width=tokens.HIDDEN, height=tokens.HIDDEN)
+
+    if not page or not hasattr(page, "platform"):
+        return ft.Container(width=tokens.HIDDEN, height=tokens.HIDDEN)
+
+    try:
+        if not page.platform.is_mobile() or page.web:
+            return ft.Container(width=tokens.HIDDEN, height=tokens.HIDDEN)
+    except Exception:
+        return ft.Container(width=tokens.HIDDEN, height=tokens.HIDDEN)
+
+    # Consent gate: the banner must never request an ad before (or without)
+    # a UMP verdict — this is the same gate the interstitial path uses.
+    from core.state import state
+
+    if not state.can_request_ads:
+        return ft.Container(width=tokens.HIDDEN, height=tokens.HIDDEN)
+
+    try:
+        import flet_ads as fta
+
+        def _on_paid(e):
+            val = getattr(e, "value", None)
+            currency = getattr(e, "currency_code", "USD")
+            logger.info("BannerAd paid event: %s %s", val, currency)
+
+        ad = fta.BannerAd(
+            unit_id=banner_unit_id(),
+            width=tokens.BANNER_WIDTH,
+            height=tokens.BANNER_HEIGHT,
+            on_load=lambda _e: logger.info("BannerAd loaded"),
+            on_error=lambda e: logger.warning("BannerAd load error: %s", getattr(e, "data", e)),
+            on_paid=_on_paid,
+        )
+    except Exception as e:
+        logger.warning("Failed to load BannerAd: %s", e)
+        return ft.Container(width=tokens.HIDDEN, height=tokens.HIDDEN)
+
+    banner = ft.Container(
+        content=ft.Column(
+            [
+                ft.Container(
+                    content=ad,
+                    width=tokens.BANNER_WIDTH,
+                    height=tokens.BANNER_HEIGHT,
+                ),
+            ],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=tokens.SPACE_XS,
+            tight=True,
+        ),
+        expand=True,
+        padding=tokens.SPACE_SM,
+        border_radius=tokens.RADIUS_LG,
+        bgcolor=theme.glass_bg(),
+        border=ft.Border.all(tokens.HAIRLINE, theme.glass_border()),
+    )
+
+    return ft.Container(
+        content=ft.Row(
+            controls=[banner],
+            alignment=ft.MainAxisAlignment.CENTER,
+        ),
+        padding=ft.Padding.symmetric(horizontal=tokens.SPACE_SM),
+    )
