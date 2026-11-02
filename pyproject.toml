@@ -56,7 +56,7 @@ package_files = ["oauthlib/**"]
 
 [tool.flet.android.service."com.dexterous.flutterlocalnotifications.ForegroundService"]
 exported = false
-foreground_service_type = "specialUse"
+foregroundServiceType = "specialUse"
 
 [tool.flet.android.meta_data]
 "com.google.android.gms.ads.APPLICATION_ID" = "ca-app-pub-5679949845754640~7325028963"
