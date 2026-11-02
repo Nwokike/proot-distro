@@ -106,6 +106,15 @@ class SessionActions:
     async def open_session(self, container: str) -> None:
         """Open a NEW shell on the container (multi-shell; no ad on open)."""
         state.session_error = ""
+        # If an image ref was passed instead of a container name (e.g.
+        # 'archlinux/archlinux'), resolve it to the actual installed container.
+        if "/" in container:
+            containers = await asyncio.to_thread(self.proot.list_containers)
+            match = next(
+                (c["name"] for c in containers if c.get("image") == container),
+                container.rsplit("/", 1)[-1],
+            )
+            container = match
         try:
             entry = await self.session_manager.open(container)
         except Exception as exc:

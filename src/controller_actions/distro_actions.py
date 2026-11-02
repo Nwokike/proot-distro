@@ -16,6 +16,14 @@ logger = logging.getLogger(__name__)
 
 
 class DistroActions:
+    @staticmethod
+    def _derive_container_name(image_ref: str) -> str:
+        """Derive a valid container name from an image ref — mirrors upstream
+        proot_distro.helpers.docker.refs.derive_alias: take the last path
+        component after '/', strip the tag. 'archlinux/archlinux' -> 'archlinux'."""
+        repo = image_ref.strip().split("@")[0].split(":")[0]
+        return repo.rsplit("/", 1)[-1]
+
     async def install_distro(
         self, image: str, name: str, arch: str = "", insecure: bool = False
     ) -> None:
@@ -24,6 +32,11 @@ class DistroActions:
         if await asyncio.to_thread(self.proot.busy_locks):
             state.busy_note = "another install is already running"
             return
+        # Sanitize: a container name must never contain '/' (upstream
+        # require_valid_name rejects it). Derive from the image ref if the
+        # user left the name blank or typed an invalid one.
+        if not name.strip() or "/" in name:
+            name = self._derive_container_name(image)
         state.installing = name or image
         state.install_stage = "preparing"
         state.install_logs = []
