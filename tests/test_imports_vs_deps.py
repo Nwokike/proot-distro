@@ -49,9 +49,12 @@ def test_imports_all_declared():
     local = {p.name for p in (ROOT / "src").glob("*") if p.is_dir()}
     local |= {p.stem for p in (ROOT / "src").glob("*.py")}
     missing: set[str] = set()
+    # jnius (pyjnius) is part of the serious_python Android runtime — not a
+    # pip dependency, not importable on desktop. Guarded at the call site.
+    _ANDROID_RUNTIME = {"jnius"}
     for path in sorted((ROOT / "src").rglob("*.py")):
         for mod in _imports(path):
-            if mod in local or mod in sys.stdlib_module_names:
+            if mod in local or mod in sys.stdlib_module_names or mod in _ANDROID_RUNTIME:
                 continue
             providers = {d.lower().replace("-", "_") for d in (dist_map.get(mod) or [])}
             if not (providers & declared) and mod.lower() not in declared:

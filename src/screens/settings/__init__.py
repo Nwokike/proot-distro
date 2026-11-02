@@ -363,6 +363,18 @@ def SettingsView() -> ft.Control:
                 ft.TextButton("Open Terminal", on_click=_open_live_terminal),
                 stacked=is_narrow,
             ),
+            ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
+            _setting_row(
+                ft.Icons.POWER_SETTINGS_NEW_ROUNDED,
+                "Exit App",
+                "Kill all running sessions and close the app",
+                ft.TextButton(
+                    "Exit",
+                    on_click=lambda _e: page.run_task(methods.exit_app),
+                    style=ft.ButtonStyle(color=ft.Colors.RED),
+                ),
+                stacked=is_narrow,
+            ),
         ]
     )
 

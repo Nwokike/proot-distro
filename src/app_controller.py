@@ -9,6 +9,7 @@ import logging
 import os
 
 import flet as ft
+import flet_notifications as ft_notifications
 
 from app_shell import AppShell
 from controller_actions import BuildActions, ContainerActions, DistroActions, SessionActions
@@ -37,6 +38,8 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
         self.proot = proot_service
         self.session_manager = session_manager.SessionManager()
         self.ad_service = ad_service.AdService(page)
+        self.notifications = ft_notifications.Notifications()
+        self.session_manager.notifications = self.notifications
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
@@ -86,6 +89,7 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             close_session=self.close_session,
             finish_onboarding=self.finish_onboarding,
             dismiss_hints=self.dismiss_hints,
+            exit_app=self.exit_app,
             run_build=self.run_build,
             push_image=self.push_image,
         )
@@ -125,6 +129,9 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
         self.connectivity = ft.Connectivity()
         self.connectivity.on_change = self._on_connectivity
         self.page.services.append(self.connectivity)
+        # Termux-style persistent notification: keeps the app alive in the
+        # background while Linux sessions are running.
+        self.page.services.append(self.notifications)
 
     async def _restore_prefs(self) -> None:
         if self.prefs is None:

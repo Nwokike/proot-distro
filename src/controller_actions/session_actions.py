@@ -16,6 +16,34 @@ logger = logging.getLogger(__name__)
 
 
 class SessionActions:
+    async def _start_fgs(self, container: str) -> None:
+        """Start the Termux-style foreground service notification (keeps the
+        app alive in the background while Linux sessions are running)."""
+        notifications = getattr(self, "notifications", None)
+        if notifications is None:
+            return
+        try:
+            from flet_notifications import AndroidForegroundServiceType, AndroidServiceStartType
+
+            await notifications.start_foreground_service(
+                id=1,
+                title="Proot Distro",
+                body=f"Linux session running: {container}",
+                start_type=AndroidServiceStartType.STICKY,
+                service_types=[AndroidForegroundServiceType.SPECIAL_USE],
+            )
+        except Exception as exc:
+            logger.debug("FGS start failed (non-Android or no permission): %s", exc)
+
+    async def _stop_fgs(self) -> None:
+        notifications = getattr(self, "notifications", None)
+        if notifications is None:
+            return
+        try:
+            await notifications.stop_foreground_service()
+        except Exception as exc:
+            logger.debug("FGS stop failed: %s", exc)
+
     async def list_sessions(self) -> None:
         rows = await asyncio.to_thread(self.proot.active_sessions)
         if not rows:
@@ -123,6 +151,7 @@ class SessionActions:
             logger.exception("Could not open shell for %s", container)
             raise
         state.active_session = entry.key
+        await self._start_fgs(container)
         # Interstitial at the natural break of opening a shell (allowed by
         # AdMob placement rules — terminal-adjacent breaks only, never mid-type).
         await self.ad_service.show_interstitial()
@@ -135,7 +164,22 @@ class SessionActions:
         await asyncio.to_thread(self.session_manager.close, session_key)
         if state.active_session == session_key:
             state.active_session = None
+            await self._stop_fgs()
         await self.ad_service.show_interstitial()
+
+    async def exit_app(self) -> None:
+        """Kill all sessions, stop the foreground service, and exit the app."""
+        await asyncio.to_thread(self.session_manager.close_all)
+        await self._stop_fgs()
+        # Android: finish the activity directly.
+        try:
+            from jnius import autoclass
+
+            autoclass("android.os.Process").killProcess(autoclass("android.os.Process").myPid())
+        except Exception:
+            import os
+
+            os._exit(0)
 
     async def run_container(self, container: str, args_text: str) -> None:
         """`proot-distro run` — Entrypoint/Cmd plus the args, on a PTY, captured live."""
