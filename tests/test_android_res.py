@@ -16,7 +16,7 @@ def test_notification_icon_drawables_exist_for_all_densities():
 def test_pyproject_points_res_dir_at_android_res():
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert 'res_dir = "android_res"' in pyproject
-    assert 'android_default_icon' not in pyproject  # set in code, not here
+    assert "android_default_icon" not in pyproject  # set in code, not here
 
 
 def test_controller_uses_the_bundled_icon_name():
