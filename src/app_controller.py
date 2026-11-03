@@ -57,7 +57,7 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
 
     def _on_notification_tap(self, e) -> None:
         """Tapping the persistent notification returns to the running shell."""
-        entries = list(self.session_manager.entries)
+        entries = list(self.session_manager.entries.values())
         if entries and not state.active_session:
             state.active_session = entries[-1].key
 

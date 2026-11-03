@@ -244,71 +244,78 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
             mt.clear_pending()
             entry.replay(mt.send_bytes)
 
-    # ONE scrollable header row (animepahe-TV style): back + status + title,
-    # the tab chips, and every terminal control all live in the header,
-    # horizontally scrollable on narrow screens. Fullscreen only HIDES the
-    # chrome (visible=False) — the terminal widget is never unmounted from the
-    # tree, so its state (extra-keys ink, scrollback, subscriptions) survives
-    # the fullscreen toggle instead of breaking after it.
+    # Header: back + status + title + the terminal action controls, in ONE
+    # horizontally scrollable row (animepahe-TV style) — the header was free,
+    # so the controls moved up here. The fullscreen toggle sits OUTSIDE the
+    # hideable chrome: it stays visible in fullscreen, so exit is always
+    # reachable from the header (the FAB keeps its Exit Full Screen too).
+    header_chrome = ft.Row(
+        controls=[
+            ft.IconButton(
+                icon=ft.Icons.ARROW_BACK_ROUNDED,
+                icon_size=tokens.ICON_MD,
+                tooltip="Back to the session list (the shell stays alive)",
+                on_click=lambda _e: page.run_task(methods.leave_session),
+            ),
+            ft.Row(
+                controls=status_indicators,
+                spacing=tokens.SPACE_XS,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            ft.Text(
+                entry.title,
+                size=tokens.FONT_LG,
+                weight=ft.FontWeight.BOLD,
+                color=theme.text(),
+                max_lines=1,
+                overflow=ft.TextOverflow.ELLIPSIS,
+                tooltip=entry.title,
+            ),
+            ft.IconButton(
+                icon=ft.Icons.REFRESH_ROUNDED,
+                icon_size=tokens.ICON_SM,
+                tooltip="Refresh Terminal (replay scrollback)",
+                style=_compact_btn_style(),
+                on_click=_refresh_terminal,
+            ),
+            ft.IconButton(
+                icon=ft.Icons.PALETTE_ROUNDED,
+                icon_size=tokens.ICON_SM,
+                tooltip="Cycle Terminal Theme",
+                style=_compact_btn_style(),
+                on_click=lambda _e: _cycle_terminal_theme(mt),
+            ),
+            ft.IconButton(
+                icon=ft.Icons.ZOOM_OUT,
+                icon_size=tokens.ICON_SM,
+                tooltip="Zoom Out",
+                style=_compact_btn_style(),
+                on_click=lambda _e: mt.zoom_out(),
+            ),
+            ft.IconButton(
+                icon=ft.Icons.ZOOM_IN,
+                icon_size=tokens.ICON_SM,
+                tooltip="Zoom In",
+                style=_compact_btn_style(),
+                on_click=lambda _e: mt.zoom_in(),
+            ),
+            ft.IconButton(
+                icon=ft.Icons.SEARCH_ROUNDED,
+                icon_size=tokens.ICON_SM,
+                tooltip="Search Buffer",
+                style=_compact_btn_style(),
+                on_click=lambda _e: mt.toggle_search(),
+            ),
+            theme_button(lambda: page.run_task(methods.cycle_theme_mode)),
+        ],
+        scroll=ft.ScrollMode.AUTO,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        spacing=tokens.SPACE_XS,
+    )
     header = ft.Container(
         content=ft.Row(
             controls=[
-                ft.IconButton(
-                    icon=ft.Icons.ARROW_BACK_ROUNDED,
-                    icon_size=tokens.ICON_MD,
-                    tooltip="Back to the session list (the shell stays alive)",
-                    on_click=lambda _e: page.run_task(methods.leave_session),
-                ),
-                ft.Row(
-                    controls=status_indicators,
-                    spacing=tokens.SPACE_XS,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                ),
-                ft.Text(
-                    entry.title,
-                    size=tokens.FONT_LG,
-                    weight=ft.FontWeight.BOLD,
-                    color=theme.text(),
-                    max_lines=1,
-                    overflow=ft.TextOverflow.ELLIPSIS,
-                    tooltip=entry.title,
-                ),
-                *tab_chips,
-                ft.IconButton(
-                    icon=ft.Icons.REFRESH_ROUNDED,
-                    icon_size=tokens.ICON_SM,
-                    tooltip="Refresh Terminal (replay scrollback)",
-                    style=_compact_btn_style(),
-                    on_click=_refresh_terminal,
-                ),
-                ft.IconButton(
-                    icon=ft.Icons.PALETTE_ROUNDED,
-                    icon_size=tokens.ICON_SM,
-                    tooltip="Cycle Terminal Theme",
-                    style=_compact_btn_style(),
-                    on_click=lambda _e: _cycle_terminal_theme(mt),
-                ),
-                ft.IconButton(
-                    icon=ft.Icons.ZOOM_OUT,
-                    icon_size=tokens.ICON_SM,
-                    tooltip="Zoom Out",
-                    style=_compact_btn_style(),
-                    on_click=lambda _e: mt.zoom_out(),
-                ),
-                ft.IconButton(
-                    icon=ft.Icons.ZOOM_IN,
-                    icon_size=tokens.ICON_SM,
-                    tooltip="Zoom In",
-                    style=_compact_btn_style(),
-                    on_click=lambda _e: mt.zoom_in(),
-                ),
-                ft.IconButton(
-                    icon=ft.Icons.SEARCH_ROUNDED,
-                    icon_size=tokens.ICON_SM,
-                    tooltip="Search Buffer",
-                    style=_compact_btn_style(),
-                    on_click=lambda _e: mt.toggle_search(),
-                ),
+                ft.Container(content=header_chrome, expand=True, visible=not fullscreen),
                 ft.IconButton(
                     icon=ft.Icons.FULLSCREEN_EXIT_ROUNDED
                     if fullscreen
@@ -317,23 +324,33 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
                     tooltip="Exit full screen" if fullscreen else "Full screen",
                     on_click=_toggle_fullscreen,
                 ),
-                theme_button(lambda: page.run_task(methods.cycle_theme_mode)),
             ],
-            scroll=ft.ScrollMode.AUTO,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=tokens.SPACE_XS,
         ),
         bgcolor=theme.surface(),
         padding=ft.Padding(tokens.SPACE_XS, tokens.SPACE_XXS, tokens.SPACE_SM, tokens.SPACE_XXS),
-        visible=not fullscreen,
     )
 
     # Sticky banner directly under the header (1DM-style), never inside the
-    # terminal; fullscreen leaves only the terminal (FAB stays).
+    # terminal. Fullscreen only HIDES the chrome (visible=False) — the
+    # terminal widget is never unmounted from the tree, so its state
+    # (extra-keys ink, scrollback, subscriptions) survives the toggle.
     banner = pooled_banner_ad("terminal-1", page)
     banner.visible = not fullscreen
 
-    controls: list[ft.Control] = [header, banner]
+    # Tab row: the multi-shell chips keep their own scrollable row below the
+    # banner, with room to breathe.
+    tabs_row = ft.Container(
+        content=ft.Row(
+            controls=tab_chips,
+            spacing=tokens.SPACE_XS,
+            scroll=ft.ScrollMode.AUTO,
+        ),
+        padding=ft.Padding(tokens.SPACE_XS, 0, tokens.SPACE_SM, tokens.SPACE_XXS),
+        visible=not fullscreen,
+    )
+
+    controls: list[ft.Control] = [header, banner, tabs_row]
     if mt is not None:
         controls.append(mt)
     else:

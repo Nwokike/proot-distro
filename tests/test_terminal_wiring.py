@@ -93,9 +93,14 @@ def test_terminal_view_source_has_switcher_tabs_and_fab_actions():
 
     pkg = Path(__file__).resolve().parents[1] / "src" / "screens" / "terminal"
     source = "\n".join(f.read_text(encoding="utf-8") for f in sorted(pkg.glob("*.py")))
-    assert "tab_chips" in source  # multi-shell tabs live in the header row
-    assert "scroll=ft.ScrollMode.AUTO" in source  # header scrolls horizontally
-    assert "visible=not fullscreen" in source  # fullscreen hides, never unmounts
+    assert "tab_chips" in source  # multi-shell tabs keep their own row
+    assert "tabs_row" in source  # tabs row below the banner, not crammed in header
+    assert "scroll=ft.ScrollMode.AUTO" in source  # header + tabs scroll horizontally
+    assert "visible=not fullscreen" in source  # fullscreen hides chrome, never unmounts
+    # The fullscreen toggle must stay visible in fullscreen (outside the
+    # hideable chrome) so exit is always reachable from the header.
+    assert "header_chrome" in source
+    assert "expand=True, visible=not fullscreen" in source
     assert "floating_action_button" in source  # FAB, no header hamburger
     assert "build_terminal_fab" in source
     assert "CLEAR_ALL_ROUNDED" in source

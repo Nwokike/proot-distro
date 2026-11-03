@@ -286,12 +286,15 @@ jobs:
           # attribution permissions (AD_ID / ATTRIBUTION, play-services); the
           # data-safety form declares them. The build template's baseline carries
           # WAKE_LOCK (flet's boot_screen keep-screen-on shim). FOREGROUND_SERVICE
-          # + FOREGROUND_SERVICE_SPECIAL_USE are for the Termux-style persistent
-          # notification that keeps Linux sessions alive in the background.
-          # Anything else, and above all any install permission, fails the build.
+          # + FOREGROUND_SERVICE_SPECIAL_USE + POST_NOTIFICATIONS are for the
+          # Termux-style persistent notification (flet-notifications) that keeps
+          # Linux sessions alive in the background; that plugin's own manifest
+          # adds RECEIVE_BOOT_COMPLETED (restore scheduled notifications after
+          # reboot) and VIBRATE. Anything else, and above all any install
+          # permission, fails the build.
           for perm in $perms; do
             case "$perm" in
-              "android.permission.INTERNET"|"android.permission.ACCESS_NETWORK_STATE"|android.permission.ACCESS_ADSERVICES_*|"android.permission.FOREGROUND_SERVICE"|"android.permission.FOREGROUND_SERVICE_SPECIAL_USE"|"android.permission.WAKE_LOCK"|"android.permission.POST_NOTIFICATIONS") ;;
+              "android.permission.INTERNET"|"android.permission.ACCESS_NETWORK_STATE"|android.permission.ACCESS_ADSERVICES_*|"android.permission.FOREGROUND_SERVICE"|"android.permission.FOREGROUND_SERVICE_SPECIAL_USE"|"android.permission.WAKE_LOCK"|"android.permission.POST_NOTIFICATIONS"|"android.permission.RECEIVE_BOOT_COMPLETED"|"android.permission.VIBRATE") ;;
               *) echo "::error::unexpected permission $perm (A-12: no install permissions)"; exit 1;;
             esac
           done

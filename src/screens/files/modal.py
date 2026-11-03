@@ -305,6 +305,7 @@ def show_manage_files_modal(page: ft.Page, container: str, initial_path: str = "
         _render()
 
     def _toggle_select(item_path: str):
+        nonlocal selection_mode
         if item_path in selected_files:
             selected_files.remove(item_path)
             if not selected_files:
@@ -312,6 +313,9 @@ def show_manage_files_modal(page: ft.Page, container: str, initial_path: str = "
                 return
         else:
             selected_files.add(item_path)
+            # Long-press enters selection mode too — same as pressing Select
+            # then tapping the item: the selection action bar must appear.
+            selection_mode = True
         _render()
 
     def _on_navigate(path: str):
