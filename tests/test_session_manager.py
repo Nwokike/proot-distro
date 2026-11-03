@@ -1,6 +1,5 @@
 """Session manager state and event-loop delivery tests."""
 
-import pytest
 from session_support import GOLDEN_CMD
 
 from services import session_service
@@ -20,16 +19,21 @@ def test_session_manager_keys_entries_by_unique_session_id(monkeypatch):
         assert manager._new_key("ubuntu") == "ubuntu"
 
 
-async def test_session_manager_caps_concurrent_sessions():
+async def test_session_manager_has_no_concurrency_cap(monkeypatch):
+    """One-to-one with upstream: no artificial shell cap — open as many shells
+    as the user wants (the OS fd/memory limits are the only bound)."""
     from services import session_manager as sm
 
+    monkeypatch.setattr(session_service, "ProotSession", _FakeSession)
+    monkeypatch.setattr(
+        session_service.proot_service, "get_proot_cmd", lambda container: GOLDEN_CMD
+    )
+
     manager = sm.SessionManager()
-    with manager._lock:
-        for index in range(sm.MAX_CONCURRENT_SESSIONS):
-            key = f"c{index}"
-            manager.entries[key] = sm.SessionEntry(key, key)
-    with pytest.raises(RuntimeError):
-        await manager.open("one-too-many")
+    entries = [await manager.open("debian") for _ in range(6)]
+    assert len(manager.entries) == 6
+    assert len({e.key for e in entries}) == 6
+    assert all(e.ready for e in entries)
 
 
 def test_session_entry_replay_sends_the_buffer_in_order():

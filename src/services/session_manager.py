@@ -16,8 +16,10 @@ import flet as ft
 
 from services import session_service
 
-MAX_CONCURRENT_SESSIONS = 4
-SCROLLBACK_CHUNKS = 2000
+# No artificial concurrency cap: upstream proot-distro has none — the OS
+# (fd/memory limits) is the only bound, and we wrap it one-to-one.
+# Scrollback is a replay-buffer memory bound only (~40 MB at 4 KB chunks).
+SCROLLBACK_CHUNKS = 10000
 
 
 @ft.observable
@@ -68,10 +70,6 @@ class SessionManager:
         """Open a NEW shell on the container (multiple per container allowed)."""
         loop = asyncio.get_running_loop()
         with self._lock:
-            if len(self.entries) >= MAX_CONCURRENT_SESSIONS:
-                raise RuntimeError(
-                    f"{MAX_CONCURRENT_SESSIONS} shells are already open — close one first"
-                )
             key = self._new_key(container)
             entry = SessionEntry(key, container)
             self.entries[key] = entry

@@ -12,12 +12,13 @@ def run_capture(
     container: str,
     run_args: list[str],
     work_dir: str | None = None,
-    timeout: float = 120.0,
+    timeout: float | None = None,
     on_chunk=None,
 ) -> dict:
     """Run a one-shot command inside a container on a PTY and capture its output.
 
-    `on_chunk(bytes)` is called live as output arrives. Returns plain data for
+    `on_chunk(bytes)` is called live as output arrives. `timeout=None` waits
+    forever, exactly like upstream `proot-distro run`. Returns plain data for
     the UI: {"ok", "returncode", "output", "timed_out"}.
     """
     env, argv = run_argv(container, run_args, work_dir)

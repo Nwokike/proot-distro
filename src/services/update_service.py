@@ -97,7 +97,7 @@ async def check_for_update(
     """
     import httpx
 
-    timeout = httpx.Timeout(5.0, connect=4.0)
+    timeout = httpx.Timeout(15.0, connect=10.0)
 
     async def _fetch(c: httpx.AsyncClient) -> httpx.Response:
         last_exc: Exception | None = None

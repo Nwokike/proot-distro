@@ -39,13 +39,12 @@ def main(page) -> None:
 
     page.fonts = FONT_FILES
 
-    def _on_close(_e=None) -> None:
-        controller.session_manager.close_all()
-
-    # A disconnect is not a shutdown: the app may just be backgrounded, and the
-    # shells (with their scrollback) must survive the resume.
+    # A close/disconnect is NOT a shutdown: the foreground service (STICKY)
+    # keeps the process alive in the background, and the shells (with their
+    # scrollback) must survive until the user explicitly exits. Tearing down
+    # sessions here killed everything whenever the activity was destroyed.
     page.on_disconnect = lambda _e=None: None
-    page.on_close = _on_close
+    page.on_close = lambda _e=None: None
 
     def _on_brightness(_e=None) -> None:
         # "System" mode must follow a runtime dark/light flip too, not just

@@ -46,22 +46,31 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
     page = ft.context.page
     methods = ft.use_context(ControllerMethodsCtx)
     st, _ = ft.use_state(state)
-    fullscreen, set_fullscreen = ft.use_state(state.terminal_fullscreen)
+    # Fullscreen comes straight from the observable state — a local use_state
+    # copy desyncs from main.py's back-button handler, which sets the global.
+    fullscreen = st.terminal_fullscreen
     controller = getattr(page, "_controller", None)
     manager = getattr(controller, "session_manager", None)
 
     # Wakelock keeps screen/CPU awake during active terminal sessions
     def _sync_wakelock():
         wl = getattr(page, "wakelock", None)
-        if wl is not None:
+        if wl is None:
+            return None
+        try:
             page.run_task(wl.enable)
+        except RuntimeError:
+            pass  # session already destroyed — nothing left to update
 
-            def _cleanup():
-                if wl is not None:
-                    page.run_task(wl.disable)
+        def _cleanup():
+            # Effect cleanup can run after the page session is destroyed —
+            # page.run_task then raises "An attempt to fetch destroyed session".
+            try:
+                page.run_task(wl.disable)
+            except RuntimeError:
+                pass
 
-            return _cleanup
-        return None
+        return _cleanup
 
     ft.on_mounted(_sync_wakelock)
 
@@ -101,8 +110,7 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
     ft.use_effect(_apply_app_theme, [state.theme_revision])
 
     def _toggle_fullscreen(_e=None) -> None:
-        state.terminal_fullscreen = not fullscreen
-        set_fullscreen(not fullscreen)
+        state.terminal_fullscreen = not st.terminal_fullscreen
 
     def _browse_files() -> None:
         from screens.files.modal import show_manage_files_modal
@@ -111,14 +119,22 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
 
     # All terminal actions in a page-level FAB (CollabShell build_session_fab).
     # The FAB is ALWAYS visible, including in fullscreen — it has "Exit Full
-    # Screen" as an option. The slot mutation is pushed with a view-level
+    # Screen" as an option. Ownership is tracked with a Ref (CollabShell's
+    # pattern): we write the view slot only when it is empty or already ours,
+    # and clear it only while we still own it — so a fullscreen re-render can
+    # never leave the slot empty. The slot mutation is pushed with a view-level
     # update so the FAB appears immediately, not on the next event.
+    _fab_ref = ft.Ref[ft.FloatingActionButton]()
+
     def _sync_fab():
         try:
             view = page.views[0]
         except Exception:
             return None
-        view.floating_action_button = menu.build_terminal_fab(
+        current = view.floating_action_button
+        if current is not None and current is not _fab_ref.current:
+            return None  # another component owns the FAB slot right now
+        fab = menu.build_terminal_fab(
             page,
             methods,
             entry,
@@ -128,6 +144,8 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
             _browse_files,
             _open_new_session_sheet,
         )
+        _fab_ref.current = fab
+        view.floating_action_button = fab
         try:
             view.update()
         except Exception:
@@ -135,8 +153,10 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
 
         def _cleanup():
             try:
-                view.floating_action_button = None
-                view.update()
+                if view.floating_action_button is _fab_ref.current:
+                    view.floating_action_button = None
+                    _fab_ref.current = None
+                    view.update()
             except Exception:
                 pass
 

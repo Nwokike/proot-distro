@@ -38,8 +38,18 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
         self.proot = proot_service
         self.session_manager = session_manager.SessionManager()
         self.ad_service = ad_service.AdService(page)
-        self.notifications = ft_notifications.Notifications()
+        # android_default_icon: our app-icon silhouette (bundled via
+        # tool.flet.android.res_dir), not the plugin's default Flet logo.
+        self.notifications = ft_notifications.Notifications(
+            android_default_icon="ic_stat_prootdistro"
+        )
+        self.notifications.on_action = self._on_notification_action
         self.session_manager.notifications = self.notifications
+
+    async def _on_notification_action(self, e) -> None:
+        """Notification action buttons — the FGS notification's Exit tears down."""
+        if getattr(e, "action_id", "") == "exit":
+            self.page.run_task(self.exit_app)
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 

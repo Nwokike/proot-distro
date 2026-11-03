@@ -44,6 +44,9 @@ split_per_abi = true
 legacy_packaging = true
 target_arch = ["arm64-v8a", "x86_64"]
 dependencies = ["flet-proot==5.1.107.102"]
+# Our own Android resources (notification small icon drawable), copied into
+# the generated android/app/src/main/res by flet build.
+res_dir = "android_res"
 
 [tool.flet.cleanup]
 package_files = ["oauthlib/**"]
@@ -54,6 +57,7 @@ package_files = ["oauthlib/**"]
 "android.permission.FOREGROUND_SERVICE" = true
 "android.permission.FOREGROUND_SERVICE_SPECIAL_USE" = true
 "android.permission.POST_NOTIFICATIONS" = true
+"android.permission.WAKE_LOCK" = true
 
 [tool.flet.android.service."com.dexterous.flutterlocalnotifications.ForegroundService"]
 exported = false

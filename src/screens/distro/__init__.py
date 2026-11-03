@@ -92,7 +92,9 @@ def DistroView() -> ft.Control:
         if not q:
             return
         try:
-            limit = max(1, min(int(search_limit or "25"), 1000))
+            # No ceiling — the limit is passed straight through to upstream,
+            # which forwards it to the Docker Hub API.
+            limit = max(1, int(search_limit or "25"))
         except ValueError:
             limit = 25
         if ":" in q:
@@ -273,6 +275,7 @@ def DistroView() -> ft.Control:
         ("Debian", "debian"),
         ("Ubuntu", "ubuntu"),
         ("Alpine", "alpine"),
+        ("Fedora", "fedora"),
     )
 
     controls: list[ft.Control] = [

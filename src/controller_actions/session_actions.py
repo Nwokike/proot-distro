@@ -38,7 +38,11 @@ class SessionActions:
         if notifications is None:
             return
         try:
-            from flet_notifications import AndroidForegroundServiceType, AndroidServiceStartType
+            from flet_notifications import (
+                AndroidForegroundServiceType,
+                AndroidServiceStartType,
+                NotificationAction,
+            )
 
             await self._ensure_notification_permission()
             await notifications.start_foreground_service(
@@ -47,6 +51,9 @@ class SessionActions:
                 body=f"Linux session running: {container}",
                 start_type=AndroidServiceStartType.STICKY,
                 service_types=[AndroidForegroundServiceType.SPECIAL_USE],
+                # Termux-style: the persistent notification carries an Exit
+                # action that tears down sessions + FGS and closes the app.
+                actions=[NotificationAction(id="exit", title="Exit")],
             )
             logger.info("FGS started for %s", container)
         except Exception as exc:
