@@ -75,6 +75,14 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             _entry.mt = None
             _entry.wired = False
 
+        # Stale pooled-banner controls carry the PREVIOUS session's control
+        # ids; patching them into the fresh Dart tree makes the client drop
+        # patches ("unknown control … client is out of sync"). Rebuild the pool
+        # for this session.
+        from components.banner_ad import clear_banner_pool
+
+        clear_banner_pool()
+
         self._mount_services()
 
         light, dark = theme.build_theme()
@@ -252,7 +260,7 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
     # ── misc ──────────────────────────────────────────────────────────────────
 
     def _guard(self, fn):
-        """Wrap a controller coroutine so BaseException exits never kill the app."""
+        """Wrap a controller coroutine so exits and session teardown never kill the app."""
 
         @functools.wraps(fn)
         async def _wrapped(*args, **kwargs):
@@ -263,6 +271,17 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
                 logger.exception("handler %s raised %s — contained", name, type(exc).__name__)
                 state.data_note = f"{name} tried to exit the app ({exc!r}) — contained"
                 return None
+            except RuntimeError as exc:
+                # A task can finish after the page session is destroyed (app
+                # closed mid-refresh): the observable values were already set —
+                # only the notify needs a live session. Contain like exits
+                # instead of surfacing "An attempt to fetch destroyed session".
+                if "destroyed session" in str(exc) or "not associated" in str(exc):
+                    logger.debug(
+                        "handler %s raced session teardown: %s", getattr(fn, "__name__", "?"), exc
+                    )
+                    return None
+                raise
 
         return _wrapped
 

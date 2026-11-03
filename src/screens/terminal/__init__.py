@@ -328,13 +328,17 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
         content=ft.Row(
             controls=[
                 ft.Container(content=header_chrome, expand=True, visible=not fullscreen),
-                # Fixed (never hidden): the app color-mode switch.
+                # Fixed in the normal header (non-scrolling): the app
+                # color-mode switch. The whole header hides in fullscreen —
+                # TRUE fullscreen is nothing but the terminal (exit via the
+                # FAB's "Exit Full Screen" or the back button).
                 theme_button(lambda: page.run_task(methods.cycle_theme_mode)),
             ],
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
         bgcolor=theme.surface(),
         padding=ft.Padding(tokens.SPACE_XS, tokens.SPACE_XXS, tokens.SPACE_SM, tokens.SPACE_XXS),
+        visible=not fullscreen,
     )
 
     # Sticky banner directly under the header (1DM-style), never inside the
