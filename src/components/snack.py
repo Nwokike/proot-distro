@@ -22,7 +22,9 @@ def show_snack(page: ft.Page | None, message: str) -> None:
         return
     try:
         snack = ft.SnackBar(
-            content=ft.Text(message, color=theme.WHITE, size=tokens.FONT_SM),
+            # theme.text() is paired with the surface palette in BOTH modes —
+            # a hardcoded white made the toast unreadable in light mode.
+            content=ft.Text(message, color=theme.text(), size=tokens.FONT_SM),
             bgcolor=theme.surface_alt(),
             behavior=ft.SnackBarBehavior.FLOATING,
             show_close_icon=True,
