@@ -97,10 +97,14 @@ def test_terminal_view_source_has_switcher_tabs_and_fab_actions():
     assert "tabs_row" in source  # tabs row below the banner, not crammed in header
     assert "scroll=ft.ScrollMode.AUTO" in source  # header + tabs scroll horizontally
     assert "visible=not fullscreen" in source  # fullscreen hides chrome, never unmounts
-    # The fullscreen toggle must stay visible in fullscreen (outside the
-    # hideable chrome) so exit is always reachable from the header.
+    # The fullscreen toggle lives in the scrollable chrome; the app theme
+    # switch is the fixed button.
     assert "header_chrome" in source
     assert "expand=True, visible=not fullscreen" in source
+    # Regression: never mutate the pooled (mounted) banner control during
+    # render — flet 1.1 freezes mounted controls mid-patch and that raises
+    # "Frozen controls cannot be updated" (device-proven app hang).
+    assert "banner.visible =" not in source
     assert "floating_action_button" in source  # FAB, no header hamburger
     assert "build_terminal_fab" in source
     assert "CLEAR_ALL_ROUNDED" in source

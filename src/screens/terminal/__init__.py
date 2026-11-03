@@ -246,9 +246,13 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
 
     # Header: back + status + title + the terminal action controls, in ONE
     # horizontally scrollable row (animepahe-TV style) — the header was free,
-    # so the controls moved up here. The fullscreen toggle sits OUTSIDE the
-    # hideable chrome: it stays visible in fullscreen, so exit is always
-    # reachable from the header (the FAB keeps its Exit Full Screen too).
+    # so the controls moved up here. Fullscreen sits inside the chrome next to
+    # the terminal-theme (palette) button; the app color-mode switch is the
+    # FIXED button at the end, always visible even in fullscreen.
+    # NOTE: never mutate an already-mounted control during render (e.g. the
+    # pooled banner's .visible) — flet 1.1 freezes mounted controls during a
+    # patch and that raises "Frozen controls cannot be updated" (device-proven
+    # hang). Set `visible` only at construction on fresh wrapper controls.
     header_chrome = ft.Row(
         controls=[
             ft.IconButton(
@@ -286,6 +290,15 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
                 on_click=lambda _e: _cycle_terminal_theme(mt),
             ),
             ft.IconButton(
+                icon=ft.Icons.FULLSCREEN_EXIT_ROUNDED
+                if fullscreen
+                else ft.Icons.FULLSCREEN_ROUNDED,
+                icon_size=tokens.ICON_SM,
+                tooltip="Exit full screen" if fullscreen else "Full screen",
+                style=_compact_btn_style(),
+                on_click=_toggle_fullscreen,
+            ),
+            ft.IconButton(
                 icon=ft.Icons.ZOOM_OUT,
                 icon_size=tokens.ICON_SM,
                 tooltip="Zoom Out",
@@ -306,7 +319,6 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
                 style=_compact_btn_style(),
                 on_click=lambda _e: mt.toggle_search(),
             ),
-            theme_button(lambda: page.run_task(methods.cycle_theme_mode)),
         ],
         scroll=ft.ScrollMode.AUTO,
         vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -316,14 +328,8 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
         content=ft.Row(
             controls=[
                 ft.Container(content=header_chrome, expand=True, visible=not fullscreen),
-                ft.IconButton(
-                    icon=ft.Icons.FULLSCREEN_EXIT_ROUNDED
-                    if fullscreen
-                    else ft.Icons.FULLSCREEN_ROUNDED,
-                    icon_size=tokens.ICON_MD,
-                    tooltip="Exit full screen" if fullscreen else "Full screen",
-                    on_click=_toggle_fullscreen,
-                ),
+                # Fixed (never hidden): the app color-mode switch.
+                theme_button(lambda: page.run_task(methods.cycle_theme_mode)),
             ],
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
@@ -332,11 +338,14 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
     )
 
     # Sticky banner directly under the header (1DM-style), never inside the
-    # terminal. Fullscreen only HIDES the chrome (visible=False) — the
-    # terminal widget is never unmounted from the tree, so its state
-    # (extra-keys ink, scrollback, subscriptions) survives the toggle.
-    banner = pooled_banner_ad("terminal-1", page)
-    banner.visible = not fullscreen
+    # terminal. Fullscreen only HIDES the chrome via visible=False on a FRESH
+    # wrapper built each render — the pooled banner control itself is never
+    # mutated (frozen-control crash). The terminal widget is never unmounted,
+    # so its state (extra-keys ink, scrollback) survives the toggle.
+    banner = ft.Container(
+        content=pooled_banner_ad("terminal-1", page),
+        visible=not fullscreen,
+    )
 
     # Tab row: the multi-shell chips keep their own scrollable row below the
     # banner, with room to breathe.
