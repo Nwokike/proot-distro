@@ -86,12 +86,16 @@ def test_terminal_view_is_built_inside_the_component_tree():
 
 
 def test_terminal_view_source_has_switcher_tabs_and_fab_actions():
-    """Terminal view renders switcher tabs; all actions live in the page FAB."""
+    """Terminal view renders switcher tabs in the scrollable header; all
+    actions live in the page FAB; fullscreen only hides chrome (visible),
+    never unmounts the terminal widget."""
     from pathlib import Path
 
     pkg = Path(__file__).resolve().parents[1] / "src" / "screens" / "terminal"
     source = "\n".join(f.read_text(encoding="utf-8") for f in sorted(pkg.glob("*.py")))
-    assert "switcher_box" in source
+    assert "tab_chips" in source  # multi-shell tabs live in the header row
+    assert "scroll=ft.ScrollMode.AUTO" in source  # header scrolls horizontally
+    assert "visible=not fullscreen" in source  # fullscreen hides, never unmounts
     assert "floating_action_button" in source  # FAB, no header hamburger
     assert "build_terminal_fab" in source
     assert "CLEAR_ALL_ROUNDED" in source

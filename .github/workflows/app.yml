@@ -291,7 +291,7 @@ jobs:
           # Anything else, and above all any install permission, fails the build.
           for perm in $perms; do
             case "$perm" in
-              "android.permission.INTERNET"|"android.permission.ACCESS_NETWORK_STATE"|android.permission.ACCESS_ADSERVICES_*|"android.permission.FOREGROUND_SERVICE"|"android.permission.FOREGROUND_SERVICE_SPECIAL_USE"|"android.permission.WAKE_LOCK") ;;
+              "android.permission.INTERNET"|"android.permission.ACCESS_NETWORK_STATE"|android.permission.ACCESS_ADSERVICES_*|"android.permission.FOREGROUND_SERVICE"|"android.permission.FOREGROUND_SERVICE_SPECIAL_USE"|"android.permission.WAKE_LOCK"|"android.permission.POST_NOTIFICATIONS") ;;
               *) echo "::error::unexpected permission $perm (A-12: no install permissions)"; exit 1;;
             esac
           done

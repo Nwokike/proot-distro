@@ -97,6 +97,9 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
 
     if mt is not None and not entry.wired:
         wiring.wire_terminal(entry, mt, page, manager, methods, _open_new_session_sheet)
+        # Live output must target THIS page's loop (the app can be reopened in
+        # the same process while the foreground service keeps it alive).
+        entry.loop = getattr(page, "loop", None)
 
     # The terminal theme follows the app's light/dark mode (CollabShell's
     # _active_theme_name pattern): re-apply to every open shell on theme flips.
@@ -164,8 +167,6 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
 
     ft.use_effect(_sync_fab, [fullscreen, entry.key])
 
-    # CollabShell flat full-width header: back + status + title. No menu, no
-    # theme button here — those live in the FAB.
     status_indicators: list[ft.Control] = [status_dot(entry.ready)]
     if not entry.ready:
         status_indicators.append(
@@ -175,47 +176,6 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
                 stroke_width=tokens.PROGRESS_RING_STROKE,
             )
         )
-    header = ft.Container(
-        content=ft.Row(
-            controls=[
-                ft.IconButton(
-                    icon=ft.Icons.ARROW_BACK_ROUNDED,
-                    icon_size=tokens.ICON_MD,
-                    tooltip="Back to the session list (the shell stays alive)",
-                    on_click=lambda _e: page.run_task(methods.leave_session),
-                ),
-                ft.Row(
-                    controls=status_indicators,
-                    spacing=tokens.SPACE_XS,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                ),
-                ft.Text(
-                    entry.title,
-                    size=tokens.FONT_LG,
-                    weight=ft.FontWeight.BOLD,
-                    color=theme.text(),
-                    expand=True,
-                    max_lines=1,
-                    overflow=ft.TextOverflow.ELLIPSIS,
-                    tooltip=entry.title,
-                ),
-                # Badge rail (CollabShell header): fullscreen + app theme switch.
-                ft.IconButton(
-                    icon=ft.Icons.FULLSCREEN_EXIT_ROUNDED
-                    if fullscreen
-                    else ft.Icons.FULLSCREEN_ROUNDED,
-                    icon_size=tokens.ICON_MD,
-                    tooltip="Exit full screen" if fullscreen else "Full screen",
-                    on_click=_toggle_fullscreen,
-                ),
-                theme_button(lambda: page.run_task(methods.cycle_theme_mode)),
-            ],
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=tokens.SPACE_SM,
-        ),
-        bgcolor=theme.surface(),
-        padding=ft.Padding(tokens.SPACE_SM, tokens.SPACE_SM, tokens.SPACE_LG, tokens.SPACE_SM),
-    )
 
     # Multi-shell switcher tabs: one chip per open shell (keyed by session id).
     tab_chips: list[ft.Control] = []
@@ -284,17 +244,36 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
             mt.clear_pending()
             entry.replay(mt.send_bytes)
 
-    switcher_box = ft.Container(
+    # ONE scrollable header row (animepahe-TV style): back + status + title,
+    # the tab chips, and every terminal control all live in the header,
+    # horizontally scrollable on narrow screens. Fullscreen only HIDES the
+    # chrome (visible=False) — the terminal widget is never unmounted from the
+    # tree, so its state (extra-keys ink, scrollback, subscriptions) survives
+    # the fullscreen toggle instead of breaking after it.
+    header = ft.Container(
         content=ft.Row(
             controls=[
-                ft.Container(
-                    content=ft.Row(
-                        controls=tab_chips,
-                        spacing=tokens.SPACE_XS,
-                        scroll=ft.ScrollMode.AUTO,
-                    ),
-                    expand=True,
+                ft.IconButton(
+                    icon=ft.Icons.ARROW_BACK_ROUNDED,
+                    icon_size=tokens.ICON_MD,
+                    tooltip="Back to the session list (the shell stays alive)",
+                    on_click=lambda _e: page.run_task(methods.leave_session),
                 ),
+                ft.Row(
+                    controls=status_indicators,
+                    spacing=tokens.SPACE_XS,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                ft.Text(
+                    entry.title,
+                    size=tokens.FONT_LG,
+                    weight=ft.FontWeight.BOLD,
+                    color=theme.text(),
+                    max_lines=1,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                    tooltip=entry.title,
+                ),
+                *tab_chips,
                 ft.IconButton(
                     icon=ft.Icons.REFRESH_ROUNDED,
                     icon_size=tokens.ICON_SM,
@@ -330,21 +309,31 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
                     style=_compact_btn_style(),
                     on_click=lambda _e: mt.toggle_search(),
                 ),
+                ft.IconButton(
+                    icon=ft.Icons.FULLSCREEN_EXIT_ROUNDED
+                    if fullscreen
+                    else ft.Icons.FULLSCREEN_ROUNDED,
+                    icon_size=tokens.ICON_MD,
+                    tooltip="Exit full screen" if fullscreen else "Full screen",
+                    on_click=_toggle_fullscreen,
+                ),
+                theme_button(lambda: page.run_task(methods.cycle_theme_mode)),
             ],
-            spacing=tokens.SPACE_NONE,
+            scroll=ft.ScrollMode.AUTO,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=tokens.SPACE_XS,
         ),
-        padding=ft.Padding(tokens.SPACE_SM, 0, tokens.SPACE_SM, 0),
-        bgcolor=ft.Colors.with_opacity(tokens.OPACITY_WHISPER, theme.text()),
+        bgcolor=theme.surface(),
+        padding=ft.Padding(tokens.SPACE_XS, tokens.SPACE_XXS, tokens.SPACE_SM, tokens.SPACE_XXS),
+        visible=not fullscreen,
     )
 
-    controls: list[ft.Control] = []
-    if not fullscreen:
-        # Sticky banner directly under the header (1DM-style), never inside
-        # the terminal; fullscreen leaves only the terminal (FAB stays).
-        controls.append(header)
-        controls.append(pooled_banner_ad("terminal-1", page))
-        controls.append(switcher_box)
+    # Sticky banner directly under the header (1DM-style), never inside the
+    # terminal; fullscreen leaves only the terminal (FAB stays).
+    banner = pooled_banner_ad("terminal-1", page)
+    banner.visible = not fullscreen
+
+    controls: list[ft.Control] = [header, banner]
     if mt is not None:
         controls.append(mt)
     else:

@@ -36,7 +36,10 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
     def __init__(self, page: ft.Page):
         self.page = page
         self.proot = proot_service
-        self.session_manager = session_manager.SessionManager()
+        # Process-wide registry: the FGS keeps the process alive across
+        # activity destroy/recreate, so reopening the app re-attaches to the
+        # same live shells instead of losing them (Termux behavior).
+        self.session_manager = session_manager.shared_manager()
         self.ad_service = ad_service.AdService(page)
         # android_default_icon: our app-icon silhouette (bundled via
         # tool.flet.android.res_dir), not the plugin's default Flet logo.
@@ -44,6 +47,7 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             android_default_icon="ic_stat_prootdistro"
         )
         self.notifications.on_action = self._on_notification_action
+        self.notifications.on_tap = self._on_notification_tap
         self.session_manager.notifications = self.notifications
 
     async def _on_notification_action(self, e) -> None:
@@ -51,11 +55,25 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
         if getattr(e, "action_id", "") == "exit":
             self.page.run_task(self.exit_app)
 
+    def _on_notification_tap(self, e) -> None:
+        """Tapping the persistent notification returns to the running shell."""
+        entries = list(self.session_manager.entries)
+        if entries and not state.active_session:
+            state.active_session = entries[-1].key
+
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
     async def init(self) -> None:
         # The env contract + grp shim must be set before proot_distro is importable.
         await self.check_probe()
+
+        # New page session (app reopened while the process stayed alive via the
+        # foreground service): drop stale terminal widgets so each live shell
+        # re-creates its MobileTerminal on THIS page and re-wires; the retained
+        # scrollback replays on mount.
+        for _entry in self.session_manager.entries.values():
+            _entry.mt = None
+            _entry.wired = False
 
         self._mount_services()
 
