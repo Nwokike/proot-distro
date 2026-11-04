@@ -70,15 +70,22 @@ class SessionManager:
             n += 1
         return key
 
-    async def open(self, container: str) -> SessionEntry:
-        """Open a NEW shell on the container (multiple per container allowed)."""
+    async def open(self, container: str, options: dict | None = None) -> SessionEntry:
+        """Open a NEW shell on the container (multiple per container allowed).
+
+        `options` carries the upstream login options from the "Shell with
+        options…" dialog (user/work_dir/env/bind/shared_*); None = the plain
+        `pd login <c>` interactive shell, exactly as before."""
         loop = asyncio.get_running_loop()
         with self._lock:
             key = self._new_key(container)
             entry = SessionEntry(key, container)
             self.entries[key] = entry
 
-            env, argv = session_service.session_argv(container)
+            if options:
+                env, argv = session_service.session_argv_with_options(container, options)
+            else:
+                env, argv = session_service.session_argv(container)
 
             def _on_bytes(data: bytes) -> None:
                 entry.feed(data)

@@ -66,9 +66,21 @@ class ControllerMethods:
 
     # Terminal sessions
     open_session: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    open_session_with_options: Callable[[str, dict], Awaitable[None]] = field(default=_noop_async)
     leave_session: Callable[[], Awaitable[None]] = field(default=_noop_async)
     close_session: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     exit_app: Callable[[], Awaitable[None]] = field(default=_noop_async)
+
+    # Display / X11 sessions
+    open_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    probe_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    start_display: Callable[[str, str | None], Awaitable[None]] = field(default=_noop_async)
+    stop_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    leave_display: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    install_display_support: Callable[[str, str], Awaitable[None]] = field(default=_noop_async)
+    show_display_logs: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    set_display_fullscreen: Callable[[bool], Awaitable[None]] = field(default=_noop_async)
+    share_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
 
     # Build / push (Dockerfile → OCI image → registry)
     run_build: Callable[[dict], Awaitable[None]] = field(default=_noop_async)

@@ -350,7 +350,6 @@ def FilesView(
     return ft.Column(
         controls=[
             ft.Row(controls=container_chips, scroll=ft.ScrollMode.AUTO, spacing=tokens.SPACE_SM),
-            pooled_banner_ad("files-1", page),
             nav_row,
             action_bar,
             ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
@@ -358,6 +357,7 @@ def FilesView(
                 content=card(file_list_content, padding=tokens.SPACE_SM),
                 expand=True,
             ),
+            pooled_banner_ad("files-1", page),
             ft.Container(height=tokens.NAV_BAR_CLEARANCE),
         ],
         spacing=tokens.SPACE_SM,

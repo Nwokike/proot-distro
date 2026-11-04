@@ -1,0 +1,372 @@
+"""Display (X11) session actions: probe, start/stop, provision, view routing.
+
+The DeskManager (desk_service) owns the guest process; this mixin owns the
+UI state and the FGS ref-count shared with the terminal actions. The wrap is
+complete: fps/quality/geometry are upstream server params, `lan` maps to the
+upstream host=0.0.0.0 binding, `tunnel` runs upstream's LocalhostRunTunnel,
+and fullscreen locks orientation + keeps the screen awake via flet's
+Wakelock/`set_allowed_device_orientations` (dev4).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+
+import flet as ft
+
+from core import theme, tokens
+from core.state import state
+from services import desk_service, proot_service
+from services.desk_service import script as desk_script
+
+from ._common import _reason
+
+logger = logging.getLogger(__name__)
+
+# Xvfb screen for "auto" geometry: long side 1280 keeps JPEG capture + WS
+# streaming sane on phones; the viewer letterboxes any aspect anyway.
+_AUTO_GEOMETRY_LONG_SIDE = 1280
+
+
+def _auto_geometry(page) -> str:
+    width = max(1, int(getattr(page, "width", 0) or 0))
+    height = max(1, int(getattr(page, "height", 0) or 0))
+    long_side = max(width, height)
+    scale = _AUTO_GEOMETRY_LONG_SIDE / long_side
+    even_w = max(2, round(width * scale / 2) * 2)
+    even_h = max(2, round(height * scale / 2) * 2)
+    return f"{even_w}x{even_h}"
+
+
+class DisplayActions:
+    # ── probe ─────────────────────────────────────────────────────────────────
+
+    async def probe_display(self, container: str) -> None:
+        """Cache the container's rootfs capability probe in state.display_support
+        (cached even on failure, as {"error": ...}, so the tab never re-probes
+        in a render loop)."""
+        if state.display_support is None:
+            state.display_support = {}
+        if container in state.display_support:
+            return
+        try:
+            caps = await asyncio.to_thread(proot_service.guest_capabilities, container)
+        except Exception as exc:
+            logger.warning("display probe failed for %s: %s", container, exc)
+            state.display_support[container] = {"error": _reason(exc)}
+            return
+        state.display_support[container] = caps
+
+    def _display_caps(self, container: str) -> dict:
+        return (state.display_support or {}).get(container) or {}
+
+    def _display_settings(self) -> dict:
+        settings = dict(state.display_settings or {})
+        settings.setdefault("fps", 12)
+        settings.setdefault("quality", 70)
+        settings.setdefault("geometry", "auto")
+        settings.setdefault("orientation", "landscape")
+        settings.setdefault("lan", False)
+        settings.setdefault("tunnel", False)
+        return settings
+
+    def _resolve_geometry(self, settings: dict) -> str:
+        preset = str(settings.get("geometry", "auto"))
+        if preset != "auto" and desk_script.is_valid_geometry(preset):
+            return preset
+        return _auto_geometry(self.page)
+
+    def _lock_orientation(self, on: bool) -> None:
+        """Fullscreen → landscape lock (owner's pick), exit → system default.
+        Android 16 devices ≥600dp ignore the lock — documented upstream."""
+        orientations: list = []
+        if on and self._display_settings().get("orientation") == "landscape":
+            from flet import DeviceOrientation
+
+            orientations = [DeviceOrientation.LANDSCAPE_LEFT, DeviceOrientation.LANDSCAPE_RIGHT]
+        try:
+            self.page.run_task(self.page.set_allowed_device_orientations, orientations)
+        except Exception as exc:
+            logger.debug("orientation lock failed: %s", exc)
+
+    def _wakelock(self, on: bool) -> None:
+        """Keep the screen awake while a display is being viewed/mirrored.
+        The Wakelock service is mounted once on the controller."""
+        service = getattr(self, "wakelock", None)
+        if service is None:
+            service = ft.Wakelock()
+            self.wakelock = service
+        try:
+            self.page.run_task(service.enable if on else service.disable)
+        except Exception as exc:
+            logger.debug("wakelock toggle failed: %s", exc)
+
+    # ── routing ───────────────────────────────────────────────────────────────
+
+    async def open_display(self, container: str) -> None:
+        """Card/tab entry point: probe, then start the display — or open the
+        install sheet when the container can't run one yet."""
+        state.display_error = ""
+        await self.probe_display(container)
+        caps = self._display_caps(container)
+        ready = caps.get("desk_ready") and caps.get("x_server") and caps.get("desktops")
+        if ready:
+            await self.start_display(container)
+        else:
+            state.display_installing = container
+            from screens.display_launcher import show_display_sheet
+
+            show_display_sheet(self.page, self.methods, container, caps)
+
+    async def start_display(self, container: str, desktop_env: str | None = None) -> None:
+        manager = self.desk_manager
+        existing = manager.get(container)
+        if existing and existing.status.value == "running":
+            state.active_display = container
+            return
+        caps = self._display_caps(container)
+        installed_desktops = caps.get("desktops") or {}
+        env = desktop_env or next(
+            (key for key, present in installed_desktops.items() if present),
+            "xfce",
+        )
+        settings = self._display_settings()
+        state.display_error = ""
+        state.display_status = "starting"
+        state.display_status_text = f"starting the X11 display in {container}…"
+        state.display_logs = []
+        try:
+            session = await manager.start(
+                container,
+                desktop_env=env,
+                fps=float(settings["fps"]),
+                quality=int(settings["quality"]),
+                geometry=self._resolve_geometry(settings),
+                # LAN sharing maps to upstream's host param (S104 is the point).
+                host=(
+                    "0.0.0.0" if settings["lan"] else "127.0.0.1"  # noqa: S104 - LAN feature
+                ),
+                tunnel=bool(settings["tunnel"]),
+            )
+        except Exception as exc:
+            state.display_status = "error"
+            state.display_error = _reason(exc)
+            self.show_snack(f"display failed: {state.display_error}")
+            logger.exception("display start failed for %s", container)
+            raise
+        state.active_display = container
+        state.display_status = "running"
+        state.display_status_text = f"X11 on :{session.display}"
+        state.display_url = session.url
+        state.display_error = ""
+        self._wakelock(True)
+        await self._update_fgs()
+
+    async def stop_display(self, container: str) -> None:
+        await self.desk_manager.stop(container)
+        if state.active_display == container:
+            state.active_display = None
+            state.display_status = "idle"
+            state.display_url = ""
+            self._wakelock(False)
+            self._lock_orientation(False)
+        await self._update_fgs()
+
+    async def leave_display(self) -> None:
+        """Back from the display screen; the session keeps running in the background."""
+        state.active_display = None
+        state.display_fullscreen = False
+        self._lock_orientation(False)
+        self._wakelock(False)
+
+    async def set_display_fullscreen(self, on: bool) -> None:
+        state.display_fullscreen = bool(on)
+        self._lock_orientation(bool(on))
+
+    # ── sharing (LAN + tunnel + code) ─────────────────────────────────────────
+
+    async def share_display(self, container: str) -> None:
+        """Local / LAN / tunnel URLs + the access code, each copyable, with a
+        system share sheet for the whole bundle. Clipboard/Share services are
+        mounted once on the controller."""
+        session = self.desk_manager.get(container)
+        if session is None or not session.url:
+            self.show_snack("the display is not running")
+            return
+        clipboard = getattr(self, "clipboard", None) or ft.Clipboard()
+        share = getattr(self, "share", None) or ft.Share()
+        rows: list[ft.Control] = []
+
+        def _url_row(label: str, url: str) -> ft.Control:
+            return ft.Row(
+                controls=[
+                    ft.Text(label, size=tokens.FONT_SM, color=theme.text_dim(), width=80),
+                    ft.Text(
+                        url,
+                        size=tokens.FONT_XS,
+                        font_family=tokens.MONO_FONT,
+                        color=theme.text(),
+                        expand=True,
+                        selectable=True,
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.COPY_ROUNDED,
+                        icon_size=tokens.ICON_MD,
+                        tooltip="Copy URL",
+                        on_click=lambda _e: self.page.run_task(clipboard.set, url),
+                    ),
+                ],
+                spacing=tokens.SPACE_XS,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            )
+
+        rows.append(_url_row("Local", session.url))
+        if session.host == "0.0.0.0":  # noqa: S104 - LAN mode flag, no bind here
+            from services.desk_service.manager import _local_ip
+
+            ip = _local_ip()
+            if ip:
+                rows.append(_url_row("LAN", f"http://{ip}:{session.port}/"))
+        if session.tunnel_url:
+            rows.append(_url_row("Tunnel", session.tunnel_url))
+        elif session.tunnel:
+            rows.append(
+                ft.Text(
+                    "the tunnel is still negotiating its URL… (it appears here and "
+                    "in the guest logs when ssh answers)",
+                    size=tokens.FONT_XS,
+                    color=theme.text_dim(),
+                )
+            )
+        rows.append(
+            ft.Row(
+                controls=[
+                    ft.Text("Code", size=tokens.FONT_SM, color=theme.text_dim(), width=80),
+                    ft.Text(
+                        session.code,
+                        size=tokens.FONT_MD,
+                        weight=ft.FontWeight.BOLD,
+                        font_family=tokens.MONO_FONT,
+                        color=theme.primary(),
+                        expand=True,
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.COPY_ROUNDED,
+                        icon_size=tokens.ICON_MD,
+                        tooltip="Copy access code",
+                        on_click=lambda _e: self.page.run_task(clipboard.set, session.code),
+                    ),
+                ],
+                spacing=tokens.SPACE_XS,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            )
+        )
+        rows.append(
+            ft.Text(
+                "Any device opening a URL above must enter this access code — "
+                "localhost.run's free URLs rotate after a few hours.",
+                size=tokens.FONT_XXS,
+                color=theme.text_dim(),
+            )
+        )
+
+        share_url = session.tunnel_url or session.url
+        self.page.show_dialog(
+            ft.AlertDialog(
+                title=ft.Text(
+                    f"Share display — {container}",
+                    size=tokens.FONT_LG,
+                    weight=ft.FontWeight.BOLD,
+                ),
+                content=ft.Column(
+                    controls=[*rows],
+                    tight=True,
+                    spacing=tokens.SPACE_SM,
+                    width=tokens.DIALOG_WIDTH,
+                ),
+                actions=[
+                    ft.TextButton(
+                        "Share…",
+                        on_click=lambda _e: (
+                            self.page.pop_dialog(),
+                            self.page.run_task(share.share_uri, share_url),
+                        ),
+                    ),
+                    ft.TextButton("Close", on_click=lambda _e: self.page.pop_dialog()),
+                ],
+            )
+        )
+
+    # ── provisioning ──────────────────────────────────────────────────────────
+
+    async def install_display_support(self, container: str, desktop_env: str = "xfce") -> None:
+        """Stream the guest install into state.display_install_logs; never silent."""
+        state.display_installing = container
+        state.display_install_logs = []
+        state.display_error = ""
+        await self.probe_display(container)
+        caps = self._display_caps(container)
+        loop = asyncio.get_running_loop()
+
+        def _on_chunk(data: bytes) -> None:
+            text = data.decode("utf-8", "replace")
+            if not text:
+                return
+
+            def _apply(t: str = text) -> None:
+                # reassign (not append) so the observable notifies the sheet.
+                # Contain the destroyed-session race like _record_exit: the
+                # value lands on the module-level state either way.
+                try:
+                    state.display_install_logs = [*state.display_install_logs, t]
+                except RuntimeError:
+                    pass
+
+            loop.call_soon_threadsafe(_apply)
+
+        try:
+            result = await desk_service.install(container, caps, desktop_env, on_chunk=_on_chunk)
+        except Exception as exc:
+            state.display_error = _reason(exc)
+            state.display_installing = None
+            logger.exception("display install failed for %s", container)
+            raise
+        state.display_installing = None
+        if result.get("ok"):
+            self.show_snack(f"display support installed in {container}")
+            # Re-probe without the cache guard: the container changed on disk.
+            try:
+                caps = await asyncio.to_thread(proot_service.guest_capabilities, container)
+                state.display_support[container] = caps
+            except Exception as exc:
+                logger.warning("display re-probe failed for %s: %s", container, exc)
+        else:
+            state.display_error = f"install exited {result.get('returncode')} — see the log tail"
+            self.show_snack(f"display install failed in {container}")
+
+    # ── diagnostics ───────────────────────────────────────────────────────────
+
+    async def show_display_logs(self, container: str) -> None:
+        session = self.desk_manager.get(container)
+        lines = list(session.log_tail) if session else list(state.display_logs or [])
+        tail = "\n".join(lines[-200:]) or "(no logs yet)"
+        self.page.show_dialog(
+            ft.AlertDialog(
+                title=ft.Text(
+                    f"Display logs — {container}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
+                ),
+                content=ft.Container(
+                    content=ft.Text(
+                        tail,
+                        font_family=tokens.MONO_FONT,
+                        size=tokens.FONT_XXS,
+                        color=theme.text_dim(),
+                        selectable=True,
+                    ),
+                    width=tokens.DIALOG_WIDTH_LG,
+                    height=320,
+                ),
+                actions=[ft.TextButton("Close", on_click=lambda _e: self.page.pop_dialog())],
+            )
+        )

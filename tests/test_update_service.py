@@ -72,24 +72,24 @@ def test_host_trusted_after_normalization(url):
 
 
 def test_is_newer_version_comparison():
-    # Current app: build 2, version 1.0.1
+    # Current app: build 3, version 1.1.0
     # Newer by build number
-    assert is_newer(3, "1.0.1") is True
+    assert is_newer(4, "1.1.0") is True
     # Same build number, same version
-    assert is_newer(2, "1.0.1") is False
-    # Same version string format (1.0.1 vs 1.0.1.0 normalized)
-    assert is_newer(2, "1.0.1") is False
+    assert is_newer(3, "1.1.0") is False
+    # Same version string format (1.1.0 vs 1.1.0.0 normalized)
+    assert is_newer(3, "1.1.0") is False
     # Newer version string
-    assert is_newer(2, "1.1.0") is True
-    assert is_newer(2, "2.0.0") is True
+    assert is_newer(3, "1.2.0") is True
+    assert is_newer(3, "2.0.0") is True
 
 
 def test_check_for_update_returns_data_when_newer():
     feed_data = {
-        "version": "1.1.0",
-        "build_number": 2,
+        "version": "1.2.0",
+        "build_number": 4,
         "type": "update",
-        "title": "Version 1.1.0 available",
+        "title": "Version 1.2.0 available",
         "release_notes": "New features and fixes",
         "mandatory": False,
         "github_url": "https://github.com/Nwokike/proot-distro/releases/latest",
@@ -105,15 +105,15 @@ def test_check_for_update_returns_data_when_newer():
 
     result = asyncio.run(_run())
     assert result is not None
-    assert result["version"] == "1.1.0"
-    assert result["build_number"] == 2
+    assert result["version"] == "1.2.0"
+    assert result["build_number"] == 4
     assert result["type"] == "update"
 
 
 def test_check_for_update_returns_none_when_up_to_date():
     feed_data = {
-        "version": "1.0.1",
-        "build_number": 1,
+        "version": "1.1.0",
+        "build_number": 3,
         "type": "update",
     }
 

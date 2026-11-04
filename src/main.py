@@ -56,12 +56,19 @@ def main(page) -> None:
     page.on_platform_brightness_change = _on_brightness
     page.on_resize = lambda _e: page.update()
 
-    # Android back button: exit fullscreen → leave terminal → default.
-    # Without this handler the back button closes the activity outright.
+    # Android back button: display fullscreen → display → terminal fullscreen
+    # → terminal → default. Without this handler the back button closes the
+    # activity outright.
     def _on_view_pop(_e) -> None:
         from core.state import state
 
-        if state.terminal_fullscreen:
+        if state.active_display:
+            if state.display_fullscreen:
+                state.display_fullscreen = False
+                page.update()
+            else:
+                page.run_task(controller.leave_display)
+        elif state.terminal_fullscreen:
             state.terminal_fullscreen = False
             page.update()
         elif state.active_session:

@@ -1,27 +1,20 @@
-"""One-shot PTY capture for `proot-distro run`."""
+"""One-shot PTY capture for guest commands: `run` (Entrypoint/Cmd) and `login -- <command>`."""
 
 from __future__ import annotations
 
 import threading
 
-from .argv import run_argv
+from .argv import Argv, Env, command_argv, run_argv
 from .pty import ProotSession
 
 
-def run_capture(
-    container: str,
-    run_args: list[str],
-    work_dir: str | None = None,
-    timeout: float | None = None,
-    on_chunk=None,
-) -> dict:
-    """Run a one-shot command inside a container on a PTY and capture its output.
+def _capture(argv: Argv, env: Env, timeout: float | None, on_chunk=None) -> dict:
+    """Spawn one hardened guest command on a PTY and capture its output.
 
     `on_chunk(bytes)` is called live as output arrives. `timeout=None` waits
-    forever, exactly like upstream `proot-distro run`. Returns plain data for
-    the UI: {"ok", "returncode", "output", "timed_out"}.
+    forever. Returns plain data for the UI:
+    {"ok", "returncode", "output", "timed_out"}.
     """
-    env, argv = run_argv(container, run_args, work_dir)
     chunks: list[bytes] = []
     exited = threading.Event()
 
@@ -45,3 +38,34 @@ def run_capture(
         }
     finally:
         session.stop()
+
+
+def run_capture(
+    container: str,
+    run_args: list[str],
+    work_dir: str | None = None,
+    timeout: float | None = None,
+    on_chunk=None,
+) -> dict:
+    """Run a one-shot command via `proot-distro run` (Entrypoint/Cmd + args).
+
+    `timeout=None` waits forever, exactly like upstream `proot-distro run`.
+    """
+    env, argv = run_argv(container, run_args, work_dir)
+    return _capture(argv, env, timeout, on_chunk)
+
+
+def command_capture(
+    container: str,
+    command: list[str],
+    work_dir: str | None = None,
+    timeout: float | None = 120.0,
+    on_chunk=None,
+) -> dict:
+    """Run a one-shot arbitrary guest command via `login -- <command>`.
+
+    Bounded by default (120s) because probes and installs must not hang the
+    UI; pass `timeout=None` for unbounded runs like a desktop session.
+    """
+    env, argv = command_argv(container, command, work_dir)
+    return _capture(argv, env, timeout, on_chunk)

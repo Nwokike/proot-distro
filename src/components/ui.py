@@ -7,7 +7,7 @@ import flet as ft
 from core import styles, theme, tokens
 
 NO_CONTAINERS_TITLE = "No containers installed"
-NO_CONTAINERS_MESSAGE = "Install a container first to explore and manage its files."
+NO_CONTAINERS_MESSAGE = "Install a container first to get started."
 
 
 def card(content: ft.Control, padding: int | ft.Padding = tokens.SPACE_MD) -> ft.Control:

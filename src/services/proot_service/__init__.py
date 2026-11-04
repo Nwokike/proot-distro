@@ -23,6 +23,7 @@ from services.proot_namespaces import (
 )
 
 from . import _core as _core_module
+from ._capabilities import guest_capabilities
 from ._commands import (
     _call_get_proot_cmd,
     get_proot_cmd,
@@ -108,6 +109,7 @@ __all__ = [
     "friendly_job_error",
     "get_proot_cmd",
     "get_proot_cmd_with_options",
+    "guest_capabilities",
     "inspect_container",
     "install",
     "is_pull_limit",

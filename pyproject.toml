@@ -2,27 +2,35 @@
 # The uv project name must differ from the wrapped dependency "proot-distro"
 # (uv rejects self-dependencies); the repo itself is Nwokike/proot-distro.
 name = "proot-distro-flet"
-version = "1.0.1"
-description = "Run Debian, Ubuntu, Alpine and any Docker image on your phone — no root, no Termux. Built with Flet."
+version = "1.1.0"
+description = "Run Debian, Ubuntu, Alpine and any Docker image on your phone — terminal and X11 desktop, no root, no Termux. Built with Flet."
 readme = "README.md"
 requires-python = ">=3.14"
+# The Flet family is pinned as ONE coordinated set: the extensions demand an
+# exact flet version, and a range here can resolve flet dev5 against an
+# extension built for dev4 — a build-time conflict.
 dependencies = [
-    "flet>=1.1.0.dev3",
-    "flet-ads>=1.1.0.dev3",
-    "flet-notifications>=1.1.0.dev3",
+    "flet==1.1.0.dev4",
+    "flet-ads==1.1.0.dev4",
+    "flet-notifications==1.1.0.dev4",
+    "flet-webview==1.1.0.dev4",
     "httpx>=0.28.1",
     "flet-terminal==0.4.2",
     "proot-distro>=5.10.0",
-]
+    "termux-desk",
+    ]
 
 [tool.uv]
 package = false
 
+[tool.uv.sources]
+termux-desk = { git = "https://github.com/amirghm/termux-desk.git", rev = "446fadf91d392ef4480fefd61e4a5b39c5567b9a" }
+
 [tool.flet]
 org = "ng.kiri"
-product = "Proot Distro"
+product = "Proot Distro X11"
 company = "Kiri Research Labs"
-build_number = 2
+build_number = 3
 icon = "src/assets/icon.png"
 
 [tool.flet.app]
@@ -32,7 +40,7 @@ path = "src"
 name = "flet"
 
 [tool.flet.boot_screen.flet]
-startup_message = "Starting the container engine…"
+startup_message = "Starting Proot Distro X11…"
 
 [tool.flet.splash]
 color = "#121218"
@@ -47,6 +55,13 @@ dependencies = ["flet-proot==5.1.107.102"]
 # Our own Android resources (notification small icon drawable), copied into
 # the generated android/app/src/main/res by flet build.
 res_dir = "android_res"
+
+# The desktop WebView loads TermuxDesk's viewer over http://127.0.0.1 inside
+# the proot container (guest loopback == host loopback); Android 9+ blocks
+# cleartext HTTP by default, so allow it here. Written verbatim onto the
+# <application> element of the merged manifest.
+[tool.flet.android.manifest_application]
+usesCleartextTraffic = "true"
 
 [tool.flet.cleanup]
 package_files = ["oauthlib/**"]
@@ -65,12 +80,12 @@ foregroundServiceType = "specialUse"
 
 [tool.flet.android.meta_data]
 "com.google.android.gms.ads.APPLICATION_ID" = "ca-app-pub-5679949845754640~7325028963"
-"android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" = "Linux container sessions stay alive in the background"
+"android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" = "Linux container and X11 desktop sessions stay alive in the background"
 
 [dependency-groups]
 dev = [
-    "flet-cli>=1.1.0.dev3",
-    "flet-desktop>=1.1.0.dev3",
+    "flet-cli>=1.1.0.dev4",
+    "flet-desktop>=1.1.0.dev4",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.1",
     "pytest-timeout>=2.4.0",
@@ -102,6 +117,7 @@ ignore = ["E501", "EM101", "EM102", "EM103", "TRY003", "BLE001", "S110", "SIM105
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
 "tests/check_flet_api.py" = ["T201"]
+"tests/test_desk_service.py" = ["S104", "S108"]  # asserts wrap-surface strings, never binds
 "tests/test_flet_api_guard.py" = ["S603"]
 "scripts/build_flet_proot_wheel.py" = ["T201", "S310"]
 "scripts/check_elf_alignment.py" = ["T201"]

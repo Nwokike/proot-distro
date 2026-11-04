@@ -271,11 +271,16 @@ def DistroView() -> ft.Control:
     # Certified distros: bare names and bare refs. No versions, no sizes, no
     # descriptions — Docker Hub resolves each image's current latest when the
     # user taps Install, and upstream's derive_alias names the container.
+    # Modern/rolling first (Alpine, Arch, Fedora, openSUSE, Kali), the
+    # old-guard stable pair last.
     _POPULAR_DISTROS = (
-        ("Debian", "debian"),
-        ("Ubuntu", "ubuntu"),
         ("Alpine", "alpine"),
+        ("Arch Linux", "archlinux"),
         ("Fedora", "fedora"),
+        ("openSUSE", "opensuse/tumbleweed"),
+        ("Kali", "kalilinux/kali-rolling"),
+        ("Ubuntu", "ubuntu"),
+        ("Debian", "debian"),
     )
 
     controls: list[ft.Control] = [

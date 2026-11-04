@@ -17,11 +17,13 @@ from .argv import (
     Env,
     _harden_session,
     _parse_proot_cmd_line,
+    command_argv,
     run_argv,
     session_argv,
+    session_argv_with_options,
 )
 from .pty import ProotSession
-from .run import run_capture
+from .run import command_capture, run_capture
 
 __all__ = [
     "_ASSIGNMENT_RE",
@@ -31,10 +33,13 @@ __all__ = [
     "ProotSession",
     "_harden_session",
     "_parse_proot_cmd_line",
+    "command_argv",
+    "command_capture",
     "os",
     "proot_service",
     "run_argv",
     "run_capture",
     "session_argv",
+    "session_argv_with_options",
     "subprocess",
 ]

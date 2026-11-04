@@ -1,4 +1,7 @@
-"""Responsive installed-container card and its primary actions."""
+"""Responsive installed-container card — exactly three inline items: Open
+shell, Open display (or Set up display), and the ⋯ menu (rename/backup/copy/
+sync/inspect/run + reset/remove live there now, grouped with the destructive
+pair last)."""
 
 from __future__ import annotations
 
@@ -6,83 +9,16 @@ import flet as ft
 
 from components import card
 from core import theme, tokens
+from core.state import state
 from screens.container_actions import container_menu_items
 from screens.formatting import format_size
 
 
 def build_container_card(row: dict, page: ft.Page, methods, is_narrow: bool) -> ft.Control:
     cname = row.get("name", "?")
-
-    def _reset(_e) -> None:
-        def _yes(_e) -> None:
-            page.pop_dialog()
-            page.run_task(methods.reset_container, cname)
-
-        page.show_dialog(
-            ft.AlertDialog(
-                title=ft.Text(f"Reset {cname}?", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
-                content=ft.Text(
-                    "Container files are wiped back to the clean base image.",
-                    size=tokens.FONT_SM,
-                ),
-                actions=[
-                    ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
-                    ft.FilledButton(
-                        "Reset",
-                        on_click=_yes,
-                        style=ft.ButtonStyle(
-                            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
-                            bgcolor=theme.warn(),
-                        ),
-                    ),
-                ],
-            )
-        )
-
-    def _remove(_e) -> None:
-        clean_cache_cb = ft.Checkbox(
-            label="Also remove cached download layers",
-            value=True,
-        )
-
-        def _yes(_e) -> None:
-            page.pop_dialog()
-            should_clean = bool(clean_cache_cb.value)
-
-            async def _do_remove() -> None:
-                await methods.remove_container(cname)
-                if should_clean:
-                    await methods.clear_orphan_layers()
-
-            page.run_task(_do_remove)
-
-        page.show_dialog(
-            ft.AlertDialog(
-                title=ft.Text(f"Remove {cname}?", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
-                content=ft.Column(
-                    controls=[
-                        ft.Text(
-                            "Are you sure? This permanently deletes all files in this container.",
-                            size=tokens.FONT_SM,
-                        ),
-                        clean_cache_cb,
-                    ],
-                    tight=True,
-                    spacing=tokens.SPACE_SM,
-                ),
-                actions=[
-                    ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
-                    ft.FilledButton(
-                        "Remove",
-                        on_click=_yes,
-                        style=ft.ButtonStyle(
-                            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
-                            bgcolor=theme.warn(),
-                        ),
-                    ),
-                ],
-            )
-        )
+    caps = (state.display_support or {}).get(cname) or {}
+    ready = bool(caps.get("desk_ready") and caps.get("x_server"))
+    display_label = "Open display" if ready else "Set up display"
 
     details_col = ft.Column(
         controls=[
@@ -110,8 +46,15 @@ def build_container_card(row: dict, page: ft.Page, methods, is_narrow: bool) -> 
             shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
         ),
     )
-    btn_reset = ft.Button("Reset", on_click=_reset, height=tokens.CONTROL_SM)
-    btn_remove = ft.Button("Remove", on_click=_remove, height=tokens.CONTROL_SM)
+    btn_display = ft.FilledTonalButton(
+        display_label,
+        icon=ft.Icons.DESKTOP_WINDOWS,
+        on_click=lambda _e: page.run_task(methods.open_display, cname),
+        height=tokens.CONTROL_SM,
+        style=ft.ButtonStyle(
+            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
+        ),
+    )
     menu_btn = ft.PopupMenuButton(
         icon=ft.Icons.MORE_VERT,
         icon_size=tokens.ICON_MD,
@@ -132,7 +75,7 @@ def build_container_card(row: dict, page: ft.Page, methods, is_narrow: bool) -> 
                     spacing=tokens.SPACE_SM,
                 ),
                 ft.Row(
-                    controls=[btn_shell, btn_reset, btn_remove],
+                    controls=[btn_shell, btn_display],
                     spacing=tokens.SPACE_SM,
                     wrap=True,
                 ),
@@ -145,8 +88,7 @@ def build_container_card(row: dict, page: ft.Page, methods, is_narrow: bool) -> 
                 ft.Icon(ft.Icons.APPS_ROUNDED, size=tokens.ICON_MD, color=theme.primary()),
                 details_col,
                 btn_shell,
-                btn_reset,
-                btn_remove,
+                btn_display,
                 menu_btn,
             ],
             vertical_alignment=ft.CrossAxisAlignment.CENTER,

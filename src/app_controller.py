@@ -12,11 +12,17 @@ import flet as ft
 import flet_notifications as ft_notifications
 
 from app_shell import AppShell
-from controller_actions import BuildActions, ContainerActions, DistroActions, SessionActions
+from controller_actions import (
+    BuildActions,
+    ContainerActions,
+    DisplayActions,
+    DistroActions,
+    SessionActions,
+)
 from core import proot_probe, shared_services, theme
 from core.constants import STORAGE_HINTS_DISMISSED, STORAGE_ONBOARDING_DONE
 from core.state import state
-from services import ad_service, proot_service, session_manager
+from services import ad_service, desk_service, proot_service, session_manager
 from state.controller_ctx import ControllerMethods, ControllerMethodsCtx
 
 logger = logging.getLogger(__name__)
@@ -32,7 +38,7 @@ _THEME_MODES = {
 _THEME_ORDER = ("light", "dark", "system")
 
 
-class AppController(DistroActions, ContainerActions, SessionActions, BuildActions):
+class AppController(DistroActions, ContainerActions, SessionActions, BuildActions, DisplayActions):
     def __init__(self, page: ft.Page):
         self.page = page
         self.proot = proot_service
@@ -40,6 +46,7 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
         # activity destroy/recreate, so reopening the app re-attaches to the
         # same live shells instead of losing them (Termux behavior).
         self.session_manager = session_manager.shared_manager()
+        self.desk_manager = desk_service.DeskManager()
         self.ad_service = ad_service.AdService(page)
         # android_default_icon: our app-icon silhouette (bundled via
         # tool.flet.android.res_dir), not the plugin's default Flet logo.
@@ -56,7 +63,10 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             self.page.run_task(self.exit_app)
 
     def _on_notification_tap(self, e) -> None:
-        """Tapping the persistent notification returns to the running shell."""
+        """Tapping the persistent notification returns to the running work —
+        the open display if there is one, else the running shell."""
+        if state.active_display:
+            return
         entries = list(self.session_manager.entries.values())
         if entries and not state.active_session:
             state.active_session = entries[-1].key
@@ -121,8 +131,18 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             kill_session=self.kill_session,
             kill_all_sessions=self.kill_all_sessions,
             open_session=self.open_session,
+            open_session_with_options=self.open_session_with_options,
             leave_session=self.leave_session,
             close_session=self.close_session,
+            open_display=self.open_display,
+            probe_display=self.probe_display,
+            start_display=self.start_display,
+            stop_display=self.stop_display,
+            leave_display=self.leave_display,
+            install_display_support=self.install_display_support,
+            show_display_logs=self.show_display_logs,
+            set_display_fullscreen=self.set_display_fullscreen,
+            share_display=self.share_display,
             finish_onboarding=self.finish_onboarding,
             dismiss_hints=self.dismiss_hints,
             exit_app=self.exit_app,
@@ -137,6 +157,7 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
         for _name, _fn in list(vars(methods).items()):
             if inspect.iscoroutinefunction(_fn):
                 setattr(methods, _name, self._guard(_fn))
+        self.methods = methods  # sheets opened imperatively (display launcher) need it
         self.page._controller = self
         self.page.render(lambda: ControllerMethodsCtx(methods, lambda: AppShell()))
 
@@ -177,6 +198,13 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
         self.connectivity = ft.Connectivity()
         self.connectivity.on_change = self._on_connectivity
         self.page.services.append(self.connectivity)
+        # flet dev4 services the display wrap uses: screen-awake while a
+        # desktop is open, the system share sheet and clipboard for URLs/code.
+        self.wakelock = ft.Wakelock()
+        self.clipboard = ft.Clipboard()
+        self.share = ft.Share()
+        for _service in (self.wakelock, self.clipboard, self.share):
+            self.page.services.append(_service)
         # Termux-style persistent notification: keeps the app alive in the
         # background while Linux sessions are running.
         self.page.services.append(self.notifications)

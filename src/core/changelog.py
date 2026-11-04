@@ -3,6 +3,14 @@
 from __future__ import annotations
 
 CHANGELOG: dict[str, str] = {
+    "1.1.0": (
+        "• Proot Distro X11: native X11 desktop on your phone\n"
+        "• One tap from the Display tab: install desktop support, start, use\n"
+        "• Full input — tap, drag, scroll, keyboard — plus clipboard sync\n"
+        "• Access-code protected, loopback-only: nothing leaves the device\n"
+        "• Works on Alpine, Debian, Ubuntu, Fedora and Arch containers\n"
+        "• Flet family moved to 1.1.0.dev4"
+    ),
     "1.0.1": (
         "• Background running: persistent notification keeps sessions alive\n"
         "• Exit App button in Settings\n"

@@ -71,6 +71,23 @@ class AppState:
     active_session: str | None = None
     session_error: str = ""
 
+    # Display / X11 (v1.1.0): the container whose display is open, or None.
+    active_display: str | None = None
+    display_status: str = "idle"  # idle | starting | running | stopping | error
+    display_status_text: str = ""
+    display_error: str = ""
+    display_url: str = ""
+    display_fullscreen: bool = False
+    display_support: dict | None = None  # per-container caps cache: name -> guest_capabilities
+    display_installing: str | None = None  # container currently provisioning display support
+    display_logs: list = None  # list[str] — bounded log tail for the active display
+    display_install_logs: list = None  # list[str] — live provisioning output
+    # Launcher-set options for the NEXT start — the 100% termux-desk wrap:
+    # fps/quality (server params), geometry (Xvfb screen, "auto" = device
+    # aspect), orientation (fullscreen lock), lan (host 0.0.0.0), tunnel
+    # (upstream localhost.run publish).
+    display_settings: dict | None = None
+
     def __init__(self):
         self.containers = []
         self.search_results = []
@@ -78,6 +95,17 @@ class AppState:
         self.busy_locks = []
         self.install_logs = []
         self.build_logs = []
+        self.display_support = {}
+        self.display_logs = []
+        self.display_install_logs = []
+        self.display_settings = {
+            "fps": 12,
+            "quality": 70,
+            "geometry": "auto",
+            "orientation": "landscape",
+            "lan": False,
+            "tunnel": False,
+        }
 
 
 state = AppState()

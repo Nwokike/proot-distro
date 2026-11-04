@@ -12,6 +12,8 @@ from core import theme, tokens
 from core.state import state
 from screens import (
     BuildView,
+    DesktopView,
+    DisplayView,
     DistroView,
     FilesView,
     OnboardingView,
@@ -22,13 +24,15 @@ from screens import (
 
 TAB_DISTRO = 0
 TAB_TERMINAL = 1
-TAB_FILES = 2
-TAB_BUILD = 3
-TAB_SETTINGS = 4
+TAB_DISPLAY = 2
+TAB_FILES = 3
+TAB_BUILD = 4
+TAB_SETTINGS = 5
 
 _TABS = (
     ("Distros", ft.Icons.APPS),
     ("Terminal", ft.Icons.TERMINAL),
+    ("Display", ft.Icons.DESKTOP_WINDOWS),
     ("Files", ft.Icons.FOLDER_OUTLINED),
     ("Build", ft.Icons.BUILD_ROUNDED),
     ("Settings", ft.Icons.SETTINGS),
@@ -62,12 +66,24 @@ def AppShell() -> ft.Control:
 
     entry = _session_entry(controller, st.active_session)
     fullscreen = st.terminal_fullscreen
-    if entry is not None:
+    # A running display owns the screen first (it is the display surface);
+    # then an open shell; then the tabs.
+    desk_session = None
+    dmanager = getattr(controller, "desk_manager", None)
+    if st.active_display and dmanager is not None:
+        candidate = dmanager.get(st.active_display)
+        if candidate is not None and candidate.status.value == "running":
+            desk_session = candidate
+    if desk_session is not None:
+        body = DesktopView(desk_session)
+    elif entry is not None:
         body = TerminalView(entry)
     elif active_tab == TAB_DISTRO:
         body = DistroView()
     elif active_tab == TAB_TERMINAL:
         body = SessionSelectorView()
+    elif active_tab == TAB_DISPLAY:
+        body = DisplayView()
     elif active_tab == TAB_FILES:
         body = FilesView()
     elif active_tab == TAB_BUILD:
@@ -76,9 +92,9 @@ def AppShell() -> ft.Control:
         body = SettingsView()
 
     chrome: list[ft.Control] = []
-    if entry is None:
-        # CollabShell: one fixed bar for every tab; the session screen has
-        # its own header, so the shell bar steps aside while it is open.
+    if entry is None and desk_session is None:
+        # CollabShell: one fixed bar for every tab; the session/desktop screen
+        # has its own header, so the shell bar steps aside while either is open.
         chrome.append(
             AppHeader(
                 _TABS[active_tab][0],
@@ -87,7 +103,7 @@ def AppShell() -> ft.Control:
             )
         )
     chrome.append(ft.Container(content=body, expand=True, bgcolor=theme.bg()))
-    if entry is None and not fullscreen:
+    if entry is None and desk_session is None and not fullscreen:
         # The session owns the whole screen (true full screen, extra room
         # for the keyboard) — the nav bar hides while a shell is open.
         chrome.append(

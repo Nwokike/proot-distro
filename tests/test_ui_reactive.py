@@ -376,9 +376,10 @@ def test_views_contain_no_app_header():
 
 
 def test_navigation_bar_hidden_during_session():
-    """NavigationBar must step aside while a session is open or in full screen."""
+    """NavigationBar must step aside while a session is open, a display is
+    open, or either is in full screen (v1.1.0 added the display takeover)."""
     source = (ROOT / "src" / "app_shell.py").read_text(encoding="utf-8")
-    assert "if entry is None and not fullscreen:" in source
+    assert "if entry is None and desk_session is None and not fullscreen:" in source
 
 
 def test_terminal_has_no_hardcoded_quick_commands():
