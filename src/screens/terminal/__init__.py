@@ -35,7 +35,7 @@ from screens.terminal_controls import (
     _cycle_terminal_theme,
     _theme_name,
 )
-from services.session_manager import SessionEntry
+from services.session_manager import SCROLLBACK_CHUNKS, SessionEntry
 from state.controller_ctx import ControllerMethodsCtx
 
 from . import menu, wiring
@@ -81,7 +81,7 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
             show_extra_keys=True,
             show_search=False,
             show_settings=False,
-            scrollback=10000,
+            scrollback=SCROLLBACK_CHUNKS,  # same bound the entry's deque uses
             font_family=tokens.MONO_FONT,
             cursor_style="block",
             cursor_blink=True,

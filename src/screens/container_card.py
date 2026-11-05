@@ -1,5 +1,5 @@
 """Responsive installed-container card — exactly three inline items: Open
-shell, Open display (or Set up display), and the ⋯ menu (rename/backup/copy/
+shell, Open display (or Install desktop), and the ⋯ menu (rename/backup/copy/
 sync/inspect/run + reset/remove live there now, grouped with the destructive
 pair last)."""
 
@@ -18,7 +18,7 @@ def build_container_card(row: dict, page: ft.Page, methods, is_narrow: bool) -> 
     cname = row.get("name", "?")
     caps = (state.display_support or {}).get(cname) or {}
     ready = bool(caps.get("desk_ready") and caps.get("x_server"))
-    display_label = "Open display" if ready else "Set up display"
+    display_label = "Open display" if ready else "Install desktop"
 
     details_col = ft.Column(
         controls=[

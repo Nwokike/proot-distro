@@ -23,7 +23,7 @@ from services.proot_namespaces import (
 )
 
 from . import _core as _core_module
-from ._capabilities import guest_capabilities
+from ._capabilities import DESKTOP_STARTERS, guest_capabilities
 from ._commands import (
     _call_get_proot_cmd,
     get_proot_cmd,
@@ -76,6 +76,7 @@ def __getattr__(name: str):
 
 
 __all__ = [
+    "DESKTOP_STARTERS",
     "PULL_LIMIT_COPY",
     "Outcome",
     "ProotUnavailable",

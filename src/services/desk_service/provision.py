@@ -1,6 +1,6 @@
-"""Per-distro display provisioning — install Xvfb + a desktop + clipboard +
-the guest python modules TermuxDesk needs, then vendor the termux_desk package
-into the guest.
+"""Per-distro desktop provisioning — install Xvfb (+ xauth) + a desktop +
+clipboard (+ ssh for the tunnel) into the guest. The display SERVER is not
+installed here: it runs in the app, bundled with its deps.
 
 APT reliability block copied from ServalDesk (Acquire::Retries, lock timeout,
 dpkg --configure -a first) — it is what makes installs survive flaky mobile
@@ -12,10 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import shlex
-import shutil
-from pathlib import Path
 
-from core import storage_paths
 from services import session_service
 
 logger = logging.getLogger(__name__)
@@ -40,53 +37,44 @@ _PM_BY_ID = {
     "sles": "zypper",
 }
 
-# Base stack per desktop: X server + clipboard + guest python modules that
-# termux_desk imports (aiohttp, Pillow as PIL, python-xlib as Xlib) +
-# openssh for the upstream localhost.run tunnel (`ssh -R … nokey@localhost.run`).
+# Base stack: X server (+ xauth for the app-global cookie), clipboard, dbus
+# for the session, and openssh for the upstream localhost.run tunnel
+# (`ssh -R … nokey@localhost.run`). NO guest python — the display server is
+# bundled in the app.
 _BASE_PACKAGES = {
     "apk": [
         "xvfb",
+        "xauth",
         "xclip",
-        "py3-aiohttp",
-        "py3-pillow",
-        "py3-xlib",
         "dbus",
         "dbus-x11",
         "openssh-client",
     ],
     "apt-get": [
         "xvfb",
+        "xauth",
         "xclip",
-        "python3-aiohttp",
-        "python3-pil",
-        "python3-xlib",
         "dbus-x11",
         "openssh-client",
     ],
     "dnf": [
         "xorg-x11-server-Xvfb",
+        "xauth",
         "xclip",
-        "python3-aiohttp",
-        "python3-pillow",
-        "python3-xlib",
         "dbus-x11",
         "openssh-clients",
     ],
     "pacman": [
         "xorg-server-xvfb",
+        "xorg-xauth",
         "xclip",
-        "python-aiohttp",
-        "python-pillow",
-        "python-xlib",
         "dbus",
         "openssh",
     ],
     "zypper": [
         "xorg-x11-server-Xvfb",
+        "xauth",
         "xclip",
-        "python3-aiohttp",
-        "python3-Pillow",
-        "python3-xlib",
         "dbus-1-x11",
         "openssh",
     ],
@@ -194,50 +182,21 @@ def install_script(caps: dict, desktop_env: str = "xfce") -> str:
     return f"""set -e
 {update}
 {reliability}{install}
-echo "display support ready ({desktop_env})"
+echo "desktop ready ({desktop_env})"
 """
 
 
-def vendor_termux_desk(container: str) -> str:
-    """Copy the installed termux_desk package (5 py files + viewer.html, pure
-    Python) into the guest's dist-packages, and return the GUEST site dir.
-
-    Vendoring means the guest needs no pip and no network for the display
-    server itself — the app ships its own wrapped dependency, the same way
-    proot-distro ships in the host.
-    """
-    import termux_desk
-
-    pkg_dir = Path(termux_desk.__file__).resolve().parent
-    rootfs = storage_paths.containers_dir() / container / "rootfs"
-    # A stable, always-importable location for guest python3: dist-packages
-    # exists on Debian/Ubuntu; create it where missing (Alpine/Fedora) and
-    # add a .pth so every python3 picks it up.
-    guest_site = rootfs / "usr" / "lib" / "python3" / "dist-packages" / "termux_desk"
-    guest_site.mkdir(parents=True, exist_ok=True)
-    for src in pkg_dir.iterdir():
-        if src.suffix in {".py", ".html"}:
-            shutil.copy2(src, guest_site / src.name)
-    pth_dir = guest_site.parent.parent
-    (pth_dir / "proot-x11.pth").write_text("dist-packages\n", encoding="utf-8")
-    logger.info("vendored termux_desk into %s", guest_site)
-    return "/usr/lib/python3/dist-packages"
-
-
 async def install(container: str, caps: dict, desktop_env: str = "xfce", on_chunk=None) -> dict:
-    """Run the provisioning script in the guest; unbounded by design (a
-    multi-hundred-MB install must not time out) — the UI owns progress and
-    cancellation. Streams output through `on_chunk`. The capture is sync, so
-    it runs on a worker thread to keep the event loop responsive."""
+    """Run the provisioning script in the guest; unbounded by design (an
+    install must not time out) — the UI owns progress and cancellation.
+    Streams output through `on_chunk`. The capture is sync, so it runs on a
+    worker thread to keep the event loop responsive. Nothing is vendored:
+    the display server is bundled in the app."""
     script = install_script(caps, desktop_env)
-    result = await asyncio.to_thread(
+    return await asyncio.to_thread(
         session_service.command_capture,
         container,
         ["/bin/sh", "-lc", script],
         timeout=None,
         on_chunk=on_chunk,
     )
-    if result.get("ok"):
-        # Vendor AFTER the guest python3 exists (the install just added it).
-        vendor_termux_desk(container)
-    return result

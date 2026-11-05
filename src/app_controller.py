@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import inspect
+import json
 import logging
 import os
 
@@ -46,7 +47,9 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
         # activity destroy/recreate, so reopening the app re-attaches to the
         # same live shells instead of losing them (Termux behavior).
         self.session_manager = session_manager.shared_manager()
-        self.desk_manager = desk_service.DeskManager()
+        # Shared singleton (same pattern): the FGS keeps the process alive, so
+        # a reopened app re-adopts running display sessions instead of losing them.
+        self.desk_manager = desk_service.shared_manager()
         self.ad_service = ad_service.AdService(page)
         # android_default_icon: our app-icon silhouette (bundled via
         # tool.flet.android.res_dir), not the plugin's default Flet logo.
@@ -198,13 +201,9 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
         self.connectivity = ft.Connectivity()
         self.connectivity.on_change = self._on_connectivity
         self.page.services.append(self.connectivity)
-        # flet dev4 services the display wrap uses: screen-awake while a
-        # desktop is open, the system share sheet and clipboard for URLs/code.
-        self.wakelock = ft.Wakelock()
-        self.clipboard = ft.Clipboard()
-        self.share = ft.Share()
-        for _service in (self.wakelock, self.clipboard, self.share):
-            self.page.services.append(_service)
+        # Wakelock/Clipboard/Share for the display wrap are the ONE app-wide
+        # instances already mounted by shared_services (page.wakelock,
+        # page.clipboard, page.share) — never mount a second instance.
         # Termux-style persistent notification: keeps the app alive in the
         # background while Linux sessions are running.
         self.page.services.append(self.notifications)
@@ -221,6 +220,16 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             state.docker_token = token
             if token:
                 os.environ["PD_DOCKER_AUTH"] = token
+        saved_settings = await self.prefs.get("display_settings")
+        if isinstance(saved_settings, str) and saved_settings:
+            try:
+                loaded = json.loads(saved_settings)
+                if isinstance(loaded, dict):
+                    from core.state import DEFAULT_DISPLAY_SETTINGS
+
+                    state.display_settings = {**DEFAULT_DISPLAY_SETTINGS, **loaded}
+            except ValueError, TypeError:
+                logger.debug("saved display_settings unparseable — keeping defaults")
         state.theme_revision += 1
 
     def _noop_cancel(self) -> None:

@@ -15,11 +15,20 @@ class ContainerActions:
     async def rename_container(self, orig: str, new: str) -> None:
         new = new.strip()
         if not new:
+            self.show_snack("name must not be empty")
+            return
+        if "/" in new:
+            self.show_snack("name must not contain '/'")
             return
         outcome = await asyncio.to_thread(self.proot.rename_container, orig, new)
         self.show_snack(
             f"renamed to {new}" if outcome.ok else self.proot.friendly_job_error(outcome)
         )
+        if outcome.ok:
+            # The caps cache is keyed by name — move the entry to the new key.
+            from controller_actions.display_actions import invalidate_display_support
+
+            invalidate_display_support(orig)
         await self.refresh_containers()
         if outcome.ok:
             await self.ad_service.show_interstitial()

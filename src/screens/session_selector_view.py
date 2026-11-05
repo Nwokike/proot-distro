@@ -28,6 +28,12 @@ def SessionSelectorView() -> ft.Control:
     sections: list[ft.Control] = []
     open_entries = list(manager.entries.values()) if manager else []
     if open_entries:
+
+        def _add_shell(_e) -> None:
+            from screens.terminal.menu import open_new_session_sheet
+
+            open_new_session_sheet(page, methods, manager)
+
         rows = []
         for entry in open_entries:
 
@@ -78,7 +84,18 @@ def SessionSelectorView() -> ft.Control:
             )
         sections.append(
             ft.Column(
-                controls=[section_header("Open shells"), *rows],
+                controls=[
+                    section_header(
+                        "Open shells",
+                        action=ft.IconButton(
+                            icon=ft.Icons.ADD_ROUNDED,
+                            icon_size=tokens.ICON_MD,
+                            tooltip="New shell",
+                            on_click=_add_shell,
+                        ),
+                    ),
+                    *rows,
+                ],
                 spacing=tokens.SPACE_SM,
             )
         )

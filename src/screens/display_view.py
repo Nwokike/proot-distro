@@ -15,7 +15,6 @@ from components import card, containers_required_empty_state, section_header
 from components.banner_ad import pooled_banner_ad
 from core import theme, tokens
 from core.state import state
-from services.desk_service import DEFAULT_DESKTOP, DESKTOP_ENVIRONMENTS
 from state.controller_ctx import ControllerMethodsCtx
 
 
@@ -40,11 +39,11 @@ def DisplayView() -> ft.Control:
         rows = []
         for session in running:
 
-            def _resume(_e, name=session.container) -> None:
-                state.active_display = name
+            def _resume(_e, key=session.key) -> None:
+                state.active_display = key
 
-            def _stop(_e, name=session.container) -> None:
-                page.run_task(methods.stop_display, name)
+            def _stop(_e, key=session.key) -> None:
+                page.run_task(methods.stop_display, key)
 
             rows.append(
                 card(
@@ -57,14 +56,14 @@ def DisplayView() -> ft.Control:
                                     color=theme.ok(),
                                 ),
                                 ft.Text(
-                                    session.container,
+                                    session.key,
                                     size=tokens.FONT_LG,
                                     weight=ft.FontWeight.W_600,
                                     color=theme.text(),
                                     expand=True,
                                 ),
                                 ft.Text(
-                                    f":{session.display} · port {session.port}",
+                                    f"{session.mode} · port {session.port}",
                                     size=tokens.FONT_SM,
                                     color=theme.text_dim(),
                                 ),
@@ -99,15 +98,46 @@ def DisplayView() -> ft.Control:
             )
         )
 
+    # A display still starting gets a live progress card in the tab (with
+    # Cancel) — otherwise a slow first start looks like nothing happened.
+    starting_sessions = manager.starting() if manager else []
+    for session in starting_sessions:
+
+        def _cancel(_e, key=session.key) -> None:
+            page.run_task(methods.stop_display, key)
+
+        sections.insert(
+            0,
+            card(
+                ft.Row(
+                    controls=[
+                        ft.ProgressRing(
+                            width=tokens.PROGRESS_RING_MD, height=tokens.PROGRESS_RING_MD
+                        ),
+                        ft.Text(
+                            st.display_status_text or f"starting {session.key}…",
+                            size=tokens.FONT_SM,
+                            color=theme.text(),
+                            expand=True,
+                        ),
+                        ft.TextButton("Cancel", on_click=_cancel),
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=tokens.SPACE_SM,
+                ),
+                padding=tokens.SPACE_SM,
+            ),
+        )
+
     containers = [row.get("name", "?") for row in st.containers]
-    if not containers and not running:
+    if not containers and not running and not starting_sessions:
         return containers_required_empty_state(page, ad_slot="display-empty")
     if containers:
         rows = []
         for name in containers:
             caps = (st.display_support or {}).get(name) or {}
             ready = bool(caps.get("desk_ready") and caps.get("x_server"))
-            label = "Open display" if ready else "Set up display"
+            label = "Open display" if ready else "Install desktop"
 
             def _open(_e, container=name) -> None:
                 page.run_task(methods.open_display, container)
@@ -155,9 +185,26 @@ def DisplayView() -> ft.Control:
                     padding=tokens.SPACE_SM,
                 )
             )
+
+        def _new_display(_e) -> None:
+            from screens.display_launcher import show_new_display_sheet
+
+            show_new_display_sheet(page, methods)
+
         sections.append(
             ft.Column(
-                controls=[section_header("Installed containers"), *rows],
+                controls=[
+                    section_header(
+                        "Installed containers",
+                        action=ft.IconButton(
+                            icon=ft.Icons.ADD_ROUNDED,
+                            icon_size=tokens.ICON_MD,
+                            tooltip="New display (desktop or single app)",
+                            on_click=_new_display,
+                        ),
+                    ),
+                    *rows,
+                ],
                 spacing=tokens.SPACE_SM,
             )
         )
@@ -180,85 +227,3 @@ def DisplayView() -> ft.Control:
         expand=True,
         scroll=ft.ScrollMode.AUTO,
     )
-
-
-def build_de_cards(selected: dict, on_pick) -> list[ft.Control]:
-    """ServalDesk-style desktop-environment cards: name + description + RAM
-    note, `BEST` badge on the recommended default. `selected` is a one-key
-    dict {key: True} so the highlight survives re-renders."""
-    rows: list[ft.Control] = []
-    for de in DESKTOP_ENVIRONMENTS:
-        is_selected = bool(selected.get(de.key)) or (not selected and de.key == DEFAULT_DESKTOP)
-        rows.append(
-            card(
-                ft.Container(
-                    content=ft.Row(
-                        controls=[
-                            ft.Column(
-                                controls=[
-                                    ft.Row(
-                                        controls=[
-                                            ft.Text(
-                                                de.name,
-                                                size=tokens.FONT_MD,
-                                                weight=ft.FontWeight.W_600,
-                                                color=theme.text(),
-                                                expand=True,
-                                            ),
-                                            ft.Container(
-                                                content=ft.Text(
-                                                    "BEST",
-                                                    size=tokens.FONT_XXS,
-                                                    weight=ft.FontWeight.BOLD,
-                                                    color=theme.primary(),
-                                                ),
-                                                visible=de.best,
-                                                padding=ft.Padding(
-                                                    tokens.SPACE_XS,
-                                                    tokens.SPACE_XXS,
-                                                    tokens.SPACE_XS,
-                                                    tokens.SPACE_XXS,
-                                                ),
-                                                border=ft.Border.all(
-                                                    1,
-                                                    ft.Colors.with_opacity(
-                                                        tokens.OPACITY_BORDER, theme.primary()
-                                                    ),
-                                                ),
-                                                border_radius=tokens.RADIUS_SM,
-                                            ),
-                                        ],
-                                        spacing=tokens.SPACE_XS,
-                                    ),
-                                    ft.Text(
-                                        de.description,
-                                        size=tokens.FONT_XS,
-                                        color=theme.text_dim(),
-                                    ),
-                                    ft.Text(
-                                        de.ram_note,
-                                        size=tokens.FONT_XXS,
-                                        color=theme.text_dim(),
-                                    ),
-                                ],
-                                spacing=tokens.SPACE_XXS,
-                                expand=True,
-                            ),
-                            ft.Radio(
-                                group="de-picker",
-                                value=de.key,
-                            ),
-                        ],
-                        spacing=tokens.SPACE_SM,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                    bgcolor=ft.Colors.with_opacity(tokens.OPACITY_MEDIUM, theme.primary())
-                    if is_selected
-                    else None,
-                    on_click=lambda _e, k=de.key: on_pick(k),
-                    ink=True,
-                ),
-                padding=tokens.SPACE_SM,
-            )
-        )
-    return rows

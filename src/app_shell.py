@@ -77,7 +77,11 @@ def AppShell() -> ft.Control:
     if desk_session is not None:
         body = DesktopView(desk_session)
     elif entry is not None:
-        body = TerminalView(entry)
+        # Key by session id: without it the reconciler patches the new
+        # MobileTerminal ONTO the previous widget's control id (same fn, no
+        # key → in-place diff) — no remount, no replay, and the screen keeps
+        # showing the previous shell while keystrokes go to the new one.
+        body = TerminalView(entry, key=entry.key)
     elif active_tab == TAB_DISTRO:
         body = DistroView()
     elif active_tab == TAB_TERMINAL:

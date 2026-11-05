@@ -339,7 +339,12 @@ def show_manage_files_modal(page: ft.Page, container: str, initial_path: str = "
         def _scan():
             try:
                 return container_files_service.list_container_dir(container, target_dir)
-            except Exception:
+            except Exception as exc:
+                # Log the real error before falling back — otherwise a
+                # permissions bug looks like an empty root.
+                logger.warning(
+                    "list %s in %s failed (%r) — falling back to /", target_dir, container, exc
+                )
                 if target_dir != "/":
                     return container_files_service.list_container_dir(container, "/")
                 return []

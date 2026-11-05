@@ -72,9 +72,21 @@ class SessionActions:
         if manager is not None:
             desktops = manager.running()
         if desktops:
-            await self._start_fgs(f"Display running: {desktops[0].container}")
+            names = ", ".join(sorted(s.key for s in desktops))
+            label = (
+                f"Display running: {names}"
+                if len(desktops) == 1
+                else f"{len(desktops)} displays running: {names}"
+            )
+            await self._start_fgs(label)
         elif shells:
-            await self._start_fgs(f"Linux session running: {sorted(shells)[0]}")
+            names = ", ".join(sorted(shells))
+            label = (
+                f"Linux session running: {names}"
+                if len(shells) == 1
+                else f"{len(shells)} Linux sessions running: {names}"
+            )
+            await self._start_fgs(label)
         else:
             await self._stop_fgs()
 
@@ -89,7 +101,11 @@ class SessionActions:
             logger.debug("FGS stop failed: %s", exc)
 
     async def list_sessions(self) -> None:
-        rows = await asyncio.to_thread(self.proot.active_sessions)
+        try:
+            rows = await asyncio.to_thread(self.proot.active_sessions)
+        except Exception as exc:
+            self.show_snack(f"could not list sessions: {_reason(exc)}")
+            return
         if not rows:
             self.show_snack("no running sessions")
             return
@@ -176,7 +192,21 @@ class SessionActions:
         )
 
     async def open_session(self, container: str) -> None:
-        """Open a NEW shell on the container (multi-shell; no ad on open)."""
+        """Open a NEW shell on the container (multi-shell; no ad on open).
+        In-flight guard: a double-tap must not open two shells."""
+        opening = getattr(self, "_opening_sessions", None)
+        if opening is None:
+            opening = self._opening_sessions = set()
+        if container in opening:
+            self.show_snack(f"already opening a shell on {container}…")
+            return
+        opening.add(container)
+        try:
+            await self._open_session_impl(container)
+        finally:
+            opening.discard(container)
+
+    async def _open_session_impl(self, container: str) -> None:
         state.session_error = ""
         # If an image ref was passed instead of a container name (e.g.
         # 'archlinux/archlinux'), resolve it to the actual installed container.
@@ -246,10 +276,20 @@ class SessionActions:
 
     async def run_container(self, container: str, args_text: str) -> None:
         """`proot-distro run` — Entrypoint/Cmd plus the args, on a PTY, captured live."""
+        import shlex
+
         from core import tokens as _t
         from services import session_service
 
-        run_args = [a for a in args_text.split() if a]
+        try:
+            run_args = shlex.split(args_text)
+        except ValueError as exc:
+            state.run_status = f"could not parse args: {exc}"
+            state.run_output = ""
+            state.run_returncode = None
+            state.run_busy = None
+            self.show_snack(f"bad args syntax: {exc}")
+            return
         state.run_busy = container
         state.run_status = "starting…"
         state.run_output = ""

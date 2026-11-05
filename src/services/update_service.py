@@ -80,7 +80,7 @@ def is_newer(remote_build, remote_version=None) -> bool:
     try:
         if int(remote_build) > APP_BUILD_NUMBER:
             return True
-    except TypeError, ValueError:
+    except TypeError, ValueError:  # PEP 758 — parenthesized for clarity
         logger.debug("unparseable remote build number %r — comparing versions", remote_build)
     remote = _release_tuple(remote_version)
     local = _release_tuple(APP_VERSION)

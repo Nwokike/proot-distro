@@ -4,6 +4,17 @@ from __future__ import annotations
 
 import flet as ft
 
+# The ONE source of display-start defaults (used by state.__init__ and by
+# DisplayActions._display_settings — never duplicated).
+DEFAULT_DISPLAY_SETTINGS: dict = {
+    "fps": 12,
+    "quality": 70,
+    "geometry": "auto",
+    "orientation": "landscape",
+    "lan": False,
+    "tunnel": False,
+}
+
 
 @ft.observable
 class AppState:
@@ -79,7 +90,7 @@ class AppState:
     display_url: str = ""
     display_fullscreen: bool = False
     display_support: dict | None = None  # per-container caps cache: name -> guest_capabilities
-    display_installing: str | None = None  # container currently provisioning display support
+    display_installing: str | None = None  # container currently installing the desktop
     display_logs: list = None  # list[str] — bounded log tail for the active display
     display_install_logs: list = None  # list[str] — live provisioning output
     # Launcher-set options for the NEXT start — the 100% termux-desk wrap:
@@ -98,14 +109,7 @@ class AppState:
         self.display_support = {}
         self.display_logs = []
         self.display_install_logs = []
-        self.display_settings = {
-            "fps": 12,
-            "quality": 70,
-            "geometry": "auto",
-            "orientation": "landscape",
-            "lan": False,
-            "tunnel": False,
-        }
+        self.display_settings = dict(DEFAULT_DISPLAY_SETTINGS)
 
 
 state = AppState()

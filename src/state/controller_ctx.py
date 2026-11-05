@@ -71,10 +71,13 @@ class ControllerMethods:
     close_session: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     exit_app: Callable[[], Awaitable[None]] = field(default=_noop_async)
 
-    # Display / X11 sessions
+    # Display / X11 sessions — methods take the session key "container:display"
+    # (start_display takes the container and picks a display number).
     open_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     probe_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
-    start_display: Callable[[str, str | None], Awaitable[None]] = field(default=_noop_async)
+    start_display: Callable[[str, str | None, str | None, int | None], Awaitable[None]] = field(
+        default=_noop_async
+    )
     stop_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     leave_display: Callable[[], Awaitable[None]] = field(default=_noop_async)
     install_display_support: Callable[[str, str], Awaitable[None]] = field(default=_noop_async)

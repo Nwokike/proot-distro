@@ -1,9 +1,16 @@
-"""Display launcher sheet — the button-driven entry to a container's display.
+"""Display launcher sheets — the button-driven entry to a container's display.
 
-Opened imperatively via page.show_dialog (the files-modal pattern). Two
-states: display support installed (start display / DE picker / settings) or
-not (ServalDesk-style DE cards + install, reusing the container-install
-progress pattern with a live ANSI-stripped log).
+Opened imperatively via page.show_dialog. The sheet body is a reactive
+component reading the observable state, so the capability probe, the DE pill
+selection, the install log, and the settings all update live while open.
+
+Two entry points:
+- `show_display_sheet` — per container: running → resume is in the tab list;
+  ready → Start display / Open an app on a new display… / settings; not ready
+  → DE pills + exact install script + live install log + Install.
+- `show_new_display_sheet` — the "+" on the Display tab: pick container, then
+  mode (Desktop with DE picker, or Single app with a command) → a new
+  `container:N` session.
 """
 
 from __future__ import annotations
@@ -32,10 +39,12 @@ _APP_PRESETS = (
     ("VS Code", "code"),
 )
 
+_CUSTOM = "__custom__"
+
 
 def _status_line(ready: bool, caps: dict) -> ft.Control:
     os_name = (caps.get("os") or {}).get("pretty_name", "") or "unknown distro"
-    label = "X11 display ready" if ready else "display support missing"
+    label = "X11 desktop ready" if ready else "desktop not installed"
     return ft.Row(
         controls=[
             ft.Container(
@@ -50,16 +59,67 @@ def _status_line(ready: bool, caps: dict) -> ft.Control:
     )
 
 
-def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> None:
-    """Open the launcher sheet for a container. `caps` is the probed
-    guest_capabilities dict (may be empty when probing failed)."""
-    ready = bool(caps.get("desk_ready") and caps.get("x_server"))
-    pm = package_manager_for(caps) if caps else None
+def _pill_style() -> ft.ButtonStyle:
+    return ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL))
 
-    selected = {DEFAULT_DESKTOP: True}
+
+def _set_setting(key: str, value: object) -> None:
+    state.display_settings = {**(state.display_settings or {}), key: value}
+
+
+def _picker_with_custom(
+    label: str,
+    options: tuple[tuple[str, str], ...],
+    key: str,
+    *,
+    hint: str,
+) -> ft.Control:
+    """Dropdown + a Custom… option that reveals a free-text field — the
+    upstream value ranges are ranges, not our presets."""
+    settings = state.display_settings or {}
+    current = str(settings.get(key, options[0][0]))
+    is_custom = current not in {v for v, _t in options}
+    custom_field = ft.TextField(
+        label=f"{label} (custom)",
+        hint_text=hint,
+        value=current if is_custom else "",
+        width=tokens.DROPDOWN_WIDTH,
+        height=tokens.CONTROL_SM,
+        text_size=tokens.FONT_XS,
+        visible=is_custom,
+        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+        on_change=lambda e: _set_setting(key, e.control.value or ""),
+    )
+    dropdown = ft.Dropdown(
+        label=label,
+        value=(_CUSTOM if is_custom else current),
+        options=[ft.dropdown.Option(v, t) for v, t in options]
+        + [ft.dropdown.Option(_CUSTOM, "Custom…")],
+        on_change=lambda e: _set_setting(
+            key, e.control.value if e.control.value != _CUSTOM else custom_field.value or current
+        ),
+        width=tokens.DROPDOWN_WIDTH,
+        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+        text_size=tokens.FONT_XS,
+    )
+    return ft.Column(controls=[dropdown, custom_field], spacing=tokens.SPACE_XXS, tight=True)
+
+
+@ft.component
+def _DisplaySheetBody(page: ft.Page, methods, container: str) -> ft.Control:
+    """The reactive body of the per-container display sheet (reads state)."""
+    st, _ = ft.use_state(state)
+    caps = (st.display_support or {}).get(container) or {}
+    sel, set_sel = ft.use_state({DEFAULT_DESKTOP: True})
 
     def _current() -> str:
-        return next((key for key, on in selected.items() if on), DEFAULT_DESKTOP)
+        return next((key for key, on in sel.items() if on), DEFAULT_DESKTOP)
+
+    def _pick(key: str) -> None:
+        set_sel({k: k == key for k in (de.key for de in DESKTOP_ENVIRONMENTS)})
+
+    ready = bool(caps.get("desk_ready") and caps.get("x_server"))
+    pm = package_manager_for(caps) if caps else None
 
     content_controls: list[ft.Control] = [_status_line(ready, caps)]
 
@@ -70,11 +130,11 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
                 icon=ft.Icons.DESKTOP_WINDOWS,
                 on_click=lambda _e: (
                     page.pop_dialog(),
-                    page.run_task(methods.start_display, container, _current()),
+                    page.run_task(methods.start_display, container, _current(), None, None),
                 ),
                 width=float("inf"),
                 height=tokens.CONTROL_MD,
-                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)),
+                style=_pill_style(),
             )
         )
 
@@ -84,62 +144,45 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
 
         content_controls.append(
             ft.OutlinedButton(
-                "Open an app…",
+                "Open an app on a new display…",
                 icon=ft.Icons.WINDOW_ROUNDED,
                 on_click=_open_apps,
                 width=float("inf"),
                 height=tokens.CONTROL_MD,
-                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)),
+                style=_pill_style(),
             )
         )
-
         content_controls.append(
-            ft.Container(
-                content=ft.Dropdown(
-                    label="Desktop environment",
-                    value=_current(),
-                    options=[ft.dropdown.Option(de.key, de.name) for de in DESKTOP_ENVIRONMENTS],
-                    on_change=lambda e: selected.__setitem__(e.control.value, True),
-                    width=tokens.DROPDOWN_WIDTH,
-                    border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-                    text_size=tokens.FONT_XS,
-                ),
-                padding=ft.Padding(tokens.SPACE_NONE, 0, tokens.SPACE_NONE, 0),
+            ft.Dropdown(
+                label="Desktop environment",
+                value=_current(),
+                options=[ft.dropdown.Option(de.key, de.name) for de in DESKTOP_ENVIRONMENTS],
+                on_change=lambda e: _pick(e.control.value),
+                width=tokens.DROPDOWN_WIDTH,
+                border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+                text_size=tokens.FONT_XS,
             )
         )
 
         # ── Display settings — the full upstream param surface (fps/quality),
         # the Xvfb screen size, the fullscreen orientation, and the two ways
         # other devices can reach this display (LAN binding / localhost.run
-        # tunnel). Everything lands in state.display_settings for the next
-        # start; reassign the dict so the observable notifies.
-        def _set_setting(key: str, value: object) -> None:
-            state.display_settings = {**(state.display_settings or {}), key: value}
-
-        def _picker(label: str, options: tuple[tuple[str, str], ...], key: str) -> ft.Control:
-            settings = state.display_settings or {}
-            return ft.Dropdown(
-                label=label,
-                value=str(settings.get(key, options[0][0])),
-                options=[ft.dropdown.Option(v, t) for v, t in options],
-                on_change=lambda e: _set_setting(key, e.control.value),
-                width=tokens.DROPDOWN_WIDTH,
-                border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-                text_size=tokens.FONT_XS,
-            )
-
+        # tunnel). Presets plus Custom… free fields; everything lands in
+        # state.display_settings for the next start.
         content_controls.append(
             ft.Row(
                 controls=[
-                    _picker(
+                    _picker_with_custom(
                         "FPS",
                         (("8", "8 fps"), ("12", "12 fps"), ("15", "15 fps"), ("24", "24 fps")),
                         "fps",
+                        hint="any number > 0, e.g. 30",
                     ),
-                    _picker(
+                    _picker_with_custom(
                         "Quality",
                         (("50", "50"), ("70", "70"), ("85", "85"), ("95", "95")),
                         "quality",
+                        hint="1-95 (upstream JPEG bound)",
                     ),
                 ],
                 spacing=tokens.SPACE_SM,
@@ -149,7 +192,7 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
         content_controls.append(
             ft.Row(
                 controls=[
-                    _picker(
+                    _picker_with_custom(
                         "Resolution",
                         (
                             ("auto", "Auto (screen shape)"),
@@ -158,11 +201,17 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
                             ("1920x1080", "1920 x 1080"),
                         ),
                         "geometry",
+                        hint="WxH, e.g. 2560x1440",
                     ),
-                    _picker(
+                    _picker_with_custom(
                         "Fullscreen",
-                        (("landscape", "Landscape"), ("auto", "System default")),
+                        (
+                            ("landscape", "Landscape"),
+                            ("portrait", "Portrait"),
+                            ("auto", "System default"),
+                        ),
                         "orientation",
+                        hint="orientation",
                     ),
                 ],
                 spacing=tokens.SPACE_SM,
@@ -199,9 +248,10 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
     else:
         content_controls.append(
             ft.Text(
-                "Display support is not installed in this container. Installing pulls "
-                "an X server, the desktop, and the guest python modules (a few hundred "
-                "MB) from the container's package manager.",
+                "The desktop is not installed in this container. Installing pulls an X "
+                "server, the desktop, and the clipboard tools (a few hundred MB) from "
+                "the container's package manager. The display server itself is "
+                "already bundled in this app.",
                 size=tokens.FONT_SM,
                 color=theme.text(),
             )
@@ -213,14 +263,14 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
             ft.Row(
                 controls=[
                     ft.OutlinedButton(
-                        de.name,
-                        on_click=lambda _e, k=de.key: selected.__setitem__(k, True),
+                        de.name + ("  ★" if de.best else ""),
+                        on_click=lambda _e, k=de.key: _pick(k),
                         style=ft.ButtonStyle(
                             shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
                             side=ft.BorderSide(
                                 1,
                                 theme.primary()
-                                if selected.get(de.key)
+                                if sel.get(de.key)
                                 else ft.Colors.with_opacity(tokens.OPACITY_LIGHT, theme.text_dim()),
                             ),
                         ),
@@ -253,12 +303,12 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
 
         content_controls.append(
             ft.FilledButton(
-                "Install display support",
+                "Install desktop",
                 icon=ft.Icons.DOWNLOAD_ROUNDED,
                 on_click=_install,
                 width=float("inf"),
                 height=tokens.CONTROL_MD,
-                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)),
+                style=_pill_style(),
             )
         )
         if state.display_installing == container:
@@ -279,28 +329,181 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
                 )
             )
 
+    return ft.Column(
+        controls=content_controls,
+        tight=True,
+        spacing=tokens.SPACE_SM,
+        scroll=ft.ScrollMode.AUTO,
+        width=tokens.DIALOG_WIDTH,
+    )
+
+
+def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> None:
+    """Open the launcher sheet for a container. `caps` is only the initial
+    probe snapshot — the body re-reads state.display_support live."""
     dlg = ft.AlertDialog(
         title=ft.Text(f"Display — {container}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
-        content=ft.Column(
-            controls=content_controls,
-            tight=True,
-            spacing=tokens.SPACE_SM,
-            scroll=ft.ScrollMode.AUTO,
-            width=tokens.DIALOG_WIDTH,
-        ),
+        content=_DisplaySheetBody(page, methods, container),
         actions=[ft.TextButton("Close", on_click=lambda _e: page.pop_dialog())],
     )
     page.show_dialog(dlg)
 
 
+def show_new_display_sheet(page: ft.Page, methods) -> None:
+    """The Display tab's "+": pick a container, then Desktop or Single app —
+    starts a NEW `container:N` display session."""
+    containers = [r.get("name", "") for r in state.containers if r.get("name")]
+    if not containers:
+        methods.show_snack("install a container first")
+        return
+    if len(containers) == 1:
+        _show_new_display_mode_sheet(page, methods, containers[0])
+        return
+
+    def _picked(c: str) -> None:
+        page.pop_dialog()
+        _show_new_display_mode_sheet(page, methods, c)
+
+    page.show_dialog(
+        ft.AlertDialog(
+            title=ft.Text(
+                "New display — container", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
+            ),
+            content=ft.Column(
+                controls=[
+                    ft.ListTile(
+                        leading=ft.Icon(ft.Icons.APPS_ROUNDED, color=theme.primary()),
+                        title=ft.Text(c, size=tokens.FONT_MD, weight=ft.FontWeight.W_600),
+                        on_click=lambda _e, name=c: _picked(name),
+                    )
+                    for c in containers
+                ],
+                tight=True,
+                spacing=tokens.SPACE_XS,
+                scroll=ft.ScrollMode.AUTO,
+                width=tokens.DIALOG_WIDTH,
+            ),
+            actions=[ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog())],
+        )
+    )
+
+
+@ft.component
+def _NewDisplaySheetBody(page: ft.Page, methods, container: str) -> ft.Control:
+    """Mode picker body: Desktop (with DE dropdown) or Single app (command)."""
+    mode, set_mode = ft.use_state("desktop")
+    sel, set_sel = ft.use_state({DEFAULT_DESKTOP: True})
+    cmd_value, set_cmd_value = ft.use_state("")
+
+    def _current() -> str:
+        return next((key for key, on in sel.items() if on), DEFAULT_DESKTOP)
+
+    def _start(_e) -> None:
+        if mode == "app" and not cmd_value.strip():
+            methods.show_snack("enter a command for the single-app display")
+            return
+        page.pop_dialog()
+        if mode == "app":
+            page.run_task(methods.start_display, container, None, cmd_value.strip(), None)
+        else:
+            page.run_task(methods.start_display, container, _current(), None, None)
+
+    return ft.Column(
+        controls=[
+            ft.Text(
+                "A new X display (:N) on this container — a full desktop, or one app alone.",
+                size=tokens.FONT_SM,
+                color=theme.text_dim(),
+            ),
+            ft.Row(
+                controls=[
+                    ft.OutlinedButton(
+                        "Desktop",
+                        icon=ft.Icons.DESKTOP_WINDOWS,
+                        on_click=lambda _e: set_mode("desktop"),
+                        style=ft.ButtonStyle(
+                            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
+                            side=ft.BorderSide(
+                                1, theme.primary() if mode == "desktop" else theme.surface_alt()
+                            ),
+                        ),
+                    ),
+                    ft.OutlinedButton(
+                        "Single app",
+                        icon=ft.Icons.WINDOW_ROUNDED,
+                        on_click=lambda _e: set_mode("app"),
+                        style=ft.ButtonStyle(
+                            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
+                            side=ft.BorderSide(
+                                1, theme.primary() if mode == "app" else theme.surface_alt()
+                            ),
+                        ),
+                    ),
+                ],
+                spacing=tokens.SPACE_SM,
+                wrap=True,
+            ),
+            ft.Dropdown(
+                label="Desktop environment",
+                value=_current(),
+                visible=mode == "desktop",
+                options=[ft.dropdown.Option(de.key, de.name) for de in DESKTOP_ENVIRONMENTS],
+                on_change=lambda e: set_sel(
+                    {k: k == e.control.value for k in (d.key for d in DESKTOP_ENVIRONMENTS)}
+                ),
+                width=tokens.DROPDOWN_WIDTH,
+                border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+                text_size=tokens.FONT_XS,
+            ),
+            ft.TextField(
+                label="Command to run on its own display",
+                hint_text="e.g. firefox   |   python3 -m http.server 8080   |   pywebview app",
+                value=cmd_value,
+                on_change=lambda e: set_cmd_value(e.control.value or ""),
+                visible=mode == "app",
+                text_size=tokens.FONT_SM,
+                height=tokens.CONTROL_INPUT,
+                border=ft.OutlineInputBorder(
+                    border_radius=tokens.RADIUS_MD,
+                    side=ft.BorderSide(1, theme.surface_alt()),
+                ),
+            ),
+            ft.FilledButton(
+                "Start",
+                icon=ft.Icons.PLAY_CIRCLE_ROUNDED,
+                on_click=_start,
+                width=float("inf"),
+                height=tokens.CONTROL_MD,
+                style=_pill_style(),
+            ),
+        ],
+        tight=True,
+        spacing=tokens.SPACE_SM,
+        width=tokens.DIALOG_WIDTH,
+    )
+
+
+def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None:
+    page.show_dialog(
+        ft.AlertDialog(
+            title=ft.Text(
+                f"New display — {container}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
+            ),
+            content=_NewDisplaySheetBody(page, methods, container),
+            actions=[ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog())],
+        )
+    )
+
+
 def _show_app_sheet(page: ft.Page, methods, container: str) -> None:
-    """Second-level sheet: probed guest apps + an advanced custom command."""
+    """Second-level sheet: probed guest apps + a custom command — each starts a
+    SINGLE-APP display (bare Xvfb, no desktop) on the next free display number."""
     results = ft.Column(
         controls=[ft.ProgressRing(width=tokens.PROGRESS_RING_MD, height=tokens.PROGRESS_RING_MD)],
         spacing=tokens.SPACE_XS,
     )
     custom = ft.TextField(
-        hint_text="custom command (advanced)",
+        hint_text="custom command (e.g. python3 app.py)",
         height=tokens.CONTROL_SM,
         text_size=tokens.FONT_XS,
         expand=True,
@@ -310,32 +513,39 @@ def _show_app_sheet(page: ft.Page, methods, container: str) -> None:
         if not cmd.strip():
             return
         page.pop_dialog()
-        page.run_task(methods.start_display, container, None)
+        page.run_task(methods.start_display, container, None, cmd.strip(), None)
 
-    async def _probe() -> None:
-        # command_capture is blocking — run the whole probe set on a worker
-        # thread so the sheet never freezes.
-        found: list[tuple[str, str]] = []
-        for label, cmd in _APP_PRESETS:
-            try:
-                result = await asyncio.to_thread(
+    async def _probe_one(label: str, cmd: str) -> tuple[str, str] | None:
+        try:
+            result = await asyncio.wait_for(
+                asyncio.to_thread(
                     session_service.command_capture,
                     container,
                     ["/bin/sh", "-c", f"command -v {cmd}"],
-                    15.0,
-                )
-            except Exception as exc:
-                logger.debug("app probe for %s failed: %s", cmd, exc)
-                continue
-            if result.get("ok") and result.get("output", "").strip():
-                found.append((label, cmd))
-        # Event-handler context (post-render, followed by dlg.update()) — the
-        # files-modal pattern; assign a named variable, never a literal list.
+                    10.0,
+                ),
+                timeout=12.0,
+            )
+        except Exception as exc:
+            logger.debug("app probe for %s failed: %s", cmd, exc)
+            return None
+        if result.get("ok") and result.get("output", "").strip():
+            return (label, cmd)
+        return None
+
+    async def _probe() -> None:
+        # Probes run in PARALLEL — one slow probe must not serialize the sheet.
+        probed = await asyncio.gather(*(_probe_one(label, cmd) for label, cmd in _APP_PRESETS))
+        found = [item for item in probed if item is not None]
+        # Event-handler context (post-render, followed by dlg.update()) — assign
+        # a named variable, never a literal list.
         rows = [
             ft.ListTile(
                 leading=ft.Icon(ft.Icons.APPS_ROUNDED, color=theme.primary()),
                 title=ft.Text(label, size=tokens.FONT_SM, weight=ft.FontWeight.W_600),
-                subtitle=ft.Text(cmd, size=tokens.FONT_XS, color=theme.text_dim()),
+                subtitle=ft.Text(
+                    f"{cmd} — on its own display", size=tokens.FONT_XS, color=theme.text_dim()
+                ),
                 on_click=lambda _e, c=cmd: _start_app(c),
             )
             for label, cmd in found
@@ -356,7 +566,7 @@ def _show_app_sheet(page: ft.Page, methods, container: str) -> None:
         content=ft.Column(
             controls=[
                 ft.Text(
-                    "Installed apps found in the guest:",
+                    "Each app gets its own X display (:N) and streams like a desktop:",
                     size=tokens.FONT_SM,
                     color=theme.text_dim(),
                 ),

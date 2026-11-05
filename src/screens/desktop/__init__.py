@@ -104,14 +104,12 @@ def DesktopView(session) -> ft.Control:
                         ft.TextButton(
                             "Show logs",
                             on_click=lambda _e: page.run_task(
-                                methods.show_display_logs, session.container
+                                methods.show_display_logs, session.key
                             ),
                         ),
                         ft.TextButton(
                             "Cancel",
-                            on_click=lambda _e: page.run_task(
-                                methods.stop_display, session.container
-                            ),
+                            on_click=lambda _e: page.run_task(methods.stop_display, session.key),
                         ),
                     ],
                     spacing=tokens.SPACE_SM,
@@ -146,13 +144,13 @@ def DesktopView(session) -> ft.Control:
                         ft.FilledButton(
                             "Retry",
                             on_click=lambda _e: page.run_task(
-                                methods.start_display, session.container, None
+                                methods.start_display, session.container, None, None, None
                             ),
                         ),
                         ft.TextButton(
                             "Show logs",
                             on_click=lambda _e: page.run_task(
-                                methods.show_display_logs, session.container
+                                methods.show_display_logs, session.key
                             ),
                         ),
                         ft.TextButton(
@@ -245,7 +243,8 @@ def DesktopView(session) -> ft.Control:
                 on_click=lambda _e: page.run_task(methods.leave_display),
             ),
             ft.Text(
-                session.container,
+                f"{session.container} :{session.display}"
+                + (f" · {session.app_command}" if session.app_command else ""),
                 size=tokens.FONT_LG,
                 weight=ft.FontWeight.BOLD,
                 color=theme.text(),
@@ -287,17 +286,15 @@ def DesktopView(session) -> ft.Control:
                     ),
                     ft.PopupMenuItem(
                         content=ft.Text("Share"),
-                        on_click=lambda _e: page.run_task(methods.share_display, session.container),
+                        on_click=lambda _e: page.run_task(methods.share_display, session.key),
                     ),
                     ft.PopupMenuItem(
                         content=ft.Text("Logs"),
-                        on_click=lambda _e: page.run_task(
-                            methods.show_display_logs, session.container
-                        ),
+                        on_click=lambda _e: page.run_task(methods.show_display_logs, session.key),
                     ),
                     ft.PopupMenuItem(
                         content=ft.Text("Stop"),
-                        on_click=lambda _e: page.run_task(methods.stop_display, session.container),
+                        on_click=lambda _e: page.run_task(methods.stop_display, session.key),
                     ),
                 ],
             ),

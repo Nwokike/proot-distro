@@ -190,12 +190,26 @@ def ask_shell_options(page: ft.Page, methods, container: str) -> None:
         return [ln.strip() for ln in (field.value or "").splitlines() if ln.strip()]
 
     def _save(_e) -> None:
+        import re
+
+        env_lines = _lines(env)
+        bind_lines = _lines(bind)
+        # Validate BEFORE spawning: a typo must surface here, not as a generic
+        # "could not open" after a full proot attempt.
+        for line in env_lines:
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", line):
+                methods.show_snack(f"bad env line (need VAR=VALUE): {line}")
+                return
+        for line in bind_lines:
+            if not line or any(c in line for c in "\n\r\x00"):
+                methods.show_snack(f"bad bind line: {line}")
+                return
         page.pop_dialog()
         opts = {
             "user": (user.value or "").strip() or "root",
             "work_dir": (work_dir.value or "").strip() or None,
-            "env": _lines(env),
-            "bind": _lines(bind),
+            "env": env_lines,
+            "bind": bind_lines,
             "shared_tmp": bool(shared_tmp.value),
             "shared_home": bool(shared_home.value),
             "fix_low_ports": bool(fix_low_ports.value),

@@ -1,12 +1,22 @@
 """Guest script builder — what runs inside the container for one display session.
 
-The script writes the server's auth code to a rootfs file (`/tmp/termux-desk/
-auth.json`) so the app can auto-authenticate the WebView without parsing
-logs, and — when the tunnel is enabled — starts upstream's LocalhostRunTunnel
-in a daemon thread that publishes the `*.lhr.life` URL to
-`/tmp/termux-desk/tunnel.json` the same way. Every UI-supplied value is
-validated (geometry/host) or shlex-quoted — the script runs as guest root
-inside proot, still treat it as untrusted input.
+The DISPLAY SERVER RUNS IN THE APP (host-side, bundled deps) — the guest only
+provides the X framebuffer and the session:
+
+- `Xvfb :N` listens on TCP 6000+N so the host-side server connects over
+  `127.0.0.1:N` (proot shares the host network namespace — guest loopback IS
+  host loopback). An app-global xauth cookie gates the connection; if the
+  guest lacks `xauth` the script falls back to no-auth (device-gated).
+- The desktop session (or a single app via `sh -c`) runs on that display.
+- With the tunnel enabled, the EXACT upstream `LocalhostRunTunnel` command
+  line (`ssh -R 80:localhost:PORT nokey@localhost.run`, tunnel.py) runs in
+  the guest — Android hosts have no ssh binary — and its output lands in
+  `/tmp/termux-desk/tunnel-{N}.log`, where the manager applies upstream's
+  same URL regex.
+
+No python, no pip, no vendoring in the guest. Every UI-supplied value is
+validated or shlex-quoted — the script runs as guest root inside proot, still
+treat it as untrusted input.
 """
 
 from __future__ import annotations
@@ -19,7 +29,9 @@ from .environments import BY_KEY
 # Strict geometry allow-list format: the value is interpolated into the
 # Xvfb command line, so anything but digits-x-digits is rejected outright.
 _GEOMETRY_RE = re.compile(r"^\d{2,5}x\d{2,5}$")
-_ALLOWED_HOSTS = {"127.0.0.1", "0.0.0.0"}  # noqa: S104 - LAN binding is the feature
+# Upstream tunnel.py's own URL pattern (verbatim) — the manager applies it to
+# the guest tunnel log.
+TUNNEL_URL_RE = re.compile(r"(https://[^\s]+\.lhr\.life[^\s]*)")
 
 
 def is_valid_geometry(geometry: str) -> bool:
@@ -27,38 +39,75 @@ def is_valid_geometry(geometry: str) -> bool:
     return bool(_GEOMETRY_RE.match(geometry))
 
 
+def guest_tunnel_log(display: int) -> str:
+
+    return f"/tmp/termux-desk/tunnel-{display}.log"  # noqa: S108 - guest rootfs path
+
+
+def guest_script_name(display: int) -> str:
+    return f"run-display-{display}.sh"
+
+
 def build_guest_script(
     *,
     display: int = 0,
     port: int,
     desktop_env: str = "xfce",
-    fps: float = 12.0,
-    quality: int = 70,
     geometry: str = "1280x720",
-    host: str = "127.0.0.1",
+    xauth_cookie: str = "",
     tunnel: bool = False,
+    app_command: str | None = None,
 ) -> str:
-    """The `/bin/sh` payload for one display session.
+    """The `/bin/sh` payload for one display session on DISPLAY=:{display}.
 
-    DISPLAY=:0 is fixed everywhere (ServalDesk rule — the guest never
-    configures X). Order matters: Xvfb first, then the desktop session on
-    that display, then the server (which blocks; the proot process group —
-    kill-on-exit — owns its whole tree, so SIGTERM to the group tears down
-    Xvfb, the desktop, the server, and any ssh tunnel together). `host` is
-    upstream's listen address: 127.0.0.1 for the app's own WebView,
-    0.0.0.0 for LAN sharing (other devices connect to the phone's IP with
-    the same access code).
+    Order matters: xauth + Xvfb (TCP) first, then the session (desktop or
+    single app) on that display. The whole tree is one proot process group
+    (kill-on-exit), so SIGTERM tears down Xvfb, the session, and any ssh
+    tunnel together. `app_command` switches to single-app mode: the DE launch
+    is replaced by `sh -c <app_command>` on the same Xvfb. `port` is only
+    used by the tunnel forward (the host server binds it itself).
     """
-    de = BY_KEY.get(desktop_env)
-    if de is None:
-        raise ValueError(f"unknown desktop environment: {desktop_env!r}")
+    if not isinstance(display, int) or not 0 <= display <= 99:
+        raise ValueError(f"display must be an int 0-99, got {display!r}")
     if not 1 <= port <= 65535:
         raise ValueError("port must be between 1 and 65535")
-    if host not in _ALLOWED_HOSTS:
-        raise ValueError(f"host must be one of {sorted(_ALLOWED_HOSTS)}")
     if not _GEOMETRY_RE.match(geometry):
         raise ValueError(f"geometry must be WxH digits, got {geometry!r}")
-    starter = shlex.quote(de.starter)
+    if xauth_cookie and not re.match(r"^[0-9a-f]{32}$", xauth_cookie):
+        raise ValueError("xauth_cookie must be 32 hex chars")
+    app_mode = app_command is not None and app_command.strip() != ""
+    if app_mode:
+        session_cmd = f"sh -c {shlex.quote(app_command.strip())}"
+    else:
+        de = BY_KEY.get(desktop_env)
+        if de is None:
+            raise ValueError(f"unknown desktop environment: {desktop_env!r}")
+        session_cmd = f"dbus-run-session -- {shlex.quote(de.starter)}"
+
+    xauth_setup = ""
+    xvfb_auth = ""
+    if xauth_cookie:
+        # GUEST path inside the container rootfs, not host /tmp (S108 is a false positive).
+        xauth_file = f"/tmp/termux-desk/xauth-{display}"  # noqa: S108
+        xauth_setup = (
+            "if command -v xauth >/dev/null 2>&1; then\n"
+            f'  xauth -f {shlex.quote(xauth_file)} add "127.0.0.1:{display}" . {xauth_cookie} 2>/dev/null || true\n'
+            f'  xauth -f {shlex.quote(xauth_file)} add "localhost:{display}" . {xauth_cookie} 2>/dev/null || true\n'
+            f"  XVFB_AUTH={shlex.quote(xauth_file)}\n"
+            "fi"
+        )
+        xvfb_auth = '-auth "$XVFB_AUTH"'
+
+    tunnel_block = ""
+    if tunnel:
+        # Upstream LocalhostRunTunnel's exact command line (tunnel.py), run in
+        # the guest; output goes to the log the manager parses with
+        # TUNNEL_URL_RE — the same pattern as upstream's parser.
+        tunnel_block = (
+            f"( ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30"
+            f" -R 80:localhost:{int(port)} nokey@localhost.run"
+            f" > {guest_tunnel_log(display)} 2>&1 ) &\n"
+        )
 
     return f"""set -u
 export DISPLAY=:{display}
@@ -69,53 +118,15 @@ export GTK_A11Y=none
 export LC_ALL=C.UTF-8
 mkdir -p "$XDG_RUNTIME_DIR" /tmp/termux-desk
 chmod 700 "$XDG_RUNTIME_DIR"
+{xauth_setup}
 
-Xvfb :{display} -screen 0 {geometry}x24 -nolisten tcp &
+Xvfb :{display} {xvfb_auth} -screen 0 {geometry}x24 &
 XVFB_PID=$!
 sleep 1
 
-dbus-run-session -- {starter} &
-DE_PID=$!
+{session_cmd} &
+SESSION_PID=$!
 
-# The server writes its access code where the app can read it (rootfs file);
-# with the tunnel enabled a daemon thread publishes the public URL the same
-# way. Then the server blocks until the process group is torn down.
-python3 - <<'PYEOF'
-import json
-import threading
-
-from termux_desk import TermuxDeskServer
-from termux_desk.tunnel import LocalhostRunTunnel
-
-server = TermuxDeskServer(
-    host={host!r},
-    port={int(port)},
-    display=":{display}",
-    fps={float(fps)},
-    quality={int(quality)},
-)
-with open("/tmp/termux-desk/auth.json", "w", encoding="utf-8") as handle:
-    json.dump({{"code": server._auth_code, "port": server.port}}, handle)
-
-
-def _tunnel() -> None:
-    # Upstream LocalhostRunTunnel: ssh -R 80 to nokey@localhost.run.
-    try:
-        url = LocalhostRunTunnel(server.port).start()
-    except Exception as exc:  # noqa: BLE001 - the app reads whatever we got
-        with open("/tmp/termux-desk/tunnel.json", "w", encoding="utf-8") as handle:
-            json.dump({{"error": str(exc)}}, handle)
-        return
-    with open("/tmp/termux-desk/tunnel.json", "w", encoding="utf-8") as handle:
-        json.dump({{"url": url}}, handle)
-
-
-if {bool(tunnel)}:
-    threading.Thread(target=_tunnel, daemon=True).start()
-
-server.run()
-PYEOF
-SERVER_STATUS=$?
-kill "$DE_PID" "$XVFB_PID" 2>/dev/null
-exit "$SERVER_STATUS"
+{tunnel_block}wait "$SESSION_PID" "$XVFB_PID" 2>/dev/null
+exit $?
 """

@@ -130,7 +130,13 @@ class SessionManager:
                 loop.call_soon_threadsafe(_record_exit, returncode)
 
             session = session_service.ProotSession(argv, env, _on_bytes, _on_exit)
-            session.start()
+            try:
+                session.start()
+            except Exception:
+                # Never leave a ghost entry (no process, ready=False): it would
+                # show as a tab chip and count as a live shell in the FGS.
+                self.entries.pop(key, None)
+                raise
             entry.session = session
             entry.ready = True
             entry.error = ""

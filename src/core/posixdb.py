@@ -108,7 +108,7 @@ def _module_present(name: str) -> bool:
         return True
     try:
         return importlib.util.find_spec(name) is not None
-    except ValueError, ImportError:
+    except ValueError, ImportError:  # PEP 758 allows the bare form on 3.14; parens for clarity
         return False
 
 

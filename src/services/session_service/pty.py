@@ -110,22 +110,29 @@ class ProotSession:
             master_fd = self._master_fd
             if master_fd is None:
                 return
-            while True:
-                process = self._process
-                if process is None:
-                    break
-                try:
-                    data = os.read(master_fd, 4096)
-                except OSError as exc:
-                    if exc.errno == errno.EIO or (
-                        exc.errno == errno.EBADF and self._master_fd is None
-                    ):
+            try:
+                while True:
+                    process = self._process
+                    if process is None:
                         break
-                    raise
-                if data:
-                    self._on_bytes(data)
-                else:
-                    break
+                    try:
+                        data = os.read(master_fd, 4096)
+                    except OSError as exc:
+                        if exc.errno == errno.EIO or (
+                            exc.errno == errno.EBADF and self._master_fd is None
+                        ):
+                            break
+                        raise  # unexpected read error — fall through to the exit path
+                    if data:
+                        self._on_bytes(data)
+                    else:
+                        break
+            except Exception as exc:
+                # An unexpected read failure must not kill the thread silently:
+                # without this, returncode/_on_exit never fire and the shell
+                # looks alive forever (ghost tab, FGS stuck on).
+                logger.warning("pty read loop failed: %r", exc)
+            process = self._process
             self.returncode = process.poll() if process else None
             if self._on_exit is not None:
                 self._on_exit(self.returncode)
@@ -157,8 +164,8 @@ class ProotSession:
     def stop(self) -> None:
         process, self._process = self._process, None
         master_fd, self._master_fd = self._master_fd, None
-        if master_fd is not None:
-            os.close(master_fd)
+        # Terminate the guest FIRST: if the fd close raises (raced close),
+        # teardown must still happen — never let an EBADF skip the kill.
         if process is not None and process.poll() is None:
             process.terminate()
             try:
@@ -167,6 +174,11 @@ class ProotSession:
                 process.kill()
                 process.wait(timeout=1.0)
             self.returncode = process.poll()
+        if master_fd is not None:
+            try:
+                os.close(master_fd)
+            except OSError as exc:
+                logger.debug("master fd already closed: %r", exc)
         reader, self._reader = self._reader, None
         # Thread-safe stop: if stop() runs ON the reader thread itself (guest
         # exit path), joining itself would deadlock the app — skip the join.

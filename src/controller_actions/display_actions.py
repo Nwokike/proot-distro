@@ -1,11 +1,13 @@
 """Display (X11) session actions: probe, start/stop, provision, view routing.
 
-The DeskManager (desk_service) owns the guest process; this mixin owns the
-UI state and the FGS ref-count shared with the terminal actions. The wrap is
-complete: fps/quality/geometry are upstream server params, `lan` maps to the
-upstream host=0.0.0.0 binding, `tunnel` runs upstream's LocalhostRunTunnel,
-and fullscreen locks orientation + keeps the screen awake via flet's
-Wakelock/`set_allowed_device_orientations` (dev4).
+The DeskManager (desk_service) owns the guest processes — one per session key
+`container:display`, so a container can run several displays at once (a desktop
+on :0 plus single apps on :1, :2…). This mixin owns the UI state and the FGS
+ref-count shared with the terminal actions. The wrap is complete: fps/quality/
+geometry are upstream server params, `lan` maps to the upstream host=0.0.0.0
+binding, `tunnel` runs upstream's LocalhostRunTunnel, and fullscreen locks
+orientation + keeps the screen awake via the ONE shared Wakelock service and
+flet's `set_allowed_device_orientations` (dev4).
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ import logging
 import flet as ft
 
 from core import theme, tokens
-from core.state import state
+from core.state import DEFAULT_DISPLAY_SETTINGS, state
 from services import desk_service, proot_service
 from services.desk_service import script as desk_script
 
@@ -25,8 +27,12 @@ from ._common import _reason
 logger = logging.getLogger(__name__)
 
 # Xvfb screen for "auto" geometry: long side 1280 keeps JPEG capture + WS
-# streaming sane on phones; the viewer letterboxes any aspect anyway.
+# streaming sane on phones; the viewer letterboxes any aspect anyway, and a
+# preset/custom resolution bypasses this.
 _AUTO_GEOMETRY_LONG_SIDE = 1280
+
+# In-flight probe dedup (error results are never cached — see probe_display).
+_probing: set[str] = set()
 
 
 def _auto_geometry(page) -> str:
@@ -39,37 +45,42 @@ def _auto_geometry(page) -> str:
     return f"{even_w}x{even_h}"
 
 
+def invalidate_display_support(container: str) -> None:
+    """Drop the cached capability probe — call on remove/reset/rename."""
+    if state.display_support and container in state.display_support:
+        state.display_support = {k: v for k, v in state.display_support.items() if k != container}
+
+
 class DisplayActions:
     # ── probe ─────────────────────────────────────────────────────────────────
 
     async def probe_display(self, container: str) -> None:
-        """Cache the container's rootfs capability probe in state.display_support
-        (cached even on failure, as {"error": ...}, so the tab never re-probes
-        in a render loop)."""
+        """Cache the container's rootfs capability probe in state.display_support.
+        Failures are NOT cached — the next mount re-probes (a transient failure
+        must not pin an error until app restart). In-flight probes dedup via a
+        set so a render loop never spawns parallel proot commands."""
         if state.display_support is None:
             state.display_support = {}
-        if container in state.display_support:
+        cached = state.display_support.get(container)
+        if cached is not None and "error" not in cached:
             return
+        if container in _probing:
+            return
+        _probing.add(container)
         try:
             caps = await asyncio.to_thread(proot_service.guest_capabilities, container)
         except Exception as exc:
             logger.warning("display probe failed for %s: %s", container, exc)
-            state.display_support[container] = {"error": _reason(exc)}
-            return
+            return  # not cached — retried next mount
+        finally:
+            _probing.discard(container)
         state.display_support[container] = caps
 
     def _display_caps(self, container: str) -> dict:
         return (state.display_support or {}).get(container) or {}
 
     def _display_settings(self) -> dict:
-        settings = dict(state.display_settings or {})
-        settings.setdefault("fps", 12)
-        settings.setdefault("quality", 70)
-        settings.setdefault("geometry", "auto")
-        settings.setdefault("orientation", "landscape")
-        settings.setdefault("lan", False)
-        settings.setdefault("tunnel", False)
-        return settings
+        return {**DEFAULT_DISPLAY_SETTINGS, **(state.display_settings or {})}
 
     def _resolve_geometry(self, settings: dict) -> str:
         preset = str(settings.get("geometry", "auto"))
@@ -78,13 +89,18 @@ class DisplayActions:
         return _auto_geometry(self.page)
 
     def _lock_orientation(self, on: bool) -> None:
-        """Fullscreen → landscape lock (owner's pick), exit → system default.
-        Android 16 devices ≥600dp ignore the lock — documented upstream."""
-        orientations: list = []
-        if on and self._display_settings().get("orientation") == "landscape":
-            from flet import DeviceOrientation
+        """Fullscreen → orientation lock per the setting (landscape default,
+        portrait optional), exit → system default. Android 16 devices ≥600dp
+        ignore the lock — documented upstream."""
+        from flet import DeviceOrientation
 
-            orientations = [DeviceOrientation.LANDSCAPE_LEFT, DeviceOrientation.LANDSCAPE_RIGHT]
+        orientations: list = []
+        if on:
+            which = self._display_settings().get("orientation", "landscape")
+            if which == "landscape":
+                orientations = [DeviceOrientation.LANDSCAPE_LEFT, DeviceOrientation.LANDSCAPE_RIGHT]
+            elif which == "portrait":
+                orientations = [DeviceOrientation.PORTRAIT_UP]
         try:
             self.page.run_task(self.page.set_allowed_device_orientations, orientations)
         except Exception as exc:
@@ -92,11 +108,10 @@ class DisplayActions:
 
     def _wakelock(self, on: bool) -> None:
         """Keep the screen awake while a display is being viewed/mirrored.
-        The Wakelock service is mounted once on the controller."""
-        service = getattr(self, "wakelock", None)
+        Uses the ONE app-wide Wakelock service mounted by shared_services."""
+        service = getattr(self.page, "wakelock", None)
         if service is None:
-            service = ft.Wakelock()
-            self.wakelock = service
+            return
         try:
             self.page.run_task(service.enable if on else service.disable)
         except Exception as exc:
@@ -105,25 +120,43 @@ class DisplayActions:
     # ── routing ───────────────────────────────────────────────────────────────
 
     async def open_display(self, container: str) -> None:
-        """Card/tab entry point: probe, then start the display — or open the
-        install sheet when the container can't run one yet."""
+        """Card/tab entry point: probe, then open the running display (or start
+        the first one) — or open the install sheet when the container can't
+        run one yet."""
         state.display_error = ""
         await self.probe_display(container)
         caps = self._display_caps(container)
+        running = [
+            s for s in self.desk_manager.for_container(container) if s.status.value == "running"
+        ]
+        if running:
+            state.active_display = running[0].key
+            return
         ready = caps.get("desk_ready") and caps.get("x_server") and caps.get("desktops")
         if ready:
             await self.start_display(container)
         else:
-            state.display_installing = container
             from screens.display_launcher import show_display_sheet
 
             show_display_sheet(self.page, self.methods, container, caps)
 
-    async def start_display(self, container: str, desktop_env: str | None = None) -> None:
+    async def start_display(
+        self,
+        container: str,
+        desktop_env: str | None = None,
+        app_command: str | None = None,
+        display: int | None = None,
+    ) -> None:
+        """Start one display session (key `container:display`). `app_command`
+        switches to single-app mode (bare Xvfb, no DE). Busy-guarded."""
         manager = self.desk_manager
-        existing = manager.get(container)
-        if existing and existing.status.value == "running":
-            state.active_display = container
+        if any(
+            s.status.value == "starting"
+            for s in manager.running() + manager.for_container(container)
+        ) or any(
+            s.status is desk_service.DeskStatus.STARTING for s in manager.for_container(container)
+        ):
+            self.show_snack("a display is already starting — wait a moment")
             return
         caps = self._display_caps(container)
         installed_desktops = caps.get("desktops") or {}
@@ -139,7 +172,9 @@ class DisplayActions:
         try:
             session = await manager.start(
                 container,
+                display=display,
                 desktop_env=env,
+                app_command=app_command,
                 fps=float(settings["fps"]),
                 quality=int(settings["quality"]),
                 geometry=self._resolve_geometry(settings),
@@ -150,22 +185,32 @@ class DisplayActions:
                 tunnel=bool(settings["tunnel"]),
             )
         except Exception as exc:
-            state.display_status = "error"
-            state.display_error = _reason(exc)
-            self.show_snack(f"display failed: {state.display_error}")
+            if state.display_status == "starting":
+                state.display_status = "error"
+                state.display_error = _reason(exc)
+                self.show_snack(f"display failed: {state.display_error}")
             logger.exception("display start failed for %s", container)
-            raise
-        state.active_display = container
+            return
+        state.active_display = session.key
         state.display_status = "running"
-        state.display_status_text = f"X11 on :{session.display}"
+        state.display_status_text = f"X11 on :{session.display} ({session.mode})"
         state.display_url = session.url
         state.display_error = ""
+        # Persist the settings that produced this session (prefs service).
+        prefs = getattr(self, "prefs", None)
+        if prefs is not None:
+            try:
+                import json
+
+                await prefs.set("display_settings", json.dumps(self._display_settings()))
+            except Exception as exc:
+                logger.debug("display_settings persist failed: %s", exc)
         self._wakelock(True)
         await self._update_fgs()
 
-    async def stop_display(self, container: str) -> None:
-        await self.desk_manager.stop(container)
-        if state.active_display == container:
+    async def stop_display(self, key: str) -> None:
+        await self.desk_manager.stop(key)
+        if state.active_display == key:
             state.active_display = None
             state.display_status = "idle"
             state.display_url = ""
@@ -186,16 +231,16 @@ class DisplayActions:
 
     # ── sharing (LAN + tunnel + code) ─────────────────────────────────────────
 
-    async def share_display(self, container: str) -> None:
-        """Local / LAN / tunnel URLs + the access code, each copyable, with a
-        system share sheet for the whole bundle. Clipboard/Share services are
-        mounted once on the controller."""
-        session = self.desk_manager.get(container)
+    async def share_display(self, key: str) -> None:
+        """Local / LAN / tunnel URLs + the access code for one session, each
+        copyable, with a system share sheet. Clipboard/Share are the shared
+        page services mounted by shared_services."""
+        session = self.desk_manager.get(key)
         if session is None or not session.url:
             self.show_snack("the display is not running")
             return
-        clipboard = getattr(self, "clipboard", None) or ft.Clipboard()
-        share = getattr(self, "share", None) or ft.Share()
+        clipboard = getattr(self.page, "clipboard", None) or ft.Clipboard()
+        share = getattr(self.page, "share", None) or ft.Share()
         rows: list[ft.Control] = []
 
         def _url_row(label: str, url: str) -> ft.Control:
@@ -275,7 +320,7 @@ class DisplayActions:
         self.page.show_dialog(
             ft.AlertDialog(
                 title=ft.Text(
-                    f"Share display — {container}",
+                    f"Share display — {key}",
                     size=tokens.FONT_LG,
                     weight=ft.FontWeight.BOLD,
                 ),
@@ -334,7 +379,7 @@ class DisplayActions:
             raise
         state.display_installing = None
         if result.get("ok"):
-            self.show_snack(f"display support installed in {container}")
+            self.show_snack(f"desktop installed in {container}")
             # Re-probe without the cache guard: the container changed on disk.
             try:
                 caps = await asyncio.to_thread(proot_service.guest_capabilities, container)
@@ -347,14 +392,14 @@ class DisplayActions:
 
     # ── diagnostics ───────────────────────────────────────────────────────────
 
-    async def show_display_logs(self, container: str) -> None:
-        session = self.desk_manager.get(container)
+    async def show_display_logs(self, key: str) -> None:
+        session = self.desk_manager.get(key)
         lines = list(session.log_tail) if session else list(state.display_logs or [])
         tail = "\n".join(lines[-200:]) or "(no logs yet)"
         self.page.show_dialog(
             ft.AlertDialog(
                 title=ft.Text(
-                    f"Display logs — {container}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
+                    f"Display logs — {key}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
                 ),
                 content=ft.Container(
                     content=ft.Text(

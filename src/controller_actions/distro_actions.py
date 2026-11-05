@@ -48,11 +48,13 @@ class DistroActions:
 
         def _apply_line(line: str) -> None:
             clean = line.strip()
+            # Assign new list objects for every line: the rows previously
+            # mutated `state.install_logs` in place, which does not notify
+            # `@ft.observable` and therefore did not reliably repaint the
+            # progress dialog/banner.
             state.install_stage = clean
             if clean:
-                state.install_logs.append(clean)
-                if len(state.install_logs) > 500:
-                    state.install_logs.pop(0)
+                state.install_logs = [*state.install_logs[-499:], clean]
             # Live-update the modal controls if the dialog is still open.
             stage_ctrl = getattr(self.page, "_install_stage_text", None)
             logs_ctrl = getattr(self.page, "_install_logs_column", None)
@@ -73,8 +75,11 @@ class DistroActions:
                 ]
                 logs_ctrl.update()
             dialog = getattr(self.page, "_install_dialog", None)
-            if dialog is not None and dialog.open:
-                dialog.update()
+            if dialog is not None and getattr(dialog, "open", False):
+                try:
+                    dialog.update()
+                except RuntimeError:
+                    pass
 
         def _on_line(line: str) -> None:
             loop.call_soon_threadsafe(_apply_line, line)
@@ -126,6 +131,10 @@ class DistroActions:
     async def remove_container(self, name: str) -> None:
         outcome = await asyncio.to_thread(self.proot.remove_container, name)
         self.show_snack(f"removed {name}" if outcome.ok else self.proot.friendly_job_error(outcome))
+        if outcome.ok:
+            from controller_actions.display_actions import invalidate_display_support
+
+            invalidate_display_support(name)
         await self.refresh_containers()
         if outcome.ok:
             await self.ad_service.show_interstitial()
@@ -133,6 +142,12 @@ class DistroActions:
     async def reset_container(self, name: str) -> None:
         outcome = await asyncio.to_thread(self.proot.reset_container, name)
         self.show_snack(f"reset {name}" if outcome.ok else self.proot.friendly_job_error(outcome))
+        if outcome.ok:
+            # The rootfs changed on disk — drop the cached caps and re-probe.
+            from controller_actions.display_actions import invalidate_display_support
+
+            invalidate_display_support(name)
+            await self.probe_display(name)
         await self.refresh_containers()
         if outcome.ok:
             await self.ad_service.show_interstitial()

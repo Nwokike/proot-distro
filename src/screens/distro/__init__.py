@@ -275,7 +275,6 @@ def DistroView() -> ft.Control:
     # old-guard stable pair last.
     _POPULAR_DISTROS = (
         ("Alpine", "alpine"),
-        ("Arch Linux", "archlinux"),
         ("Fedora", "fedora"),
         ("openSUSE", "opensuse/tumbleweed"),
         ("Kali", "kalilinux/kali-rolling"),
