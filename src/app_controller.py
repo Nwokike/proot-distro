@@ -167,14 +167,21 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
         self.page._controller = self
 
         # Render immediately — AppShell shows the startup splash screen
-        # (brand icon + spinner + startup_stage) while containers load.
+        # (brand icon + spinner + startup_stage) on cold boot only. A warm
+        # re-open (notification tap, FGS kept the process alive) already has
+        # the container list in memory: flip app_ready NOW so the shell lands
+        # straight on the terminal in ~1s, and refresh in the background.
         self.page.render(lambda: ControllerMethodsCtx(methods, lambda: AppShell()))
 
-        state.startup_stage = "Loading containers…"
-        await self.refresh_containers()
-
-        # Startup complete: dismiss splash screen into fully-loaded UI.
-        state.app_ready = True
+        warm_reopen = bool(state.containers)
+        if warm_reopen:
+            state.app_ready = True
+            self.page.run_task(self.refresh_containers)
+        else:
+            state.startup_stage = "Loading containers…"
+            await self.refresh_containers()
+            # Startup complete: dismiss splash into fully-loaded UI.
+            state.app_ready = True
 
         # The update check runs in the background and only flips state.
         self.page.run_task(self._check_for_updates)

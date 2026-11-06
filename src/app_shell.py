@@ -64,14 +64,21 @@ def AppShell() -> ft.Control:
     # ── Startup Splash Screen (CollabShell / AnimePahe pattern) ───────────────
     if not st.app_ready:
         _ = st.startup_stage
+        from components.brand_hero import app_icon_svg
+
         return ft.Container(
             content=ft.Column(
                 [
+                    # The responsive brand mark: white on dark, artwork's own
+                    # colors on light (same tinting as the home hero).
                     ft.Image(
-                        src="icon.png",
+                        src=app_icon_svg(),
                         width=tokens.HERO_ICON_SIZE,
                         height=tokens.HERO_ICON_SIZE,
                         fit=ft.BoxFit.CONTAIN,
+                        color=None if theme.is_light_theme() else theme.WHITE,
+                        color_blend_mode=ft.BlendMode.SRC_IN,
+                        error_content=ft.Icon(ft.Icons.TERMINAL, size=tokens.ICON_HERO),
                     ),
                     ft.Container(height=tokens.SPACE_XL),
                     ft.ProgressRing(
