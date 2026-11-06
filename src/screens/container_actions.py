@@ -55,13 +55,11 @@ def container_menu_items(page: ft.Page, methods, cname: str) -> list[ft.PopupMen
         ft.PopupMenuItem(content=ft.Divider(height=1)),
         ft.PopupMenuItem(
             icon=ft.Icons.RESTART_ALT_ROUNDED,
-            icon_color=theme.warn(),
             content=ft.Text("Reset", size=tokens.FONT_SM, color=theme.warn()),
             on_click=lambda _e: ask_reset(page, methods, cname),
         ),
         ft.PopupMenuItem(
             icon=ft.Icons.DELETE_FOREVER_ROUNDED,
-            icon_color=theme.warn(),
             content=ft.Text("Remove", size=tokens.FONT_SM, color=theme.warn()),
             on_click=lambda _e: ask_remove(page, methods, cname),
         ),

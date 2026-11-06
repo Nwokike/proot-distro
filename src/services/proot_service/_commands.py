@@ -93,3 +93,22 @@ def get_proot_cmd_with_options(container: str, **login_opts) -> str:
         "command_login",
         _ns_login_get_proot_cmd(container, **login_opts),
     )
+
+
+def setup_fake_sysdata(rootfs: str) -> None:
+    """Create fake /proc and /sys stubs (including sys_empty for SELinux masking)."""
+    try:
+        sysdata = _imp("proot_distro.sysdata")
+        sysdata.setup_fake_sysdata(rootfs)
+    except Exception as exc:
+        logger.debug("setup_fake_sysdata skipped: %s", exc)
+
+
+def fake_sysdata_bindings(rootfs: str) -> list[str]:
+    """Return --bind arguments masking /sys/fs/selinux and restricted /proc entries."""
+    try:
+        sysdata = _imp("proot_distro.sysdata")
+        return sysdata.fake_sysdata_bindings(rootfs)
+    except Exception as exc:
+        logger.debug("fake_sysdata_bindings skipped: %s", exc)
+        return []

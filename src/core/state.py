@@ -67,6 +67,11 @@ class AppState:
     push_busy: bool = False
     push_status: str = ""
 
+    # Startup gate (CollabShell / AnimePahe pattern): the shell shows the
+    # splash until initial checks and container discovery finish.
+    app_ready: bool = False
+    startup_stage: str = ""
+
     # First run: the onboarding deck shows until it is dismissed once.
     onboarding_done: bool = False
 

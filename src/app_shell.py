@@ -61,6 +61,41 @@ def AppShell() -> ft.Control:
     def _on_change(e):
         set_active_tab(int(e.data))
 
+    # ── Startup Splash Screen (CollabShell / AnimePahe pattern) ───────────────
+    if not st.app_ready:
+        _ = st.startup_stage
+        return ft.Container(
+            content=ft.Column(
+                [
+                    ft.Image(
+                        src="icon.png",
+                        width=tokens.HERO_ICON_SIZE,
+                        height=tokens.HERO_ICON_SIZE,
+                        fit=ft.BoxFit.CONTAIN,
+                    ),
+                    ft.Container(height=tokens.SPACE_XL),
+                    ft.ProgressRing(
+                        width=tokens.PROGRESS_RING_XL,
+                        height=tokens.PROGRESS_RING_XL,
+                        stroke_width=3,
+                        color=theme.primary(),
+                    ),
+                    ft.Container(height=tokens.SPACE_MD),
+                    ft.Text(
+                        st.startup_stage or "Starting…",
+                        size=tokens.FONT_XS,
+                        color=theme.text_dim(),
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=tokens.SPACE_NONE,
+            ),
+            expand=True,
+            alignment=ft.Alignment.CENTER,
+            bgcolor=theme.bg(),
+        )
+
     if not st.onboarding_done:
         return OnboardingView()
 

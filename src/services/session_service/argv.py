@@ -44,6 +44,7 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
 
     # Ensure shm and l2s directories on host filesystem
     shm_bind: str | None = None
+    sysdata_binds: list[str] = []
     if rootfs_path and rootfs_path.is_dir():
         shm = rootfs_path / "tmp"
         shm.mkdir(parents=True, exist_ok=True)
@@ -53,6 +54,26 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
         l2s = rootfs_path / ".l2s"
         l2s.mkdir(parents=True, exist_ok=True)
         env["PROOT_L2S_DIR"] = str(l2s)
+
+        # Fake sysdata stubs: masks /sys/fs/selinux with an empty directory
+        # so dpkg/passwd/chage know SELinux is absent rather than failing with
+        # ENOENT on Android SELinux transitions.
+        proot_service.setup_fake_sysdata(str(rootfs_path))
+        sysdata_binds = proot_service.fake_sysdata_bindings(str(rootfs_path))
+
+        # APT reliability: under proot on Android, apt's sandbox user (_apt)
+        # cannot read cache archives, and dpkg fsync slows down operations.
+        apt_conf_dir = rootfs_path / "etc" / "apt" / "apt.conf.d"
+        if apt_conf_dir.is_dir():
+            conf_file = apt_conf_dir / "99-proot.conf"
+            if not conf_file.exists():
+                try:
+                    conf_file.write_text(
+                        'APT::Sandbox::User "root";\nAcquire::Retries "3";\nDPkg::Lock::Timeout "60";\n',
+                        encoding="utf-8",
+                    )
+                except OSError:
+                    pass
 
     # Hardened Android extensions (device-proven in M0 spike)
     # Only injected before the inner guest command on Android
@@ -90,6 +111,9 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
 
         if shm_bind:
             _add_if_missing(shm_bind)
+
+        for b in sysdata_binds:
+            _add_if_missing(b)
 
     env.setdefault("TERM", "xterm-256color")
     env.setdefault("COLORTERM", "truecolor")

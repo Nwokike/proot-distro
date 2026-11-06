@@ -7,7 +7,7 @@ ref-count shared with the terminal actions. The wrap is complete: fps/quality/
 geometry are upstream server params, `lan` maps to the upstream host=0.0.0.0
 binding, `tunnel` runs upstream's LocalhostRunTunnel, and fullscreen locks
 orientation + keeps the screen awake via the ONE shared Wakelock service and
-flet's `set_allowed_device_orientations` (dev4).
+flet's `set_allowed_device_orientations` (Flet 1.1).
 """
 
 from __future__ import annotations

@@ -77,6 +77,9 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
     async def init(self) -> None:
+        state.app_ready = False
+        state.startup_stage = "Starting…"
+
         # The env contract + grp shim must be set before proot_distro is importable.
         await self.check_probe()
 
@@ -163,13 +166,15 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
         self.methods = methods  # sheets opened imperatively (display launcher) need it
         self.page._controller = self
 
-        # Data BEFORE first paint: the home tab must already know which
-        # containers exist when it paints (device lesson — it used to show
-        # the install-only view for a beat and then flip).
+        # Render immediately — AppShell shows the startup splash screen
+        # (brand icon + spinner + startup_stage) while containers load.
+        self.page.render(lambda: ControllerMethodsCtx(methods, lambda: AppShell()))
+
+        state.startup_stage = "Loading containers…"
         await self.refresh_containers()
 
-        self.page.render(lambda: ControllerMethodsCtx(methods, lambda: AppShell()))
-        self.page.render(lambda: ControllerMethodsCtx(methods, lambda: AppShell()))
+        # Startup complete: dismiss splash screen into fully-loaded UI.
+        state.app_ready = True
 
         # The update check runs in the background and only flips state.
         self.page.run_task(self._check_for_updates)
@@ -194,7 +199,6 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
                 logger.debug("Notification permission request failed: %s", exc)
 
         self.page.run_task(_request_notification_permission)
-        # (containers were refreshed before the first paint above)
 
     def _mount_services(self) -> None:
         mounted = shared_services.mount_shared_services(self.page)

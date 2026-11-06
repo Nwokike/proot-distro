@@ -10,10 +10,10 @@ requires-python = ">=3.14"
 # exact flet version, and a range here can resolve flet dev5 against an
 # extension built for dev4 — a build-time conflict.
 dependencies = [
-    "flet==1.1.0.dev4",
-    "flet-ads==1.1.0.dev4",
-    "flet-notifications==1.1.0.dev4",
-    "flet-webview==1.1.0.dev4",
+    "flet==1.1.0",
+    "flet-ads==1.1.0",
+    "flet-notifications==1.1.0",
+    "flet-webview==1.1.0",
     "httpx>=0.28.1",
     "flet-terminal==0.4.2",
     "proot-distro>=5.10.0",
@@ -84,8 +84,8 @@ foregroundServiceType = "specialUse"
 
 [dependency-groups]
 dev = [
-    "flet-cli>=1.1.0.dev4",
-    "flet-desktop>=1.1.0.dev4",
+    "flet-cli>=1.1.0",
+    "flet-desktop>=1.1.0",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.1",
     "pytest-timeout>=2.4.0",

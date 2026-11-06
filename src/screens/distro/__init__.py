@@ -356,14 +356,6 @@ def DistroView() -> ft.Control:
         controls.extend(result_cards)
 
     if mode == "install":
-        # Probe every installed container's display support HERE (the Display
-        # tab used to be the only prober, so the home card's label sat on
-        # stale/empty caps and lied about install state).
-        for row in st.containers:
-            cname = row.get("name", "")
-            if cname and cname not in (state.display_support or {}):
-                page.run_task(methods.probe_display, cname)
-
         # Installed containers section. Banner rule (owner): more than 5 containers
         # get a banner after every 5th card; 5 or fewer (or none) get exactly one
         # banner after the list.

@@ -9,7 +9,7 @@ CHANGELOG: dict[str, str] = {
         "• Full input — tap, drag, scroll, keyboard — plus clipboard sync\n"
         "• Access-code protected, loopback-only: nothing leaves the device\n"
         "• Works on Alpine, Debian, Ubuntu, Fedora and Arch containers\n"
-        "• Flet family moved to 1.1.0.dev4"
+        "• Flet family moved to 1.1.0"
     ),
     "1.0.1": (
         "• Background running: persistent notification keeps sessions alive\n"

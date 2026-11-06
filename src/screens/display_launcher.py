@@ -90,7 +90,7 @@ def _picker_with_custom(
         value=(_CUSTOM if is_custom else current),
         options=[ft.dropdown.Option(v, t) for v, t in options]
         + [ft.dropdown.Option(_CUSTOM, "Custom…")],
-        on_change=lambda e: _set_setting(
+        on_select=lambda e: _set_setting(
             key, e.control.value if e.control.value != _CUSTOM else custom_field.value or current
         ),
         width=tokens.DROPDOWN_WIDTH,
@@ -156,7 +156,7 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
                         DEFAULT_DESKTOP,
                     ),
                     options=[ft.dropdown.Option(de.key, de.name) for de in DESKTOP_ENVIRONMENTS],
-                    on_change=lambda e: _pick(e.control.value),
+                    on_select=lambda e: _pick(e.control.value),
                     width=tokens.DROPDOWN_WIDTH,
                     border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
                     text_size=tokens.FONT_XS,
@@ -519,7 +519,7 @@ def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None
                     label="Desktop environment",
                     value=_current(),
                     options=[ft.dropdown.Option(de.key, de.name) for de in DESKTOP_ENVIRONMENTS],
-                    on_change=lambda e: _pick(e.control.value),
+                    on_select=lambda e: _pick(e.control.value),
                     width=tokens.DROPDOWN_WIDTH,
                     border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
                     text_size=tokens.FONT_XS,
