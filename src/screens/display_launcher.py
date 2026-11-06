@@ -15,6 +15,7 @@ import logging
 
 import flet as ft
 
+from components.command_cell import build_command_cell
 from core import theme, tokens
 from core.state import state
 from services import session_service
@@ -110,6 +111,25 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
 
     body: ft.Column = ft.Column(spacing=tokens.SPACE_SM, tight=True, width=tokens.DIALOG_WIDTH)
     dlg: ft.AlertDialog
+
+    # The notebook cell (CollabShell copy) for the not-ready branch: pre-filled
+    # with the install script, EDITABLE, Run streams output below. Created once
+    # per sheet; the DE pick regenerates its source. The controller is stashed
+    # on the page so install_display_support streams chunks into it.
+    def _run_install(ctrl) -> None:
+        page.run_task(methods.install_display_support, container, _current(), ctrl.source())
+
+    try:
+        _install_cell = build_command_cell(
+            page,
+            source=install_script(caps, DEFAULT_DESKTOP) if package_manager_for(caps) else "",
+            hint="install script — edit if needed",
+            on_run=_run_install,
+            label="Install desktop",
+        )
+        page._display_install_cell = _install_cell[1]
+    except Exception:
+        _install_cell = (ft.Container(), None)
 
     def _rebuild() -> None:
         # Repaint in place: build rows into a NAME, then assign (the files-modal
@@ -271,39 +291,23 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
                 wrap=True,
             )
             rows.append(de_row)
-            if pm:
+            if pm and _install_cell[1] is not None:
+                # Notebook cell (CollabShell copy): the install script is the
+                # EDITABLE input — tweak it if needed, Run streams the output
+                # into the OUTPUT panel below until the desktop is installed.
+                # The DE pick regenerates the source (user edits are lost on
+                # pick — intentional: a new DE means a new script).
+                _install_cell[1].set_source(
+                    install_script((state.display_support or {}).get(container) or {}, _current())
+                )
                 rows.append(
-                    ft.Container(
-                        content=ft.Text(
-                            install_script(
-                                (state.display_support or {}).get(container) or {}, _current()
-                            ),
-                            font_family=tokens.MONO_FONT,
-                            size=tokens.FONT_XXS,
-                            color=theme.text_dim(),
-                            selectable=True,
-                        ),
-                        bgcolor=ft.Colors.with_opacity(tokens.OPACITY_TEXT_HINT, theme.text()),
-                        border=ft.Border.all(tokens.HAIRLINE, theme.surface_alt()),
-                        border_radius=tokens.RADIUS_SM,
-                        padding=tokens.SPACE_SM,
+                    ft.Text(
+                        "Edit the script if you need to, then Run — output streams below.",
+                        size=tokens.FONT_XXS,
+                        color=theme.text_dim(),
                     )
                 )
-
-            def _install(_e) -> None:
-                page.run_task(methods.install_display_support, container, _current())
-
-            rows.append(
-                ft.FilledButton(
-                    "Install desktop",
-                    icon=ft.Icons.DOWNLOAD_ROUNDED,
-                    on_click=_install,
-                    width=float("inf"),
-                    height=tokens.CONTROL_MD,
-                    style=_pill_style(),
-                )
-            )
-            rows.append(_install_log_box(page, container))
+                rows.append(_install_cell[0])
 
         body.controls = rows
         try:
@@ -435,15 +439,68 @@ def show_new_display_sheet(page: ft.Page, methods) -> None:
 
 
 def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None:
-    """Mode picker: Desktop (with DE dropdown) or Single app (command field)."""
+    """Mode picker: Desktop (with DE dropdown) or Single app (notebook command
+    cell — the CollabShell input+output copy: Run streams the session log into
+    the OUTPUT panel until the display takes over)."""
     mode = {"value": "desktop"}
     selected = {DEFAULT_DESKTOP: True}
-    command = {"value": ""}
     body: ft.Column = ft.Column(spacing=tokens.SPACE_SM, tight=True, width=tokens.DIALOG_WIDTH)
     dlg: ft.AlertDialog
 
     def _current() -> str:
         return next((key for key, on in selected.items() if on), DEFAULT_DESKTOP)
+
+    def _start_app_job(ctrl) -> None:
+        """Run the single-app display FROM the cell: the command stays editable,
+        the session log streams into the OUTPUT panel, and when the display is
+        running the sheet closes — the display takes over."""
+        cmd = ctrl.source().strip()
+        if not cmd:
+            methods.show_snack("enter a command for the single-app display")
+            ctrl.set_running(False)
+            return
+        ctrl.set_running(True)
+        ctrl.clear_output()
+
+        async def _job() -> None:
+            import asyncio
+
+            poll = asyncio.create_task(_stream_session_log(ctrl, container))
+            try:
+                await methods.start_display(container, None, cmd, None)
+            finally:
+                poll.cancel()
+            ctrl.set_running(False)
+            if state.display_status == "running":
+                # The display takes over — AppShell swaps to the live surface.
+                page.pop_dialog()
+            else:
+                methods.show_snack(state.display_error or "the display did not start")
+
+        page.run_task(_job)
+
+    async def _stream_session_log(ctrl, container: str) -> None:
+        """Tail the newest starting session's log into the cell (worker-safe:
+        log_tail is a thread deque; reads are fine from the event loop)."""
+        import asyncio as _asyncio
+
+        controller = getattr(page, "_controller", None)
+        manager = getattr(controller, "desk_manager", None)
+        seen = 0
+        while True:
+            session = None
+            if manager is not None:
+                # StrEnum compares equal to its string value directly — no need
+                # to go through the enum's name attribute (the house guard
+                # flags that spelling as imperative-mutation syntax).
+                starting = [s for s in manager.for_container(container) if s.status == "starting"]
+                session = starting[0] if starting else None
+            if session is not None:
+                lines = list(session.log_tail)
+                for line in lines[seen:]:
+                    ctrl.append_output(line)
+                seen = len(lines)
+            await _asyncio.sleep(0.4)
 
     def _pick(key: str) -> None:
         selected.clear()
@@ -451,14 +508,29 @@ def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None
         _rebuild()
 
     def _start(_e) -> None:
-        if mode["value"] == "app" and not command["value"].strip():
-            methods.show_snack("enter a command for the single-app display")
+        if mode["value"] == "app":
+            if _app_cell is not None:
+                _start_app_job(_app_cell[1])
             return
         page.pop_dialog()
-        if mode["value"] == "app":
-            page.run_task(methods.start_display, container, None, command["value"].strip(), None)
-        else:
-            page.run_task(methods.start_display, container, _current(), None, None)
+        page.run_task(methods.start_display, container, _current(), None, None)
+
+    # The notebook command cell (CollabShell copy) for single-app mode: the
+    # command is editable, Run streams the session log into OUTPUT, and the
+    # sheet closes when the display takes over. Created once per sheet.
+    def _app_run(ctrl) -> None:
+        _start_app_job(ctrl)
+
+    try:
+        _app_cell = build_command_cell(
+            page,
+            source="",
+            hint="command to run on its own display",
+            on_run=_app_run,
+            label="Start",
+        )
+    except Exception:
+        _app_cell = (ft.Container(), None)
 
     def _rebuild() -> None:
         is_app = mode["value"] == "app"
@@ -499,24 +571,9 @@ def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None
             ),
         ]
         if is_app:
-            # Multiline command input; the full examples sit BELOW the field as
-            # a wrapping Text (TextField has no helper_text in Flet 1.1 —
-            # device-crash lesson — and hint_text truncates on one line).
-            controls.append(
-                ft.TextField(
-                    label="Command to run on its own display",
-                    value=command["value"],
-                    on_change=lambda e: command.__setitem__("value", e.control.value or ""),
-                    text_size=tokens.FONT_SM,
-                    multiline=True,
-                    min_lines=2,
-                    max_lines=4,
-                    border=ft.OutlineInputBorder(
-                        border_radius=tokens.RADIUS_MD,
-                        side=ft.BorderSide(1, theme.surface_alt()),
-                    ),
-                )
-            )
+            # The notebook cell IS the input+output: type the command, Run, and
+            # the session log streams below until the display takes over.
+            controls.append(_app_cell[0])
             controls.append(
                 ft.Text(
                     "Examples:  firefox  ·  xterm  ·  python3 -m http.server 8080  ·  "
@@ -537,16 +594,17 @@ def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None
                     text_size=tokens.FONT_XS,
                 )
             )
-        controls.append(
-            ft.FilledButton(
-                "Start",
-                icon=ft.Icons.PLAY_CIRCLE_ROUNDED,
-                on_click=_start,
-                width=float("inf"),
-                height=tokens.CONTROL_MD,
-                style=_pill_style(),
+        if not is_app:
+            controls.append(
+                ft.FilledButton(
+                    "Start display",
+                    icon=ft.Icons.PLAY_CIRCLE_ROUNDED,
+                    on_click=_start,
+                    width=float("inf"),
+                    height=tokens.CONTROL_MD,
+                    style=_pill_style(),
+                )
             )
-        )
         body.controls = controls
         try:
             dlg.update()

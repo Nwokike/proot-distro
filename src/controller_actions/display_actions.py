@@ -350,18 +350,24 @@ class DisplayActions:
 
     # ── provisioning ──────────────────────────────────────────────────────────
 
-    async def install_display_support(self, container: str, desktop_env: str = "xfce") -> None:
-        """Stream the guest install into state.display_install_logs; never silent."""
+    async def install_display_support(
+        self, container: str, desktop_env: str = "xfce", script_text: str | None = None
+    ) -> None:
+        """Install desktop support, streaming live into the notebook-style
+        command cell on the launcher sheet (`page._display_install_cell`).
+
+        `script_text` (the possibly-EDITED cell source) runs verbatim via
+        `login -- /bin/sh -lc <script>`; without it the canned per-distro
+        script runs. The cell is the CollabShell notebook copy: input stays
+        editable, output streams per chunk, Run/Stop reflect progress."""
         state.display_installing = container
         state.display_install_logs = []
         state.display_error = ""
-        # Feedback the INSTANT the button is pressed: the SAME modal the distro
-        # install uses (page-stored controls updated per chunk — proven to move
-        # live on device), plus a snack anywhere in the app.
         self.show_snack(f"installing desktop in {container}…")
-        from components.install_progress_modal import show_display_install_modal
-
-        show_display_install_modal(self.page, container)
+        cell = getattr(self.page, "_display_install_cell", None)
+        if cell is not None:
+            cell.set_running(True)
+            cell.clear_output()
         await self.probe_display(container)
         caps = self._display_caps(container)
         loop = asyncio.get_running_loop()
@@ -373,29 +379,42 @@ class DisplayActions:
 
             def _apply(t: str = text) -> None:
                 # reassign (not append) so the observable notifies subscribers,
-                # then repaint the modal's stored controls (distro _apply_line
-                # pattern — proven live on device).
+                # then stream into the cell (notebook output panel).
                 try:
                     state.display_install_logs = [*state.display_install_logs, t]
                 except RuntimeError:
                     pass
-                try:
-                    from components.install_progress_modal import repaint_display_install
-
-                    repaint_display_install(self.page, container)
-                except Exception:
-                    pass
+                if cell is not None:
+                    cell.append_output(t)
 
             loop.call_soon_threadsafe(_apply)
 
         try:
-            result = await desk_service.install(container, caps, desktop_env, on_chunk=_on_chunk)
+            if script_text:
+                from services import session_service
+
+                result = await asyncio.to_thread(
+                    session_service.command_capture,
+                    container,
+                    ["/bin/sh", "-lc", script_text],
+                    None,
+                    on_chunk=_on_chunk,
+                )
+            else:
+                result = await desk_service.install(
+                    container, caps, desktop_env, on_chunk=_on_chunk
+                )
         except Exception as exc:
             state.display_error = _reason(exc)
             state.display_installing = None
+            if cell is not None:
+                cell.set_running(False)
+                cell.append_output(f"install failed: {_reason(exc)}")
             logger.exception("display install failed for %s", container)
             raise
         state.display_installing = None
+        if cell is not None:
+            cell.set_running(False)
         if result.get("ok"):
             self.show_snack(f"desktop installed in {container}")
             # Re-probe without the cache guard: the container changed on disk.
@@ -417,24 +436,10 @@ class DisplayActions:
         else:
             state.display_error = f"install exited {result.get('returncode')} — see the log tail"
             self.show_snack(f"display install failed in {container}")
+            if cell is not None:
+                cell.append_output(state.display_error)
 
     # ── diagnostics ───────────────────────────────────────────────────────────
-
-    @staticmethod
-    def repaint_display_install_box(page: ft.Page, container: str) -> None:
-        """Live-repaint the launcher sheet's install log box (the same
-        page-stored-control pattern distro_actions.install_distro uses)."""
-        boxes = getattr(page, "_display_install_boxes", None) or {}
-        box = boxes.get(container)
-        if box is None:
-            return
-        text = getattr(box, "content", None)
-        if text is not None:
-            text.value = "".join(state.display_install_logs or [])[-2000:]
-        try:
-            box.update()
-        except Exception:
-            pass
 
     async def show_display_logs(self, key: str) -> None:
         session = self.desk_manager.get(key)
