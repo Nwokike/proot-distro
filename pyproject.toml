@@ -121,5 +121,6 @@ ignore = ["E501", "EM101", "EM102", "EM103", "TRY003", "BLE001", "S110", "SIM105
 "tests/test_desk_service.py" = ["S104", "S108"]  # asserts wrap-surface strings, never binds
 "tests/test_flet_api_guard.py" = ["S603"]
 "scripts/build_flet_proot_wheel.py" = ["T201", "S310"]
+"scripts/build_flet_pillow_wheel.py" = ["T201", "S310"]
 "scripts/check_elf_alignment.py" = ["T201"]
 "scripts/generate_third_party_sources.py" = ["T201", "E402"]

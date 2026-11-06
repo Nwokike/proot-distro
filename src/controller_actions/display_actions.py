@@ -353,16 +353,22 @@ class DisplayActions:
     async def install_display_support(
         self, container: str, desktop_env: str = "xfce", script_text: str | None = None
     ) -> None:
-        """Install desktop support, streaming live into the notebook-style
-        command cell on the launcher sheet (`page._display_install_cell`).
+        """Install desktop support, streaming live into TWO surfaces — the
+        notebook-style command cell on the launcher sheet
+        (`page._display_install_cell`) and the reactive progress card on the
+        Display tab (`state.display_progress`, the CollabShell NotebookCell
+        mechanism: a small observable model passed as the component argument).
 
         `script_text` (the possibly-EDITED cell source) runs verbatim via
-        `login -- /bin/sh -lc <script>`; without it the canned per-distro
-        script runs. The cell is the CollabShell notebook copy: input stays
-        editable, output streams per chunk, Run/Stop reflect progress."""
+        `login -- /bin/sh -lc <script>` with NO timeout; without it the canned
+        per-distro script runs."""
+        from core.state import display_progress
+
         state.display_installing = container
         state.display_install_logs = []
         state.display_error = ""
+        display_progress.clear(container)
+        display_progress.is_running = True
         self.show_snack(f"installing desktop in {container}…")
         cell = getattr(self.page, "_display_install_cell", None)
         if cell is not None:
@@ -379,11 +385,12 @@ class DisplayActions:
 
             def _apply(t: str = text) -> None:
                 # reassign (not append) so the observable notifies subscribers,
-                # then stream into the cell (notebook output panel).
+                # then stream into the cell + progress model (notebook output).
                 try:
                     state.display_install_logs = [*state.display_install_logs, t]
                 except RuntimeError:
                     pass
+                display_progress.append(t)
                 if cell is not None:
                     cell.append_output(t)
 
@@ -398,6 +405,7 @@ class DisplayActions:
                     container,
                     ["/bin/sh", "-lc", script_text],
                     None,
+                    None,  # timeout=None — an install must never be killed
                     on_chunk=_on_chunk,
                 )
             else:
@@ -407,12 +415,16 @@ class DisplayActions:
         except Exception as exc:
             state.display_error = _reason(exc)
             state.display_installing = None
+            display_progress.is_running = False
+            display_progress.append(f"install failed: {_reason(exc)}")
             if cell is not None:
                 cell.set_running(False)
                 cell.append_output(f"install failed: {_reason(exc)}")
             logger.exception("display install failed for %s", container)
-            raise
+            return
         state.display_installing = None
+        display_progress.is_running = False
+        display_progress.finished_ok = bool(result.get("ok"))
         if cell is not None:
             cell.set_running(False)
         if result.get("ok"):

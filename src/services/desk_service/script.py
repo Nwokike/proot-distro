@@ -96,6 +96,10 @@ def build_guest_script(
             "if command -v xauth >/dev/null 2>&1; then\n"
             f'  xauth -f {xauth_file} add "127.0.0.1:{display}" . {xauth_cookie} 2>/dev/null || true\n'
             f'  xauth -f {xauth_file} add "localhost:{display}" . {xauth_cookie} 2>/dev/null || true\n'
+            # bare :N = the FamilyLocal/unix-socket entry — guest apps on
+            # DISPLAY=:N (the session's own export) authenticate through the
+            # unix socket, TCP entries above cover 127.0.0.1:N clients
+            f'  xauth -f {xauth_file} add ":{display}" . {xauth_cookie} 2>/dev/null || true\n'
             f'  XVFB_AUTH="-auth {xauth_file}"\n'
             "fi"
         )

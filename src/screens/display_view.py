@@ -16,7 +16,9 @@ import flet as ft
 from components import card, containers_required_empty_state, section_header
 from components.banner_ad import pooled_banner_ad
 from core import theme, tokens
+from core.state import display_progress as progress
 from core.state import state
+from screens.display_progress_card import DisplayProgressCard
 from state.controller_ctx import ControllerMethodsCtx
 
 
@@ -179,66 +181,23 @@ def DisplayView() -> ft.Control:
         )
 
     containers = [row.get("name", "?") for row in st.containers]
-    if not containers and not running and not starting_key and not st.display_installing:
+    if not containers and not running and not starting_key and not progress.is_running:
         return containers_required_empty_state(page, ad_slot="display-empty")
 
-    # ── Notebook-pattern install progress (CollabShell CellData lesson) ──────
-    # state.display_installing / display_install_logs are OBSERVABLE AppState
-    # fields; this component re-renders reactively on every reassignment —
-    # no refs, no manual update(). The log body is handed to the reconciler
-    # as a FRESH list each render (mutating the rendered list in place makes
-    # old == new in the diff and new output would never paint).
-    if st.display_installing:
-        install_lines = [
-            line.rstrip() for line in (st.display_install_logs or [])[-14:] if line.strip()
-        ]
+    # ── Install progress card — CollabShell NotebookCell mechanism ───────────
+    # `display_progress` is a SMALL observable model passed as the component's
+    # argument; its mutations re-render this card reactively (that is the part
+    # that makes CollabShell's notebook output move constantly). Includes the
+    # owner-requested collapse/expand chevrons.
+    if progress.is_running or progress.logs:
+
+        def _cancel_install(_e) -> None:
+            # The install runs as a capture task; stopping it kills the PTY.
+            pass
+
         sections.insert(
             0,
-            card(
-                ft.Column(
-                    controls=[
-                        ft.Row(
-                            controls=[
-                                ft.ProgressRing(
-                                    width=tokens.PROGRESS_RING_MD,
-                                    height=tokens.PROGRESS_RING_MD,
-                                ),
-                                ft.Text(
-                                    f"installing desktop in {st.display_installing}…",
-                                    size=tokens.FONT_SM,
-                                    weight=ft.FontWeight.W_600,
-                                    color=theme.text(),
-                                    expand=True,
-                                ),
-                            ],
-                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                            spacing=tokens.SPACE_SM,
-                        ),
-                        ft.Container(
-                            content=ft.ListView(
-                                controls=[
-                                    ft.Text(
-                                        line,
-                                        font_family=tokens.MONO_FONT,
-                                        size=tokens.FONT_XXS,
-                                        color=theme.text_dim(),
-                                    )
-                                    for line in install_lines
-                                ],
-                                spacing=tokens.SPACE_XXS,
-                                auto_scroll=True,
-                                height=min(max(len(install_lines) * 18 + 8, 36), 180),
-                            ),
-                            bgcolor=ft.Colors.with_opacity(tokens.OPACITY_TEXT_HINT, theme.text()),
-                            border_radius=tokens.RADIUS_SM,
-                            padding=tokens.SPACE_SM,
-                            visible=bool(install_lines),
-                        ),
-                    ],
-                    spacing=tokens.SPACE_SM,
-                ),
-                padding=tokens.SPACE_SM,
-            ),
+            DisplayProgressCard(progress, on_cancel=None),
         )
 
     # ── Desktop section: per-container desktop cards ─────────────────────────
@@ -248,7 +207,13 @@ def DisplayView() -> ft.Control:
         for name in containers:
             caps = (st.display_support or {}).get(name) or {}
             ready = bool(caps.get("desk_ready") and caps.get("x_server"))
-            label = "Open desktop" if ready else "Install desktop"
+            installing_this = progress.is_running and progress.container == name
+            if installing_this:
+                label = "Installing…"
+            elif ready:
+                label = "Open desktop"
+            else:
+                label = "Install desktop"
 
             def _open(_e, container=name) -> None:
                 page.run_task(methods.open_display, container)

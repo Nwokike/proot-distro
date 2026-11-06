@@ -118,3 +118,35 @@ class AppState:
 
 
 state = AppState()
+
+
+@ft.observable
+class DisplayProgress:
+    """Dedicated observable model for the desktop-install progress card — the
+    CollabShell NotebookCell mechanism copied exactly: a SMALL observable
+    object passed as the component's argument (not a field on the global
+    AppState), so every mutation re-renders that one card reactively.
+    Mutate `logs` by REASSIGNMENT and bump `rev` (CellData.outputs_rev)."""
+
+    def __init__(self):
+        self.container: str | None = None
+        self.logs: list[str] = []
+        self.is_running: bool = False
+        self.rev: int = 0
+        self.finished_ok: bool | None = None
+
+    def append(self, line: str) -> None:
+        clean = line.rstrip()
+        if not clean:
+            return
+        self.logs = [*self.logs[-399:], clean]
+        self.rev += 1
+
+    def clear(self, container: str | None = None) -> None:
+        self.container = container
+        self.logs = []
+        self.rev += 1
+        self.finished_ok = None
+
+
+display_progress = DisplayProgress()

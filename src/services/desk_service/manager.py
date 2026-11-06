@@ -193,8 +193,14 @@ def _ensure_clipboard_shim(container: str, display: int) -> None:
     env, argv = session_service.command_argv(container, ["/usr/bin/xclip"])
     exec_env = " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items())
     exec_script = shim_dir / f"exec-{container}.sh"
+    # DISPLAY/XAUTHORITY arrive per-call from the dispatcher (upstream sets
+    # DISPLAY=127.0.0.1:N on the xclip subprocess); forward them explicitly so
+    # the guest xclip sees the GUEST paths — appended after exec_env so they
+    # win even if the hardened env ever carries stale values.
     exec_script.write_text(
-        f'#!/system/bin/sh\nexec {exec_env} {shlex.join(argv)} "$@"\n',
+        f"#!/system/bin/sh\n"
+        f'exec {exec_env} DISPLAY="$PDX_GUEST_DISPLAY" XAUTHORITY="$PDX_GUEST_XAUTH"'
+        f' {shlex.join(argv)} "$@"\n',
         encoding="utf-8",
     )
     dispatcher = shim_dir / "xclip"
@@ -204,6 +210,11 @@ def _ensure_clipboard_shim(container: str, display: int) -> None:
         "D=${D%%.*}\n"
         'C=$(awk -v n="$D" \'$1==n{print $2}\' "$PDX_XCLIP_REGISTRY" 2>/dev/null)\n'
         '[ -n "$C" ] || exit 3\n'
+        # Guest-side values: TCP form matches the xauth "127.0.0.1:N" entry
+        # (proot shares host loopback, so the guest reaches Xvfb's TCP port);
+        # the xauth file is the guest path the session script wrote.
+        'export PDX_GUEST_DISPLAY="127.0.0.1:$D"\n'
+        'export PDX_GUEST_XAUTH="/tmp/termux-desk/xauth-$D"\n'
         'exec "$PDX_XCLIP_DIR/exec-$C.sh" "$@"\n',
         encoding="utf-8",
     )

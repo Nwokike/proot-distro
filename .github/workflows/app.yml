@@ -38,8 +38,8 @@ jobs:
         run: uv sync --frozen --group dev
       - name: Ruff
         run: |
-          uv run ruff check src tests scripts/build_flet_proot_wheel.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
-          uv run ruff format --check src tests scripts/build_flet_proot_wheel.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
+          uv run ruff check src tests scripts/build_flet_proot_wheel.py scripts/build_flet_pillow_wheel.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
+          uv run ruff format --check src tests scripts/build_flet_proot_wheel.py scripts/build_flet_pillow_wheel.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
       - name: Flet API guard (AST, installed flet)
         run: |
           for f in $(find src -name "*.py"); do
@@ -170,6 +170,9 @@ jobs:
       - name: Build native payload wheel set (flet-proot, pinned + sha256-verified)
         run: uv run python scripts/build_flet_proot_wheel.py --out wheels
 
+      - name: Build Pillow wheel WITH XCB (Termux debs, pinned + sha256-verified)
+        run: uv run python scripts/build_flet_pillow_wheel.py --out wheels
+
       - name: Decode signing keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -224,6 +227,9 @@ jobs:
 
       - name: Build native payload wheel set (flet-proot, pinned + sha256-verified)
         run: uv run python scripts/build_flet_proot_wheel.py --out wheels
+
+      - name: Build Pillow wheel WITH XCB (Termux debs, pinned + sha256-verified)
+        run: uv run python scripts/build_flet_pillow_wheel.py --out wheels
 
       - name: Decode signing keystore
         env:
