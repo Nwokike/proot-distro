@@ -106,6 +106,122 @@ def show_install_progress_modal(page: ft.Page, target: str) -> None:
     page.show_dialog(dialog)
 
 
+def show_display_install_modal(page: ft.Page, target: str) -> None:
+    """Desktop-install progress modal — the EXACT distro-install pattern:
+    page-stored control refs that display_actions.install_display_support
+    updates on every streamed chunk, so output moves live with zero
+    close/reopen (owner ruling: copy the distro install flow verbatim)."""
+    logs_column = ft.Column(
+        controls=[],
+        spacing=tokens.SPACE_NANO,
+        scroll=ft.ScrollMode.AUTO,
+        height=tokens.LOG_BOX_HEIGHT,
+    )
+
+    stage_text = ft.Text(
+        "Preparing install…",
+        size=tokens.FONT_SM,
+        weight=ft.FontWeight.W_500,
+        color=theme.text(),
+        expand=True,
+    )
+
+    status_row = ft.Row(
+        controls=[
+            ft.ProgressRing(
+                width=tokens.PROGRESS_RING_MD,
+                height=tokens.PROGRESS_RING_MD,
+                stroke_width=tokens.PROGRESS_RING_STROKE_THIN,
+            ),
+            stage_text,
+        ],
+        spacing=tokens.SPACE_MD,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+
+    log_box = ft.Container(
+        content=logs_column,
+        bgcolor=ft.Colors.with_opacity(tokens.OPACITY_TEXT_HINT, theme.text()),
+        border=ft.Border.all(tokens.HAIRLINE, theme.surface_alt()),
+        border_radius=tokens.RADIUS_SM,
+        padding=tokens.SPACE_SM,
+    )
+
+    def _clear_install_controls() -> None:
+        if getattr(page, "_display_install_dialog", None) is dialog:
+            page._display_install_dialog = None
+            page._display_install_stage_text = None
+            page._display_install_logs_column = None
+
+    def _on_dismiss(_e) -> None:
+        _clear_install_controls()
+
+    dialog = ft.AlertDialog(
+        modal=True,
+        on_dismiss=_on_dismiss,
+        title=ft.Row(
+            controls=[
+                ft.Icon(ft.Icons.DOWNLOAD_ROUNDED, color=theme.primary(), size=tokens.ICON_MD),
+                ft.Text(
+                    f"Installing desktop — {target}",
+                    size=tokens.FONT_LG,
+                    weight=ft.FontWeight.BOLD,
+                ),
+            ],
+            spacing=tokens.SPACE_SM,
+        ),
+        content=ft.Column(
+            controls=[status_row, log_box],
+            spacing=tokens.SPACE_MD,
+            tight=True,
+            width=tokens.DIALOG_WIDTH,
+        ),
+        actions=[
+            ft.TextButton(
+                "Close",
+                on_click=lambda _e: (page.pop_dialog(), _clear_install_controls()),
+            )
+        ],
+    )
+    page._display_install_stage_text = stage_text
+    page._display_install_logs_column = logs_column
+    page._display_install_dialog = dialog
+    page.show_dialog(dialog)
+
+
+def repaint_display_install(page: ft.Page, container: str) -> None:
+    """Live update from the installer's chunk callback — the distro
+    _apply_line pattern: set the stage line, rebuild the log rows from
+    state, then .update() the stored controls."""
+    stage_ctrl = getattr(page, "_display_install_stage_text", None)
+    logs_ctrl = getattr(page, "_display_install_logs_column", None)
+    if stage_ctrl is None and logs_ctrl is None:
+        return
+    if stage_ctrl is not None:
+        stage_ctrl.value = f"installing desktop in {container}…"
+        stage_ctrl.update()
+    if logs_ctrl is not None:
+        from core import tokens as _t
+
+        logs_ctrl.controls = [
+            ft.Text(
+                line.rstrip(),
+                font_family=_t.MONO_FONT,
+                size=_t.FONT_XXS,
+                color=theme.text_dim(),
+            )
+            for line in (state.display_install_logs or [])[-60:]
+            if line.strip()
+        ]
+        logs_ctrl.update()
+    dialog = getattr(page, "_display_install_dialog", None)
+    if dialog is not None and getattr(dialog, "open", False):
+        try:
+            dialog.update()
+        except RuntimeError:
+            pass
+
+
 def build_active_install_banner(page: ft.Page) -> ft.Control | None:
     """Sticky banner rendered at the top of the home view during/after an install."""
     controller = getattr(page, "_controller", None)

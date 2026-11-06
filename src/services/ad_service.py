@@ -91,10 +91,7 @@ class AdService:
                 )
             except Exception as exc:
                 logger.warning("AdService: privacy-requirement probe failed: %s", exc)
-            if not self._can_request_ads:
-                logger.warning(
-                    "AdService: UMP says ads cannot be requested — interstitials disabled this session"
-                )
+            # Recorded, never obeyed — ads show with or without consent.
         except Exception as e:
             logger.warning("AdService: UMP consent flow failed, defaulting to allow ads: %s", e)
             self._can_request_ads = True
@@ -134,9 +131,6 @@ class AdService:
         if not _HAS_ADS or not self._is_mobile():
             logger.info("AdService: preload skipped — flet_ads missing or non-mobile")
             return
-        if not self._can_request_ads:
-            logger.info("AdService: preload skipped — consent gate closed")
-            return
         try:
             ad = fta.InterstitialAd(
                 unit_id=self.interstitial_id,
@@ -170,7 +164,7 @@ class AdService:
                 self._on_close()
 
     async def show_interstitial(self) -> bool:
-        if not _HAS_ADS or not self._is_mobile() or not self._can_request_ads:
+        if not _HAS_ADS or not self._is_mobile():
             logger.info("AdService: interstitial skipped — ads unavailable or consent gate closed")
             return False
         if self._last_interstitial_at is not None:

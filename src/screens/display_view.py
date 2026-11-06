@@ -179,11 +179,71 @@ def DisplayView() -> ft.Control:
         )
 
     containers = [row.get("name", "?") for row in st.containers]
-    if not containers and not running and not starting_key:
+    if not containers and not running and not starting_key and not st.display_installing:
         return containers_required_empty_state(page, ad_slot="display-empty")
+
+    # ── Notebook-pattern install progress (CollabShell CellData lesson) ──────
+    # state.display_installing / display_install_logs are OBSERVABLE AppState
+    # fields; this component re-renders reactively on every reassignment —
+    # no refs, no manual update(). The log body is handed to the reconciler
+    # as a FRESH list each render (mutating the rendered list in place makes
+    # old == new in the diff and new output would never paint).
+    if st.display_installing:
+        install_lines = [
+            line.rstrip() for line in (st.display_install_logs or [])[-14:] if line.strip()
+        ]
+        sections.insert(
+            0,
+            card(
+                ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.ProgressRing(
+                                    width=tokens.PROGRESS_RING_MD,
+                                    height=tokens.PROGRESS_RING_MD,
+                                ),
+                                ft.Text(
+                                    f"installing desktop in {st.display_installing}…",
+                                    size=tokens.FONT_SM,
+                                    weight=ft.FontWeight.W_600,
+                                    color=theme.text(),
+                                    expand=True,
+                                ),
+                            ],
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                            spacing=tokens.SPACE_SM,
+                        ),
+                        ft.Container(
+                            content=ft.ListView(
+                                controls=[
+                                    ft.Text(
+                                        line,
+                                        font_family=tokens.MONO_FONT,
+                                        size=tokens.FONT_XXS,
+                                        color=theme.text_dim(),
+                                    )
+                                    for line in install_lines
+                                ],
+                                spacing=tokens.SPACE_XXS,
+                                auto_scroll=True,
+                                height=min(max(len(install_lines) * 18 + 8, 36), 180),
+                            ),
+                            bgcolor=ft.Colors.with_opacity(tokens.OPACITY_TEXT_HINT, theme.text()),
+                            border_radius=tokens.RADIUS_SM,
+                            padding=tokens.SPACE_SM,
+                            visible=bool(install_lines),
+                        ),
+                    ],
+                    spacing=tokens.SPACE_SM,
+                ),
+                padding=tokens.SPACE_SM,
+            ),
+        )
 
     # ── Desktop section: per-container desktop cards ─────────────────────────
     if containers:
+        is_narrow = (getattr(page, "width", None) or 0) < 600
         rows = []
         for name in containers:
             caps = (st.display_support or {}).get(name) or {}
@@ -193,43 +253,55 @@ def DisplayView() -> ft.Control:
             def _open(_e, container=name) -> None:
                 page.run_task(methods.open_display, container)
 
-            rows.append(
-                card(
-                    ft.Container(
-                        content=ft.Row(
-                            controls=[
-                                ft.Icon(
-                                    ft.Icons.DESKTOP_WINDOWS,
-                                    size=tokens.ICON_MD,
-                                    color=theme.primary(),
-                                ),
-                                ft.Text(
-                                    name,
-                                    size=tokens.FONT_LG,
-                                    weight=ft.FontWeight.W_600,
-                                    color=theme.text(),
-                                    expand=True,
-                                ),
-                                ft.Text(
-                                    caps.get("os", {}).get("pretty_name", "")
-                                    if caps
-                                    else "probing…",
-                                    size=tokens.FONT_XS,
-                                    color=theme.text_dim(),
-                                ),
-                                ft.FilledButton(
-                                    label,
-                                    icon=ft.Icons.DESKTOP_WINDOWS,
-                                    on_click=_open,
-                                    height=tokens.CONTROL_MD,
-                                    style=ft.ButtonStyle(
-                                        shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
-                                    ),
-                                ),
-                            ],
+            icon = ft.Icon(ft.Icons.DESKTOP_WINDOWS, size=tokens.ICON_MD, color=theme.primary())
+            name_text = ft.Text(
+                name,
+                size=tokens.FONT_LG,
+                weight=ft.FontWeight.W_600,
+                color=theme.text(),
+            )
+            distro_text = ft.Text(
+                caps.get("os", {}).get("pretty_name", "") if caps else "probing…",
+                size=tokens.FONT_XS,
+                color=theme.text_dim(),
+            )
+            action = ft.FilledButton(
+                label,
+                icon=ft.Icons.DESKTOP_WINDOWS,
+                on_click=_open,
+                height=tokens.CONTROL_MD,
+                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)),
+            )
+            if is_narrow:
+                # Stacked-under on narrow screens (house pattern): the row
+                # wraps so "Fedora Linux 45" drops under the name instead of
+                # squeezing the action button off-screen.
+                content = ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[icon, name_text],
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
                             spacing=tokens.SPACE_SM,
                         ),
+                        ft.Row(
+                            controls=[distro_text, action],
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                            spacing=tokens.SPACE_SM,
+                            wrap=True,
+                        ),
+                    ],
+                    spacing=tokens.SPACE_XXS,
+                )
+            else:
+                content = ft.Row(
+                    controls=[icon, name_text, distro_text, action],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=tokens.SPACE_SM,
+                )
+            rows.append(
+                card(
+                    ft.Container(
+                        content=content,
                         on_click=_open,
                         ink=True,
                     ),

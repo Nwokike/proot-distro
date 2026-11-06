@@ -103,11 +103,14 @@ def DistroView() -> ft.Control:
             page.run_task(methods.search_distro, q, limit)
 
     def _distro_tile(label: str, ref: str) -> ft.Container:
-        # If the exact container name (upstream derive_alias(ref) == ref for these
-        # bare names) is already installed, the button opens a shell instead of
-        # erroring with "container already exists".
+        # The container name is upstream derive_alias(ref): the last path
+        # component, tag stripped ("kalilinux/kali-rolling" → "kali-rolling",
+        # "opensuse/tumbleweed" → "tumbleweed", bare names unchanged). Compare
+        # THAT, not the raw ref — namespaced refs never equal the name, so
+        # Kali/openSUSE used to show Install while already installed.
+        alias = ref.strip().split("@")[0].split(":")[0].rsplit("/", 1)[-1]
         installed_names = {r.get("name", "") for r in (st.containers or [])}
-        already = ref in installed_names
+        already = alias in installed_names
 
         def _action(_e, r=ref) -> None:
             if already:
@@ -353,7 +356,9 @@ def DistroView() -> ft.Control:
         result_cards.insert(i + 1, pooled_banner_ad(f"search-{i // 5 + 1}", page))
     if result_cards:
         controls.extend(result_cards)
-    elif mode == "search" and st.search_status:
+    elif mode == "search":
+        # No results yet — including the fresh search screen before the first
+        # query — keeps one sticky banner (owner ruling).
         controls.append(pooled_banner_ad("search-empty", page))
 
     if mode == "install":

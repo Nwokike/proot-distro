@@ -17,14 +17,15 @@ dependencies = [
     "httpx>=0.28.1",
     "flet-terminal==0.4.2",
     "proot-distro>=5.10.0",
-    "termux-desk",
+    # PEP 508 direct URL (NOT [tool.uv.sources]): serious_python installs the
+    # APK's deps with pip, which ignores uv sources — a bare "termux-desk"
+    # resolved to PyPI 0.1.5 on device (no auth code) while desktop uv got
+    # 0.2.0. The direct URL pins 0.2.0 for BOTH installers.
+    "termux-desk @ git+https://github.com/amirghm/termux-desk.git@446fadf91d392ef4480fefd61e4a5b39c5567b9a",
     ]
 
 [tool.uv]
 package = false
-
-[tool.uv.sources]
-termux-desk = { git = "https://github.com/amirghm/termux-desk.git", rev = "446fadf91d392ef4480fefd61e4a5b39c5567b9a" }
 
 [tool.flet]
 org = "ng.kiri"

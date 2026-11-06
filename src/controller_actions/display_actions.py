@@ -74,7 +74,9 @@ class DisplayActions:
             return  # not cached — retried next mount
         finally:
             _probing.discard(container)
-        state.display_support[container] = caps
+        # REASSIGN: nested dict-item mutation does not notify the observable,
+        # so card labels ("Open desktop"/"Install desktop") never flipped.
+        state.display_support = {**(state.display_support or {}), container: caps}
 
     def _display_caps(self, container: str) -> dict:
         return (state.display_support or {}).get(container) or {}
@@ -353,16 +355,13 @@ class DisplayActions:
         state.display_installing = container
         state.display_install_logs = []
         state.display_error = ""
-        # Feedback the INSTANT the button is pressed: a snack anywhere in the
-        # app + the launcher sheet repaints into its live-log state (the same
-        # in-place pattern the distro install modal uses — no close/reopen).
+        # Feedback the INSTANT the button is pressed: the SAME modal the distro
+        # install uses (page-stored controls updated per chunk — proven to move
+        # live on device), plus a snack anywhere in the app.
         self.show_snack(f"installing desktop in {container}…")
-        try:
-            from screens.display_launcher import rebuild_display_sheet
+        from components.install_progress_modal import show_display_install_modal
 
-            rebuild_display_sheet(self.page, container)
-        except Exception:
-            pass
+        show_display_install_modal(self.page, container)
         await self.probe_display(container)
         caps = self._display_caps(container)
         loop = asyncio.get_running_loop()
@@ -373,17 +372,17 @@ class DisplayActions:
                 return
 
             def _apply(t: str = text) -> None:
-                # reassign (not append) so the observable notifies subscribers
-                # AND repaint the launcher sheet's log box in place (device
-                # lesson: an AlertDialog never re-renders on its own).
+                # reassign (not append) so the observable notifies subscribers,
+                # then repaint the modal's stored controls (distro _apply_line
+                # pattern — proven live on device).
                 try:
                     state.display_install_logs = [*state.display_install_logs, t]
                 except RuntimeError:
                     pass
                 try:
-                    from screens.display_launcher import repaint_install_log
+                    from components.install_progress_modal import repaint_display_install
 
-                    repaint_install_log(self.page, container)
+                    repaint_display_install(self.page, container)
                 except Exception:
                     pass
 
@@ -402,7 +401,10 @@ class DisplayActions:
             # Re-probe without the cache guard: the container changed on disk.
             try:
                 caps = await asyncio.to_thread(proot_service.guest_capabilities, container)
-                state.display_support[container] = caps
+                # REASSIGN the whole dict: nested item assignment on the
+                # observable does not notify, so card labels would keep saying
+                # "Install desktop" after the desktop is installed.
+                state.display_support = {**(state.display_support or {}), container: caps}
             except Exception as exc:
                 logger.warning("display re-probe failed for %s: %s", container, exc)
             # Repaint the launcher sheet (if still open) into its ready state.

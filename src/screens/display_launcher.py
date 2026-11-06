@@ -499,8 +499,9 @@ def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None
             ),
         ]
         if is_app:
-            # Multiline with the full examples as helper text below the field —
-            # hint_text truncates on one line, helper_text wraps.
+            # Multiline command input; the full examples sit BELOW the field as
+            # a wrapping Text (TextField has no helper_text in Flet 1.1 —
+            # device-crash lesson — and hint_text truncates on one line).
             controls.append(
                 ft.TextField(
                     label="Command to run on its own display",
@@ -510,12 +511,18 @@ def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None
                     multiline=True,
                     min_lines=2,
                     max_lines=4,
-                    helper_text="Examples:  firefox  ·  xterm  ·  python3 -m http.server 8080  ·  python3 my_pywebview_app.py",
-                    helper_style=ft.TextStyle(size=tokens.FONT_XXS, color=theme.text_dim()),
                     border=ft.OutlineInputBorder(
                         border_radius=tokens.RADIUS_MD,
                         side=ft.BorderSide(1, theme.surface_alt()),
                     ),
+                )
+            )
+            controls.append(
+                ft.Text(
+                    "Examples:  firefox  ·  xterm  ·  python3 -m http.server 8080  ·  "
+                    "python3 my_pywebview_app.py",
+                    size=tokens.FONT_XXS,
+                    color=theme.text_dim(),
                 )
             )
         else:
