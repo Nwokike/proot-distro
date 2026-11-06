@@ -85,18 +85,20 @@ def build_guest_script(
         session_cmd = f"dbus-run-session -- {shlex.quote(de.starter)}"
 
     xauth_setup = ""
-    xvfb_auth = ""
     if xauth_cookie:
         # GUEST path inside the container rootfs, not host /tmp (S108 is a false positive).
         xauth_file = f"/tmp/termux-desk/xauth-{display}"  # noqa: S108
+        # XVFB_AUTH is ALWAYS defined (device lesson: with `set -u`, an unset
+        # var in the Xvfb line killed the whole script when the guest lacked
+        # xauth — the empty default IS the graceful no-auth fallback).
         xauth_setup = (
+            'XVFB_AUTH=""\n'
             "if command -v xauth >/dev/null 2>&1; then\n"
-            f'  xauth -f {shlex.quote(xauth_file)} add "127.0.0.1:{display}" . {xauth_cookie} 2>/dev/null || true\n'
-            f'  xauth -f {shlex.quote(xauth_file)} add "localhost:{display}" . {xauth_cookie} 2>/dev/null || true\n'
-            f"  XVFB_AUTH={shlex.quote(xauth_file)}\n"
+            f'  xauth -f {xauth_file} add "127.0.0.1:{display}" . {xauth_cookie} 2>/dev/null || true\n'
+            f'  xauth -f {xauth_file} add "localhost:{display}" . {xauth_cookie} 2>/dev/null || true\n'
+            f'  XVFB_AUTH="-auth {xauth_file}"\n'
             "fi"
         )
-        xvfb_auth = '-auth "$XVFB_AUTH"'
 
     tunnel_block = ""
     if tunnel:
@@ -120,13 +122,19 @@ mkdir -p "$XDG_RUNTIME_DIR" /tmp/termux-desk
 chmod 700 "$XDG_RUNTIME_DIR"
 {xauth_setup}
 
-Xvfb :{display} {xvfb_auth} -screen 0 {geometry}x24 &
+Xvfb :{display} $XVFB_AUTH -screen 0 {geometry}x24 &
 XVFB_PID=$!
 sleep 1
+kill -0 "$XVFB_PID" 2>/dev/null || {{
+  echo "Xvfb failed to start on :{display}"
+  exit 1
+}}
 
 {session_cmd} &
 SESSION_PID=$!
 
-{tunnel_block}wait "$SESSION_PID" "$XVFB_PID" 2>/dev/null
+{tunnel_block}# The Xvfb framebuffer owns the session: wait on IT only. If the desktop
+# crashes, the display (and the server's connection to it) stays up.
+wait "$XVFB_PID" 2>/dev/null
 exit $?
 """

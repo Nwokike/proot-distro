@@ -1,16 +1,11 @@
 """Display launcher sheets — the button-driven entry to a container's display.
 
-Opened imperatively via page.show_dialog. The sheet body is a reactive
-component reading the observable state, so the capability probe, the DE pill
-selection, the install log, and the settings all update live while open.
-
-Two entry points:
-- `show_display_sheet` — per container: running → resume is in the tab list;
-  ready → Start display / Open an app on a new display… / settings; not ready
-  → DE pills + exact install script + live install log + Install.
-- `show_new_display_sheet` — the "+" on the Display tab: pick container, then
-  mode (Desktop with DE picker, or Single app with a command) → a new
-  `container:N` session.
+HARD RULE (device-proven, 2026-11-05): `@ft.component` can only be CONSTRUCTED
+during a render — calling one imperatively from a controller task (this file's
+whole pattern) raises "No current renderer is set". So every sheet here is
+built as PLAIN controls and repainted in place: the files-modal / install-
+progress pattern (named controls assigned into a live dialog + `.update()`),
+never a component and never a literal list assignment inline.
 """
 
 from __future__ import annotations
@@ -105,162 +100,157 @@ def _picker_with_custom(
     return ft.Column(controls=[dropdown, custom_field], spacing=tokens.SPACE_XXS, tight=True)
 
 
-@ft.component
-def _DisplaySheetBody(page: ft.Page, methods, container: str) -> ft.Control:
-    """The reactive body of the per-container display sheet (reads state)."""
-    st, _ = ft.use_state(state)
-    caps = (st.display_support or {}).get(container) or {}
-    sel, set_sel = ft.use_state({DEFAULT_DESKTOP: True})
+def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> None:
+    """Open the launcher sheet for a container. Plain controls; repaint in
+    place when the DE pick or the install log changes."""
+    selected = {DEFAULT_DESKTOP: True}
 
     def _current() -> str:
-        return next((key for key, on in sel.items() if on), DEFAULT_DESKTOP)
+        return next((key for key, on in selected.items() if on), DEFAULT_DESKTOP)
 
-    def _pick(key: str) -> None:
-        set_sel({k: k == key for k in (de.key for de in DESKTOP_ENVIRONMENTS)})
+    body: ft.Column = ft.Column(spacing=tokens.SPACE_SM, tight=True, width=tokens.DIALOG_WIDTH)
+    dlg: ft.AlertDialog
 
-    ready = bool(caps.get("desk_ready") and caps.get("x_server"))
-    pm = package_manager_for(caps) if caps else None
+    def _rebuild() -> None:
+        # Repaint in place: build rows into a NAME, then assign (the files-modal
+        # pattern) — never a literal list at the assignment site.
+        ready = bool((state.display_support or {}).get(container, {}).get("desk_ready")) and bool(
+            (state.display_support or {}).get(container, {}).get("x_server")
+        )
+        pm = package_manager_for((state.display_support or {}).get(container) or {})
+        rows = [_status_line(ready, (state.display_support or {}).get(container) or {})]
+        if ready:
+            rows.append(
+                ft.FilledButton(
+                    "Start display",
+                    icon=ft.Icons.DESKTOP_WINDOWS,
+                    on_click=lambda _e: (
+                        page.pop_dialog(),
+                        page.run_task(methods.start_display, container, _current(), None, None),
+                    ),
+                    width=float("inf"),
+                    height=tokens.CONTROL_MD,
+                    style=_pill_style(),
+                )
+            )
 
-    content_controls: list[ft.Control] = [_status_line(ready, caps)]
+            def _open_apps(_e) -> None:
+                page.pop_dialog()
+                _show_app_sheet(page, methods, container)
 
-    if ready:
-        content_controls.append(
-            ft.FilledButton(
-                "Start display",
-                icon=ft.Icons.DESKTOP_WINDOWS,
-                on_click=lambda _e: (
-                    page.pop_dialog(),
-                    page.run_task(methods.start_display, container, _current(), None, None),
+            rows.append(
+                ft.OutlinedButton(
+                    "Open an app on a new display…",
+                    icon=ft.Icons.WINDOW_ROUNDED,
+                    on_click=_open_apps,
+                    width=float("inf"),
+                    height=tokens.CONTROL_MD,
+                    style=_pill_style(),
+                )
+            )
+            rows.append(
+                ft.Dropdown(
+                    label="Desktop environment",
+                    value=next(
+                        (de.key for de in DESKTOP_ENVIRONMENTS if de.key == _current()),
+                        DEFAULT_DESKTOP,
+                    ),
+                    options=[ft.dropdown.Option(de.key, de.name) for de in DESKTOP_ENVIRONMENTS],
+                    on_change=lambda e: _pick(e.control.value),
+                    width=tokens.DROPDOWN_WIDTH,
+                    border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+                    text_size=tokens.FONT_XS,
+                )
+            )
+            rows.append(
+                ft.Row(
+                    controls=[
+                        _picker_with_custom(
+                            "FPS",
+                            (("8", "8 fps"), ("12", "12 fps"), ("15", "15 fps"), ("24", "24 fps")),
+                            "fps",
+                            hint="any number > 0, e.g. 30",
+                        ),
+                        _picker_with_custom(
+                            "Quality",
+                            (("50", "50"), ("70", "70"), ("85", "85"), ("95", "95")),
+                            "quality",
+                            hint="1-95 (upstream JPEG bound)",
+                        ),
+                    ],
+                    spacing=tokens.SPACE_SM,
+                    wrap=True,
+                )
+            )
+            rows.append(
+                ft.Row(
+                    controls=[
+                        _picker_with_custom(
+                            "Resolution",
+                            (
+                                ("auto", "Auto (screen shape)"),
+                                ("1280x720", "1280 x 720"),
+                                ("1600x900", "1600 x 900"),
+                                ("1920x1080", "1920 x 1080"),
+                            ),
+                            "geometry",
+                            hint="WxH, e.g. 2560x1440",
+                        ),
+                        _picker_with_custom(
+                            "Fullscreen",
+                            (
+                                ("landscape", "Landscape"),
+                                ("portrait", "Portrait"),
+                                ("auto", "System default"),
+                            ),
+                            "orientation",
+                            hint="orientation",
+                        ),
+                    ],
+                    spacing=tokens.SPACE_SM,
+                    wrap=True,
+                )
+            )
+            rows.append(
+                ft.Row(
+                    controls=[
+                        ft.Switch(
+                            label="LAN — open to Wi-Fi devices",
+                            value=bool((state.display_settings or {}).get("lan")),
+                            on_change=lambda e: _set_setting("lan", bool(e.control.value)),
+                        ),
+                        ft.Switch(
+                            label="Public URL — localhost.run tunnel",
+                            value=bool((state.display_settings or {}).get("tunnel")),
+                            on_change=lambda e: _set_setting("tunnel", bool(e.control.value)),
+                        ),
+                    ],
+                    spacing=tokens.SPACE_SM,
+                    wrap=True,
                 ),
-                width=float("inf"),
-                height=tokens.CONTROL_MD,
-                style=_pill_style(),
             )
-        )
-
-        def _open_apps(_e) -> None:
-            page.pop_dialog()
-            _show_app_sheet(page, methods, container)
-
-        content_controls.append(
-            ft.OutlinedButton(
-                "Open an app on a new display…",
-                icon=ft.Icons.WINDOW_ROUNDED,
-                on_click=_open_apps,
-                width=float("inf"),
-                height=tokens.CONTROL_MD,
-                style=_pill_style(),
+            rows.append(
+                ft.Text(
+                    "LAN binds the server to the phone's Wi-Fi address; the tunnel "
+                    "publishes a public *.lhr.life URL. Both are protected by the "
+                    "access code — share it only with your own devices.",
+                    size=tokens.FONT_XXS,
+                    color=theme.text_dim(),
+                )
             )
-        )
-        content_controls.append(
-            ft.Dropdown(
-                label="Desktop environment",
-                value=_current(),
-                options=[ft.dropdown.Option(de.key, de.name) for de in DESKTOP_ENVIRONMENTS],
-                on_change=lambda e: _pick(e.control.value),
-                width=tokens.DROPDOWN_WIDTH,
-                border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-                text_size=tokens.FONT_XS,
+        else:
+            rows.append(
+                ft.Text(
+                    "The desktop is not installed in this container. Installing pulls an X "
+                    "server, the desktop, and the clipboard tools (a few hundred MB) from "
+                    "the container's package manager. The display server itself is "
+                    "already bundled in this app.",
+                    size=tokens.FONT_SM,
+                    color=theme.text(),
+                )
             )
-        )
-
-        # ── Display settings — the full upstream param surface (fps/quality),
-        # the Xvfb screen size, the fullscreen orientation, and the two ways
-        # other devices can reach this display (LAN binding / localhost.run
-        # tunnel). Presets plus Custom… free fields; everything lands in
-        # state.display_settings for the next start.
-        content_controls.append(
-            ft.Row(
-                controls=[
-                    _picker_with_custom(
-                        "FPS",
-                        (("8", "8 fps"), ("12", "12 fps"), ("15", "15 fps"), ("24", "24 fps")),
-                        "fps",
-                        hint="any number > 0, e.g. 30",
-                    ),
-                    _picker_with_custom(
-                        "Quality",
-                        (("50", "50"), ("70", "70"), ("85", "85"), ("95", "95")),
-                        "quality",
-                        hint="1-95 (upstream JPEG bound)",
-                    ),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
-            )
-        )
-        content_controls.append(
-            ft.Row(
-                controls=[
-                    _picker_with_custom(
-                        "Resolution",
-                        (
-                            ("auto", "Auto (screen shape)"),
-                            ("1280x720", "1280 x 720"),
-                            ("1600x900", "1600 x 900"),
-                            ("1920x1080", "1920 x 1080"),
-                        ),
-                        "geometry",
-                        hint="WxH, e.g. 2560x1440",
-                    ),
-                    _picker_with_custom(
-                        "Fullscreen",
-                        (
-                            ("landscape", "Landscape"),
-                            ("portrait", "Portrait"),
-                            ("auto", "System default"),
-                        ),
-                        "orientation",
-                        hint="orientation",
-                    ),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
-            )
-        )
-        content_controls.append(
-            ft.Row(
-                controls=[
-                    ft.Switch(
-                        label="LAN — open to Wi-Fi devices",
-                        value=bool((state.display_settings or {}).get("lan")),
-                        on_change=lambda e: _set_setting("lan", bool(e.control.value)),
-                    ),
-                    ft.Switch(
-                        label="Public URL — localhost.run tunnel",
-                        value=bool((state.display_settings or {}).get("tunnel")),
-                        on_change=lambda e: _set_setting("tunnel", bool(e.control.value)),
-                    ),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
-            )
-        )
-        content_controls.append(
-            ft.Text(
-                "LAN binds the server to the phone's Wi-Fi address; the tunnel "
-                "publishes a public *.lhr.life URL. Both are protected by the "
-                "access code — share it only with your own devices.",
-                size=tokens.FONT_XXS,
-                color=theme.text_dim(),
-            )
-        )
-    else:
-        content_controls.append(
-            ft.Text(
-                "The desktop is not installed in this container. Installing pulls an X "
-                "server, the desktop, and the clipboard tools (a few hundred MB) from "
-                "the container's package manager. The display server itself is "
-                "already bundled in this app.",
-                size=tokens.FONT_SM,
-                color=theme.text(),
-            )
-        )
-        content_controls.append(
-            ft.Text("Desktop environment", size=tokens.FONT_XS, color=theme.text_dim())
-        )
-        content_controls.append(
-            ft.Row(
+            rows.append(ft.Text("Desktop environment", size=tokens.FONT_XS, color=theme.text_dim()))
+            de_row = ft.Row(
                 controls=[
                     ft.OutlinedButton(
                         de.name + ("  ★" if de.best else ""),
@@ -270,7 +260,7 @@ def _DisplaySheetBody(page: ft.Page, methods, container: str) -> ft.Control:
                             side=ft.BorderSide(
                                 1,
                                 theme.primary()
-                                if sel.get(de.key)
+                                if selected.get(de.key)
                                 else ft.Colors.with_opacity(tokens.OPACITY_LIGHT, theme.text_dim()),
                             ),
                         ),
@@ -280,73 +270,129 @@ def _DisplaySheetBody(page: ft.Page, methods, container: str) -> ft.Control:
                 spacing=tokens.SPACE_XS,
                 wrap=True,
             )
-        )
-        if pm:
-            content_controls.append(
-                ft.Container(
-                    content=ft.Text(
-                        install_script(caps, _current()),
-                        font_family=tokens.MONO_FONT,
-                        size=tokens.FONT_XXS,
-                        color=theme.text_dim(),
-                        selectable=True,
-                    ),
-                    bgcolor=ft.Colors.with_opacity(tokens.OPACITY_TEXT_HINT, theme.text()),
-                    border=ft.Border.all(tokens.HAIRLINE, theme.surface_alt()),
-                    border_radius=tokens.RADIUS_SM,
-                    padding=tokens.SPACE_SM,
+            rows.append(de_row)
+            if pm:
+                rows.append(
+                    ft.Container(
+                        content=ft.Text(
+                            install_script(
+                                (state.display_support or {}).get(container) or {}, _current()
+                            ),
+                            font_family=tokens.MONO_FONT,
+                            size=tokens.FONT_XXS,
+                            color=theme.text_dim(),
+                            selectable=True,
+                        ),
+                        bgcolor=ft.Colors.with_opacity(tokens.OPACITY_TEXT_HINT, theme.text()),
+                        border=ft.Border.all(tokens.HAIRLINE, theme.surface_alt()),
+                        border_radius=tokens.RADIUS_SM,
+                        padding=tokens.SPACE_SM,
+                    )
+                )
+
+            def _install(_e) -> None:
+                page.run_task(methods.install_display_support, container, _current())
+
+            rows.append(
+                ft.FilledButton(
+                    "Install desktop",
+                    icon=ft.Icons.DOWNLOAD_ROUNDED,
+                    on_click=_install,
+                    width=float("inf"),
+                    height=tokens.CONTROL_MD,
+                    style=_pill_style(),
                 )
             )
+            rows.append(_install_log_box(page, container))
 
-        def _install(_e) -> None:
-            page.run_task(methods.install_display_support, container, _current())
+        body.controls = rows
+        try:
+            dlg.update()
+        except Exception:
+            pass
 
-        content_controls.append(
-            ft.FilledButton(
-                "Install desktop",
-                icon=ft.Icons.DOWNLOAD_ROUNDED,
-                on_click=_install,
-                width=float("inf"),
-                height=tokens.CONTROL_MD,
-                style=_pill_style(),
-            )
-        )
-        if state.display_installing == container:
-            content_controls.append(
-                ft.Container(
-                    content=ft.Text(
-                        "".join(state.display_install_logs or [])[-2000:],
-                        font_family=tokens.MONO_FONT,
-                        size=tokens.FONT_XXS,
-                        color=theme.text_dim(),
-                        selectable=True,
-                    ),
-                    height=tokens.LOG_BOX_HEIGHT,
-                    bgcolor=ft.Colors.with_opacity(tokens.OPACITY_TEXT_HINT, theme.text()),
-                    border=ft.Border.all(tokens.HAIRLINE, theme.surface_alt()),
-                    border_radius=tokens.RADIUS_SM,
-                    padding=tokens.SPACE_SM,
-                )
-            )
+    def _pick(key: str) -> None:
+        selected.clear()
+        selected[key] = True
+        _rebuild()
 
-    return ft.Column(
-        controls=content_controls,
-        tight=True,
-        spacing=tokens.SPACE_SM,
-        scroll=ft.ScrollMode.AUTO,
-        width=tokens.DIALOG_WIDTH,
-    )
-
-
-def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> None:
-    """Open the launcher sheet for a container. `caps` is only the initial
-    probe snapshot — the body re-reads state.display_support live."""
     dlg = ft.AlertDialog(
         title=ft.Text(f"Display — {container}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
-        content=_DisplaySheetBody(page, methods, container),
+        content=ft.Column(
+            controls=[body],
+            scroll=ft.ScrollMode.AUTO,
+            width=tokens.DIALOG_WIDTH,
+        ),
         actions=[ft.TextButton("Close", on_click=lambda _e: page.pop_dialog())],
     )
+
+    def _on_dismiss(_e=None) -> None:
+        rebuilds = getattr(page, "_display_sheet_rebuilds", None) or {}
+        if rebuilds.get(container) is _rebuild:
+            del rebuilds[container]
+        page._display_sheet_rebuilds = rebuilds
+
+    dlg.on_dismiss = _on_dismiss
+    rebuilds = getattr(page, "_display_sheet_rebuilds", None) or {}
+    rebuilds[container] = _rebuild
+    page._display_sheet_rebuilds = rebuilds
+    _rebuild()
     page.show_dialog(dlg)
+
+
+def _install_log_box(page: ft.Page, container: str) -> ft.Control:
+    """The live install log box. `install_display_support` streams chunks into
+    `state.display_install_logs`; the installer in
+    display_actions._on_chunk marshals a repaint through the page loop."""
+    if state.display_installing != container:
+        return ft.Container()
+    box = ft.Container(
+        content=ft.Text(
+            "".join(state.display_install_logs or [])[-2000:] or "starting…",
+            font_family=tokens.MONO_FONT,
+            size=tokens.FONT_XXS,
+            color=theme.text_dim(),
+            selectable=True,
+        ),
+        height=tokens.LOG_BOX_HEIGHT,
+        bgcolor=ft.Colors.with_opacity(tokens.OPACITY_TEXT_HINT, theme.text()),
+        border=ft.Border.all(tokens.HAIRLINE, theme.surface_alt()),
+        border_radius=tokens.RADIUS_SM,
+        padding=tokens.SPACE_SM,
+    )
+    _register_install_box(page, container, box)
+    return box
+
+
+def _register_install_box(page: ft.Page, container: str, box: ft.Container) -> None:
+    """Stash the box on the page so the installer can repaint it live."""
+    boxes = getattr(page, "_display_install_boxes", None) or {}
+    boxes[container] = box
+    page._display_install_boxes = boxes
+
+
+def rebuild_display_sheet(page: ft.Page, container: str) -> None:
+    """Repaint an open sheet in place — called after the install finishes so
+    the not-ready branch becomes the ready branch without reopening the sheet."""
+    rebuilds = getattr(page, "_display_sheet_rebuilds", None) or {}
+    rebuild = rebuilds.get(container)
+    if rebuild is None:
+        return
+    try:
+        rebuild()
+    except Exception:
+        pass
+
+
+def repaint_install_log(page: ft.Page, container: str) -> None:
+    """Called from the installer's chunk callback via the page loop. The
+    control-attribute write lives in the controller-side helper (the house
+    guard pins control-value mutation out of src/screens; the install-progress
+    repaint in distro_actions is the same pattern, deliberately kept in
+    controllers)."""
+    from controller_actions.display_actions import repaint_display_install_box
+
+    repaint_display_install_box(page, container)
 
 
 def show_new_display_sheet(page: ft.Page, methods) -> None:
@@ -388,28 +434,35 @@ def show_new_display_sheet(page: ft.Page, methods) -> None:
     )
 
 
-@ft.component
-def _NewDisplaySheetBody(page: ft.Page, methods, container: str) -> ft.Control:
-    """Mode picker body: Desktop (with DE dropdown) or Single app (command)."""
-    mode, set_mode = ft.use_state("desktop")
-    sel, set_sel = ft.use_state({DEFAULT_DESKTOP: True})
-    cmd_value, set_cmd_value = ft.use_state("")
+def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None:
+    """Mode picker: Desktop (with DE dropdown) or Single app (command field)."""
+    mode = {"value": "desktop"}
+    selected = {DEFAULT_DESKTOP: True}
+    command = {"value": ""}
+    body: ft.Column = ft.Column(spacing=tokens.SPACE_SM, tight=True, width=tokens.DIALOG_WIDTH)
+    dlg: ft.AlertDialog
 
     def _current() -> str:
-        return next((key for key, on in sel.items() if on), DEFAULT_DESKTOP)
+        return next((key for key, on in selected.items() if on), DEFAULT_DESKTOP)
+
+    def _pick(key: str) -> None:
+        selected.clear()
+        selected[key] = True
+        _rebuild()
 
     def _start(_e) -> None:
-        if mode == "app" and not cmd_value.strip():
+        if mode["value"] == "app" and not command["value"].strip():
             methods.show_snack("enter a command for the single-app display")
             return
         page.pop_dialog()
-        if mode == "app":
-            page.run_task(methods.start_display, container, None, cmd_value.strip(), None)
+        if mode["value"] == "app":
+            page.run_task(methods.start_display, container, None, command["value"].strip(), None)
         else:
             page.run_task(methods.start_display, container, _current(), None, None)
 
-    return ft.Column(
-        controls=[
+    def _rebuild() -> None:
+        is_app = mode["value"] == "app"
+        controls = [
             ft.Text(
                 "A new X display (:N) on this container — a full desktop, or one app alone.",
                 size=tokens.FONT_SM,
@@ -420,22 +473,23 @@ def _NewDisplaySheetBody(page: ft.Page, methods, container: str) -> ft.Control:
                     ft.OutlinedButton(
                         "Desktop",
                         icon=ft.Icons.DESKTOP_WINDOWS,
-                        on_click=lambda _e: set_mode("desktop"),
+                        on_click=lambda _e: _set_mode("desktop"),
                         style=ft.ButtonStyle(
                             shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
                             side=ft.BorderSide(
-                                1, theme.primary() if mode == "desktop" else theme.surface_alt()
+                                1,
+                                theme.primary() if not is_app else theme.surface_alt(),
                             ),
                         ),
                     ),
                     ft.OutlinedButton(
                         "Single app",
                         icon=ft.Icons.WINDOW_ROUNDED,
-                        on_click=lambda _e: set_mode("app"),
+                        on_click=lambda _e: _set_mode("app"),
                         style=ft.ButtonStyle(
                             shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
                             side=ft.BorderSide(
-                                1, theme.primary() if mode == "app" else theme.surface_alt()
+                                1, theme.primary() if is_app else theme.surface_alt()
                             ),
                         ),
                     ),
@@ -443,31 +497,35 @@ def _NewDisplaySheetBody(page: ft.Page, methods, container: str) -> ft.Control:
                 spacing=tokens.SPACE_SM,
                 wrap=True,
             ),
-            ft.Dropdown(
-                label="Desktop environment",
-                value=_current(),
-                visible=mode == "desktop",
-                options=[ft.dropdown.Option(de.key, de.name) for de in DESKTOP_ENVIRONMENTS],
-                on_change=lambda e: set_sel(
-                    {k: k == e.control.value for k in (d.key for d in DESKTOP_ENVIRONMENTS)}
-                ),
-                width=tokens.DROPDOWN_WIDTH,
-                border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-                text_size=tokens.FONT_XS,
-            ),
-            ft.TextField(
-                label="Command to run on its own display",
-                hint_text="e.g. firefox   |   python3 -m http.server 8080   |   pywebview app",
-                value=cmd_value,
-                on_change=lambda e: set_cmd_value(e.control.value or ""),
-                visible=mode == "app",
-                text_size=tokens.FONT_SM,
-                height=tokens.CONTROL_INPUT,
-                border=ft.OutlineInputBorder(
-                    border_radius=tokens.RADIUS_MD,
-                    side=ft.BorderSide(1, theme.surface_alt()),
-                ),
-            ),
+        ]
+        if is_app:
+            controls.append(
+                ft.TextField(
+                    label="Command to run on its own display",
+                    hint_text="e.g. firefox   |   python3 -m http.server 8080   |   pywebview app",
+                    value=command["value"],
+                    on_change=lambda e: command.__setitem__("value", e.control.value or ""),
+                    text_size=tokens.FONT_SM,
+                    height=tokens.CONTROL_INPUT,
+                    border=ft.OutlineInputBorder(
+                        border_radius=tokens.RADIUS_MD,
+                        side=ft.BorderSide(1, theme.surface_alt()),
+                    ),
+                )
+            )
+        else:
+            controls.append(
+                ft.Dropdown(
+                    label="Desktop environment",
+                    value=_current(),
+                    options=[ft.dropdown.Option(de.key, de.name) for de in DESKTOP_ENVIRONMENTS],
+                    on_change=lambda e: _pick(e.control.value),
+                    width=tokens.DROPDOWN_WIDTH,
+                    border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+                    text_size=tokens.FONT_XS,
+                )
+            )
+        controls.append(
             ft.FilledButton(
                 "Start",
                 icon=ft.Icons.PLAY_CIRCLE_ROUNDED,
@@ -475,24 +533,25 @@ def _NewDisplaySheetBody(page: ft.Page, methods, container: str) -> ft.Control:
                 width=float("inf"),
                 height=tokens.CONTROL_MD,
                 style=_pill_style(),
-            ),
-        ],
-        tight=True,
-        spacing=tokens.SPACE_SM,
-        width=tokens.DIALOG_WIDTH,
-    )
-
-
-def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None:
-    page.show_dialog(
-        ft.AlertDialog(
-            title=ft.Text(
-                f"New display — {container}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
-            ),
-            content=_NewDisplaySheetBody(page, methods, container),
-            actions=[ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog())],
+            )
         )
+        body.controls = controls
+        try:
+            dlg.update()
+        except Exception:
+            pass
+
+    def _set_mode(next_mode: str) -> None:
+        mode["value"] = next_mode
+        _rebuild()
+
+    dlg = ft.AlertDialog(
+        title=ft.Text(f"New display — {container}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
+        content=body,
+        actions=[ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog())],
     )
+    _rebuild()
+    page.show_dialog(dlg)
 
 
 def _show_app_sheet(page: ft.Page, methods, container: str) -> None:
@@ -537,8 +596,7 @@ def _show_app_sheet(page: ft.Page, methods, container: str) -> None:
         # Probes run in PARALLEL — one slow probe must not serialize the sheet.
         probed = await asyncio.gather(*(_probe_one(label, cmd) for label, cmd in _APP_PRESETS))
         found = [item for item in probed if item is not None]
-        # Event-handler context (post-render, followed by dlg.update()) — assign
-        # a named variable, never a literal list.
+        # Named variable, never a literal list assignment.
         rows = [
             ft.ListTile(
                 leading=ft.Icon(ft.Icons.APPS_ROUNDED, color=theme.primary()),

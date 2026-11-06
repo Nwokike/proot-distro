@@ -63,7 +63,8 @@ def test_guest_script_installs_the_xauth_cookie():
     assert 'xauth -f /tmp/termux-desk/xauth-3 add "127.0.0.1:3" .' in src
     assert "localhost:3" in src
     assert cookie in src
-    assert '-auth "$XVFB_AUTH"' in src
+    assert 'XVFB_AUTH="-auth /tmp/termux-desk/xauth-3"' in src
+    assert "Xvfb :3 $XVFB_AUTH -screen 0" in src
 
 
 def test_guest_script_without_cookie_runs_xvfb_bare():

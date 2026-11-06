@@ -360,12 +360,18 @@ class DisplayActions:
                 return
 
             def _apply(t: str = text) -> None:
-                # reassign (not append) so the observable notifies the sheet.
-                # Contain the destroyed-session race like _record_exit: the
-                # value lands on the module-level state either way.
+                # reassign (not append) so the observable notifies subscribers
+                # AND repaint the launcher sheet's log box in place (device
+                # lesson: an AlertDialog never re-renders on its own).
                 try:
                     state.display_install_logs = [*state.display_install_logs, t]
                 except RuntimeError:
+                    pass
+                try:
+                    from screens.display_launcher import repaint_install_log
+
+                    repaint_install_log(self.page, container)
+                except Exception:
                     pass
 
             loop.call_soon_threadsafe(_apply)
@@ -386,11 +392,34 @@ class DisplayActions:
                 state.display_support[container] = caps
             except Exception as exc:
                 logger.warning("display re-probe failed for %s: %s", container, exc)
+            # Repaint the launcher sheet (if still open) into its ready state.
+            try:
+                from screens.display_launcher import rebuild_display_sheet
+
+                rebuild_display_sheet(self.page, container)
+            except Exception:
+                pass
         else:
             state.display_error = f"install exited {result.get('returncode')} — see the log tail"
             self.show_snack(f"display install failed in {container}")
 
     # ── diagnostics ───────────────────────────────────────────────────────────
+
+    @staticmethod
+    def repaint_display_install_box(page: ft.Page, container: str) -> None:
+        """Live-repaint the launcher sheet's install log box (the same
+        page-stored-control pattern distro_actions.install_distro uses)."""
+        boxes = getattr(page, "_display_install_boxes", None) or {}
+        box = boxes.get(container)
+        if box is None:
+            return
+        text = getattr(box, "content", None)
+        if text is not None:
+            text.value = "".join(state.display_install_logs or [])[-2000:]
+        try:
+            box.update()
+        except Exception:
+            pass
 
     async def show_display_logs(self, key: str) -> None:
         session = self.desk_manager.get(key)

@@ -18,7 +18,9 @@ def build_container_card(row: dict, page: ft.Page, methods, is_narrow: bool) -> 
     cname = row.get("name", "?")
     caps = (state.display_support or {}).get(cname) or {}
     ready = bool(caps.get("desk_ready") and caps.get("x_server"))
-    display_label = "Open display" if ready else "Install desktop"
+    # No probe yet (first paint) — label it unknown; the card must never lie
+    # about install state before the probe lands.
+    display_label = "Checking…" if not caps else ("Open display" if ready else "Install desktop")
 
     details_col = ft.Column(
         controls=[

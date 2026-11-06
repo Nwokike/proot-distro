@@ -162,6 +162,13 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
                 setattr(methods, _name, self._guard(_fn))
         self.methods = methods  # sheets opened imperatively (display launcher) need it
         self.page._controller = self
+
+        # Data BEFORE first paint: the home tab must already know which
+        # containers exist when it paints (device lesson — it used to show
+        # the install-only view for a beat and then flip).
+        await self.refresh_containers()
+
+        self.page.render(lambda: ControllerMethodsCtx(methods, lambda: AppShell()))
         self.page.render(lambda: ControllerMethodsCtx(methods, lambda: AppShell()))
 
         # The update check runs in the background and only flips state.
@@ -187,8 +194,7 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
                 logger.debug("Notification permission request failed: %s", exc)
 
         self.page.run_task(_request_notification_permission)
-
-        await self.refresh_containers()
+        # (containers were refreshed before the first paint above)
 
     def _mount_services(self) -> None:
         mounted = shared_services.mount_shared_services(self.page)
