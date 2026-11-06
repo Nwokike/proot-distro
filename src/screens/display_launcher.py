@@ -499,14 +499,19 @@ def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None
             ),
         ]
         if is_app:
+            # Multiline with the full examples as helper text below the field —
+            # hint_text truncates on one line, helper_text wraps.
             controls.append(
                 ft.TextField(
                     label="Command to run on its own display",
-                    hint_text="e.g. firefox   |   python3 -m http.server 8080   |   pywebview app",
                     value=command["value"],
                     on_change=lambda e: command.__setitem__("value", e.control.value or ""),
                     text_size=tokens.FONT_SM,
-                    height=tokens.CONTROL_INPUT,
+                    multiline=True,
+                    min_lines=2,
+                    max_lines=4,
+                    helper_text="Examples:  firefox  ·  xterm  ·  python3 -m http.server 8080  ·  python3 my_pywebview_app.py",
+                    helper_style=ft.TextStyle(size=tokens.FONT_XXS, color=theme.text_dim()),
                     border=ft.OutlineInputBorder(
                         border_radius=tokens.RADIUS_MD,
                         side=ft.BorderSide(1, theme.surface_alt()),

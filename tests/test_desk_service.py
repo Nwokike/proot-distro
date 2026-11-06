@@ -41,7 +41,9 @@ def test_guest_script_starts_xvfb_listening_on_tcp():
     src = desk_script.build_guest_script(port=9999, geometry="1600x900")
     assert "Xvfb :0" in src
     assert "1600x900x24" in src
-    # The host-side server connects over 127.0.0.1:N — TCP must stay on.
+    # Modern Xservers default to -nolisten tcp; without the explicit flag the
+    # host server's TCP probe is refused for the whole readiness window.
+    assert "-listen tcp" in src
     assert "-nolisten tcp" not in src
 
 
@@ -64,7 +66,7 @@ def test_guest_script_installs_the_xauth_cookie():
     assert "localhost:3" in src
     assert cookie in src
     assert 'XVFB_AUTH="-auth /tmp/termux-desk/xauth-3"' in src
-    assert "Xvfb :3 $XVFB_AUTH -screen 0" in src
+    assert "Xvfb :3 $XVFB_AUTH -listen tcp -screen 0" in src
 
 
 def test_guest_script_without_cookie_runs_xvfb_bare():
@@ -576,16 +578,44 @@ def test_selector_has_a_new_shell_plus():
     )
 
 
-def test_fab_has_copy_full_output():
+def test_fab_has_copy_full_output_and_no_select_all():
+    """Native select_all only reaches the rendered viewport on device — the
+    option is removed (owner ruling); Copy Full Output strips escape noise."""
     src = (ROOT / "src" / "screens" / "terminal" / "menu.py").read_text(encoding="utf-8")
     assert '"Copy Full Output"' in src
     assert "entry.scrollback" in src
+    assert "strip_ansi" in src
+    assert '"Select All"' not in src
 
 
 def test_display_tab_has_a_new_display_plus():
     src = (ROOT / "src" / "screens" / "display_view.py").read_text(encoding="utf-8")
     assert "show_new_display_sheet" in src
     assert "ADD_ROUNDED" in src
+
+
+def test_display_tab_groups_desktop_and_single_app():
+    """The two sections a display IS — Desktop (per-container) and Single App
+    (one app alone on :N) — with the starting card driven by observable state."""
+    src = (ROOT / "src" / "screens" / "display_view.py").read_text(encoding="utf-8")
+    assert '"Desktop"' in src
+    assert '"Single App"' in src
+    # The starting card reads display_status (observable), not manager state.
+    assert 'st.display_status == "starting"' in src
+
+
+def test_distro_banner_between_install_and_containers():
+    """One banner between the install area and the Containers header; none
+    inside the container list; search keeps its empty-state banner."""
+    src = (ROOT / "src" / "screens" / "distro" / "__init__.py").read_text(encoding="utf-8")
+    banner = src.index('pooled_banner_ad("containers-1", page)')
+    header = src.index('section_header("Containers")')
+    assert banner < header
+    assert '"containers-empty"' not in src
+    assert '"search-empty"' in src
+    # Search bar: no leading icon; the trailing action is the mode icon.
+    assert "bar_leading=" not in src
+    assert "ft.Icons.SEARCH_ROUNDED," in src
 
 
 def test_app_sheet_launches_single_app_displays():

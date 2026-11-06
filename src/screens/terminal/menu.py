@@ -7,11 +7,23 @@ presets) — no hamburger in the header.
 
 from __future__ import annotations
 
+import re
+
 import flet as ft
 
 from core import theme, tokens
 from core.state import state
 from screens.terminal_controls import _THEME_PRESETS, _confirm_close, _theme_name
+
+# Terminal escape sequences: CSI (\x1b[…m], cursor moves, [6n replies, [J
+# clears), OSC (window title), charset shifts and lone ESC+char. The scrollback
+# is the RAW PTY stream, so prompts repeat and every escape the shell/terminal
+# exchanged sits in it — the readable copy strips all of it.
+_ANSI_RE = re.compile(
+    r"\x1b\[[0-?]*[ -/]*[@-~]"  # CSI … final byte
+    r"|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?"  # OSC … BEL or ST
+    r"|\x1b[=>cNOM78]"  # keypad / charset / RIS singles
+)
 
 _THEME_ICONS = {
     "Dracula": ft.Icons.DARK_MODE_ROUNDED,
@@ -21,8 +33,8 @@ _THEME_ICONS = {
 }
 
 
-def _item(content: str, icon, on_click, checked: bool | None = None) -> ft.PopupMenuItem:
-    return ft.PopupMenuItem(content=content, icon=icon, on_click=on_click, checked=checked)
+def strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
 
 
 def show_full_output_dialog(page: ft.Page, entry) -> None:
@@ -31,9 +43,13 @@ def show_full_output_dialog(page: ft.Page, entry) -> None:
     flet-terminal's native select_all only reaches the rendered viewport on
     device, and the package exposes no buffer-dump API — but we own every
     byte: SessionEntry.scrollback holds the complete PTY stream (capped at
-    SCROLLBACK_CHUNKS). Decode it here and hand it to the clipboard."""
+    SCROLLBACK_CHUNKS). Decode it, strip the escape-sequence noise ([6n
+    cursor queries, [J clears, SGR colors), then hand the clean text to the
+    clipboard."""
     raw = b"".join(entry.scrollback)
-    text = raw.decode("utf-8", "replace")
+    text = strip_ansi(raw.decode("utf-8", "replace"))
+    # Collapse the blank runs the stripped clears leave behind.
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
 
     def _copy(_e) -> None:
         from components.snack import show_snack
@@ -71,6 +87,10 @@ def show_full_output_dialog(page: ft.Page, entry) -> None:
             ],
         )
     )
+
+
+def _item(content: str, icon, on_click, checked: bool | None = None) -> ft.PopupMenuItem:
+    return ft.PopupMenuItem(content=content, icon=icon, on_click=on_click, checked=checked)
 
 
 def _header(label: str) -> ft.PopupMenuItem:
@@ -117,11 +137,6 @@ def build_terminal_fab(
             "Copy Selection",
             ft.Icons.COPY_ALL_ROUNDED,
             lambda _e: page.run_task(mt.copy_selection_async),
-        ),
-        _item(
-            "Select All",
-            ft.Icons.SELECT_ALL_ROUNDED,
-            lambda _e: mt.select_all(),  # synchronous API on MobileTerminal
         ),
         _item(
             "Copy Full Output",

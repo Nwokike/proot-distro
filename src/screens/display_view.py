@@ -1,8 +1,12 @@
-"""Display tab — running DISPLAYS (grouped: Desktops / Apps) + every installed
-container's entry, sharing the Terminal tab's rhythm: header → cards → banner
-→ NAV_BAR_CLEARANCE. A display is the live streamed surface (desktop OR single
-app on its own :N); a desktop is what you install in the container. The + on a
-section header starts a NEW display of either kind.
+"""Display tab — the two things a display IS, as obvious sections:
+
+**Desktop** — a full desktop streamed from an installed container (the
+per-container cards: Open desktop / Install desktop), and **Single App** — one
+app alone on its own :N (pywebview-style). Running displays surface at the top
+grouped the same way. The + on a section header starts a NEW display.
+
+The starting card is driven by the OBSERVABLE state (state.display_status), so
+it appears the instant start_display begins — no tab switch needed.
 """
 
 from __future__ import annotations
@@ -16,9 +20,21 @@ from core.state import state
 from state.controller_ctx import ControllerMethodsCtx
 
 
+def _section(icon, title: str, action, rows: list[ft.Control]) -> ft.Control:
+    """A display section: icon + title in the header, cards under it."""
+    return ft.Column(
+        controls=[section_header(title, action=action), *rows],
+        spacing=tokens.SPACE_SM,
+    )
+
+
+def _header_icon(icon) -> ft.Control:
+    return ft.Icon(icon, size=tokens.ICON_MD, color=theme.primary())
+
+
 @ft.component
 def DisplayView() -> ft.Control:
-    """The Display tab: running desktops/apps + every container's entry."""
+    """The Display tab: Desktop + Single App, running displays on top."""
     st, _ = ft.use_state(state)
     methods = ft.use_context(ControllerMethodsCtx)
     page = ft.context.page
@@ -42,6 +58,11 @@ def DisplayView() -> ft.Control:
         tooltip="New display (desktop or single app)",
         on_click=_new_display,
     )
+
+    def _single_app(_e) -> None:
+        from screens.display_launcher import show_new_display_sheet
+
+        show_new_display_sheet(page, methods)
 
     sections: list[ft.Control] = []
     running = manager.running() if manager else []
@@ -104,33 +125,35 @@ def DisplayView() -> ft.Control:
 
     if desktops:
         sections.append(
-            ft.Column(
-                controls=[
-                    section_header("Desktops", action=plus_button),
-                    *_session_rows(desktops, ft.Icons.DESKTOP_WINDOWS),
-                ],
-                spacing=tokens.SPACE_SM,
+            _section(
+                ft.Icons.DESKTOP_WINDOWS,
+                "Desktops",
+                plus_button,
+                _session_rows(desktops, ft.Icons.DESKTOP_WINDOWS),
             )
         )
     if apps:
-        section_action = plus_button if not desktops else None
         sections.append(
-            ft.Column(
-                controls=[
-                    section_header("Apps", action=section_action),
-                    *_session_rows(apps, ft.Icons.WINDOW_ROUNDED),
-                ],
-                spacing=tokens.SPACE_SM,
+            _section(
+                ft.Icons.WINDOW_ROUNDED,
+                "Apps",
+                None if desktops else plus_button,
+                _session_rows(apps, ft.Icons.WINDOW_ROUNDED),
             )
         )
 
-    # A display still starting gets a live progress card in the tab (with
-    # Cancel) — otherwise a slow first start looks like nothing happened.
-    starting_sessions = manager.starting() if manager else []
-    for session in starting_sessions:
+    # A display still starting gets a live progress card — driven by the
+    # OBSERVABLE display_status (set the instant start_display begins), so it
+    # appears without any tab switch. The manager lookup only supplies the key.
+    starting_key = ""
+    if st.display_status == "starting":
+        starting = manager.starting() if manager else []
+        if starting:
+            starting_key = starting[0].key
+    if starting_key:
 
-        def _cancel(_e, key=session.key) -> None:
-            page.run_task(methods.stop_display, key)
+        def _cancel(_e) -> None:
+            page.run_task(methods.stop_display, starting_key)
 
         sections.insert(
             0,
@@ -141,7 +164,7 @@ def DisplayView() -> ft.Control:
                             width=tokens.PROGRESS_RING_MD, height=tokens.PROGRESS_RING_MD
                         ),
                         ft.Text(
-                            st.display_status_text or f"starting {session.key}…",
+                            st.display_status_text or f"starting {starting_key}…",
                             size=tokens.FONT_SM,
                             color=theme.text(),
                             expand=True,
@@ -156,14 +179,16 @@ def DisplayView() -> ft.Control:
         )
 
     containers = [row.get("name", "?") for row in st.containers]
-    if not containers and not running and not starting_sessions:
+    if not containers and not running and not starting_key:
         return containers_required_empty_state(page, ad_slot="display-empty")
+
+    # ── Desktop section: per-container desktop cards ─────────────────────────
     if containers:
         rows = []
         for name in containers:
             caps = (st.display_support or {}).get(name) or {}
             ready = bool(caps.get("desk_ready") and caps.get("x_server"))
-            label = "Open desktop" if ready else ("Checking…" if not caps else "Install desktop")
+            label = "Open desktop" if ready else "Install desktop"
 
             def _open(_e, container=name) -> None:
                 page.run_task(methods.open_display, container)
@@ -212,15 +237,62 @@ def DisplayView() -> ft.Control:
                 )
             )
 
-        sections.append(
-            ft.Column(
-                controls=[
-                    section_header("Installed containers", action=plus_button),
-                    *rows,
-                ],
-                spacing=tokens.SPACE_SM,
-            )
+        sections.append(_section(ft.Icons.DESKTOP_WINDOWS, "Desktop", plus_button, rows))
+
+    # ── Single App section: one app alone on its own :N ──────────────────────
+    sections.append(
+        _section(
+            ft.Icons.WINDOW_ROUNDED,
+            "Single App",
+            None,
+            [
+                card(
+                    ft.Container(
+                        content=ft.Row(
+                            controls=[
+                                ft.Icon(
+                                    ft.Icons.WINDOW_ROUNDED,
+                                    size=tokens.ICON_MD,
+                                    color=theme.primary(),
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text(
+                                            "Run one app on its own display",
+                                            size=tokens.FONT_MD,
+                                            weight=ft.FontWeight.W_600,
+                                            color=theme.text(),
+                                        ),
+                                        ft.Text(
+                                            "A browser, an editor, a pywebview app — streamed "
+                                            "alone, no desktop around it.",
+                                            size=tokens.FONT_XS,
+                                            color=theme.text_dim(),
+                                        ),
+                                    ],
+                                    spacing=tokens.SPACE_XXS,
+                                    expand=True,
+                                ),
+                                ft.IconButton(
+                                    icon=ft.Icons.ADD_CIRCLE_ROUNDED,
+                                    icon_size=tokens.ICON_LG,
+                                    icon_color=theme.primary(),
+                                    tooltip="New single-app display",
+                                    on_click=_single_app,
+                                ),
+                            ],
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                            spacing=tokens.SPACE_SM,
+                        ),
+                        on_click=_single_app,
+                        ink=True,
+                    ),
+                    padding=tokens.SPACE_SM,
+                )
+            ],
         )
+    )
+
     if state.display_error:
         sections.append(
             ft.Text(

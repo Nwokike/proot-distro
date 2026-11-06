@@ -122,7 +122,10 @@ mkdir -p "$XDG_RUNTIME_DIR" /tmp/termux-desk
 chmod 700 "$XDG_RUNTIME_DIR"
 {xauth_setup}
 
-Xvfb :{display} $XVFB_AUTH -screen 0 {geometry}x24 &
+# Modern Xservers (≥1.17) default to NO tcp listening — without the explicit
+# flag below the host server's TCP probe is refused for the whole readiness
+# window (device log: "timed out waiting for Xvfb … Connection refused").
+Xvfb :{display} $XVFB_AUTH -listen tcp -screen 0 {geometry}x24 &
 XVFB_PID=$!
 sleep 1
 kill -0 "$XVFB_PID" 2>/dev/null || {{

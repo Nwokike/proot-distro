@@ -169,6 +169,9 @@ class DisplayActions:
         state.display_status = "starting"
         state.display_status_text = f"starting the X11 display in {container}…"
         state.display_logs = []
+        # Immediate, visible feedback wherever the user is (home, display, or
+        # any tab) — the in-app snack, like the distro install flow.
+        self.show_snack(state.display_status_text)
         try:
             session = await manager.start(
                 container,
@@ -350,6 +353,16 @@ class DisplayActions:
         state.display_installing = container
         state.display_install_logs = []
         state.display_error = ""
+        # Feedback the INSTANT the button is pressed: a snack anywhere in the
+        # app + the launcher sheet repaints into its live-log state (the same
+        # in-place pattern the distro install modal uses — no close/reopen).
+        self.show_snack(f"installing desktop in {container}…")
+        try:
+            from screens.display_launcher import rebuild_display_sheet
+
+            rebuild_display_sheet(self.page, container)
+        except Exception:
+            pass
         await self.probe_display(container)
         caps = self._display_caps(container)
         loop = asyncio.get_running_loop()
