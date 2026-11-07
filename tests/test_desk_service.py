@@ -604,6 +604,17 @@ def test_display_tab_groups_desktop_and_single_app():
     assert 'st.display_status == "starting"' in src
 
 
+def test_display_tab_running_section_is_mode_agnostic():
+    """Running displays (desktop OR single app) surface in ONE 'Running'
+    section — not split into 'Desktops'/'Apps' — and the per-container
+    desktop action is right-aligned via the expanding details column."""
+    src = (ROOT / "src" / "screens" / "display_view.py").read_text(encoding="utf-8")
+    assert '"Running"' in src
+    assert '"Desktops"' not in src
+    assert '"Apps"' not in src
+    assert "controls=[name_text, distro_text]" in src
+
+
 def test_distro_banner_between_install_and_containers():
     """One banner between the install area and the Containers header; none
     inside the container list; search keeps its empty-state banner."""

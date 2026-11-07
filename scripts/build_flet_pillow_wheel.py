@@ -30,6 +30,7 @@ Usage: uv run python scripts/build_flet_pillow_wheel.py --out wheels
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import io
 import tarfile
@@ -316,26 +317,29 @@ def main() -> int:
 
         wheel_name = f"{DIST_NAME}-{PILLOW_VERSION}-{BUILD_TAG}-cp314-cp314-android_24_{jni}.whl"
         wheel_path = out_dir / wheel_name
+        dist_info = f"pillow-{PILLOW_VERSION}.dist-info"
+        entries[f"{dist_info}/METADATA"] = (
+            "Metadata-Version: 2.1\n"
+            f"Name: {DIST_NAME}\n"
+            f"Version: {PILLOW_VERSION}\n"
+            "Summary: Pillow 13.0.0 with XCB screen capture (Termux repackage)\n"
+        ).encode()
+        entries[f"{dist_info}/WHEEL"] = (
+            "Wheel-Version: 1.0\n"
+            "Generator: kiri-flet-pillow-wheel-builder\n"
+            "Root-Is-Purelib: false\n"
+            f"Tag: cp314-cp314-android_24_{jni}\n"
+        ).encode()
+        # pip's installer REQUIRES dist-info/RECORD (CI failure: "OSError:
+        # RECORD") — hash every entry exactly like the proot wheel builder.
+        lines = []
+        for name, blob in entries.items():
+            digest = base64.urlsafe_b64encode(hashlib.sha256(blob).digest()).rstrip(b"=").decode()
+            lines.append(f"{name},sha256={digest},{len(blob)}")
+        lines.append(f"{dist_info}/RECORD,,")
+        entries[f"{dist_info}/RECORD"] = ("\n".join(lines) + "\n").encode()
         with zipfile.ZipFile(wheel_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for name, blob in sorted(entries.items()):
-                zf.writestr(name, blob)
-            dist_info = [
-                (
-                    f"pillow-{PILLOW_VERSION}.dist-info/METADATA",
-                    "Metadata-Version: 2.1\n"
-                    f"Name: {DIST_NAME}\n"
-                    f"Version: {PILLOW_VERSION}\n"
-                    "Summary: Pillow 13.0.0 with XCB screen capture (Termux repackage)\n",
-                ),
-                (
-                    f"pillow-{PILLOW_VERSION}.dist-info/WHEEL",
-                    "Wheel-Version: 1.0\n"
-                    "Generator: kiri-flet-pillow-wheel-builder\n"
-                    "Root-Is-Purelib: false\n"
-                    f"Tag: cp314-cp314-android_24_{jni}\n",
-                ),
-            ]
-            for name, blob in dist_info:
                 zf.writestr(name, blob)
 
         # Alignment + parse checks on what we just wrote.

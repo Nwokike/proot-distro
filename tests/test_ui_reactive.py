@@ -183,7 +183,10 @@ def test_files_view_keeps_responsive_list_and_banner():
     source = "\n".join(f.read_text(encoding="utf-8") for f in sorted(pkg.glob("*.py")))
 
     assert 'pooled_banner_ad("files-1", page)' in source
-    assert 'pooled_banner_ad("files-picker", page)' in source
+    # Picker banner lives INSIDE the list: always after the last container,
+    # plus after every 5th when there are more than 5 containers.
+    assert 'pooled_banner_ad(f"files-picker-{banner_count}", page)' in source
+    assert "idx == total or (total > 5 and idx % 5 == 0)" in source
     init_src = (pkg / "__init__.py").read_text(encoding="utf-8")
     assert init_src.count("scroll=ft.ScrollMode.AUTO") == 1
     assert re.search(

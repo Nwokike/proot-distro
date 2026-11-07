@@ -11,7 +11,9 @@ from core import theme, tokens
 
 def build_container_picker(installed, containers_state, default_path, page, on_open) -> ft.Control:
     picker_rows = []
-    for c in installed:
+    banner_count = 0
+    total = len(installed)
+    for idx, c in enumerate(installed, start=1):
         row_meta = next((r for r in (containers_state or []) if r.get("name") == c), {})
 
         def _open(_e, name=c) -> None:
@@ -60,6 +62,11 @@ def build_container_picker(installed, containers_state, default_path, page, on_o
                 padding=tokens.SPACE_SM,
             )
         )
+        # Banner rule (owner): always immediately after the LAST container
+        # card; when there are more than 5 containers, also after every 5th.
+        if idx == total or (total > 5 and idx % 5 == 0):
+            banner_count += 1
+            picker_rows.append(pooled_banner_ad(f"files-picker-{banner_count}", page))
     return ft.Column(
         controls=[
             section_header("Browse a container"),
@@ -68,7 +75,6 @@ def build_container_picker(installed, containers_state, default_path, page, on_o
                 spacing=tokens.SPACE_SM,
                 expand=True,
             ),
-            pooled_banner_ad("files-picker", page),
             ft.Container(height=tokens.NAV_BAR_CLEARANCE),
         ],
         spacing=tokens.SPACE_SM,

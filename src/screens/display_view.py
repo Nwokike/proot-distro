@@ -22,16 +22,12 @@ from screens.display_progress_card import DisplayProgressCard
 from state.controller_ctx import ControllerMethodsCtx
 
 
-def _section(icon, title: str, action, rows: list[ft.Control]) -> ft.Control:
-    """A display section: icon + title in the header, cards under it."""
+def _section(title: str, action, rows: list[ft.Control]) -> ft.Control:
+    """A display section: title in the header, cards under it."""
     return ft.Column(
         controls=[section_header(title, action=action), *rows],
         spacing=tokens.SPACE_SM,
     )
-
-
-def _header_icon(icon) -> ft.Control:
-    return ft.Icon(icon, size=tokens.ICON_MD, color=theme.primary())
 
 
 @ft.component
@@ -68,12 +64,16 @@ def DisplayView() -> ft.Control:
 
     sections: list[ft.Control] = []
     running = manager.running() if manager else []
-    desktops = [s for s in running if s.mode == "desktop"]
-    apps = [s for s in running if s.mode == "app"]
 
-    def _session_rows(sessions: list, icon) -> list:
+    def _session_rows(sessions: list) -> list:
         rows = []
         for session in sessions:
+            # A running display is not necessarily a desktop (single-app mode
+            # runs on its own :N) — the row icon says which, the section is
+            # simply "Running".
+            row_icon = (
+                ft.Icons.DESKTOP_WINDOWS if session.mode == "desktop" else ft.Icons.WINDOW_ROUNDED
+            )
 
             def _resume(_e, key=session.key) -> None:
                 state.active_display = key
@@ -86,7 +86,7 @@ def DisplayView() -> ft.Control:
                     ft.Container(
                         content=ft.Row(
                             controls=[
-                                ft.Icon(icon, size=tokens.ICON_MD, color=theme.ok()),
+                                ft.Icon(row_icon, size=tokens.ICON_MD, color=theme.ok()),
                                 ft.Text(
                                     session.key,
                                     size=tokens.FONT_LG,
@@ -125,24 +125,8 @@ def DisplayView() -> ft.Control:
             )
         return rows
 
-    if desktops:
-        sections.append(
-            _section(
-                ft.Icons.DESKTOP_WINDOWS,
-                "Desktops",
-                plus_button,
-                _session_rows(desktops, ft.Icons.DESKTOP_WINDOWS),
-            )
-        )
-    if apps:
-        sections.append(
-            _section(
-                ft.Icons.WINDOW_ROUNDED,
-                "Apps",
-                None if desktops else plus_button,
-                _session_rows(apps, ft.Icons.WINDOW_ROUNDED),
-            )
-        )
+    if running:
+        sections.append(_section("Running", plus_button, _session_rows(running)))
 
     # A display still starting gets a live progress card — driven by the
     # OBSERVABLE display_status (set the instant start_display begins), so it
@@ -240,7 +224,8 @@ def DisplayView() -> ft.Control:
             if is_narrow:
                 # Stacked-under on narrow screens (house pattern): the row
                 # wraps so "Fedora Linux 45" drops under the name instead of
-                # squeezing the action button off-screen.
+                # squeezing the action button off-screen. The action still
+                # pins to the right edge, like the distro container cards.
                 content = ft.Column(
                     controls=[
                         ft.Row(
@@ -249,7 +234,10 @@ def DisplayView() -> ft.Control:
                             spacing=tokens.SPACE_SM,
                         ),
                         ft.Row(
-                            controls=[distro_text, action],
+                            controls=[
+                                ft.Container(content=distro_text, expand=True),
+                                action,
+                            ],
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
                             spacing=tokens.SPACE_SM,
                             wrap=True,
@@ -258,8 +246,18 @@ def DisplayView() -> ft.Control:
                     spacing=tokens.SPACE_XXS,
                 )
             else:
+                # Wide: name+distro in an expanding column (distro card
+                # pattern) so the Install/Open desktop action is right-aligned.
                 content = ft.Row(
-                    controls=[icon, name_text, distro_text, action],
+                    controls=[
+                        icon,
+                        ft.Column(
+                            controls=[name_text, distro_text],
+                            spacing=tokens.SPACE_XXS,
+                            expand=True,
+                        ),
+                        action,
+                    ],
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     spacing=tokens.SPACE_SM,
                 )
@@ -274,12 +272,11 @@ def DisplayView() -> ft.Control:
                 )
             )
 
-        sections.append(_section(ft.Icons.DESKTOP_WINDOWS, "Desktop", plus_button, rows))
+        sections.append(_section("Desktop", plus_button, rows))
 
     # ── Single App section: one app alone on its own :N ──────────────────────
     sections.append(
         _section(
-            ft.Icons.WINDOW_ROUNDED,
             "Single App",
             None,
             [
