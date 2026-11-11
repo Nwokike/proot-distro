@@ -233,8 +233,13 @@ def _ns_login_get_proot_cmd(container: str, **login_opts) -> SimpleNamespace:
     Verified against parser.py:116-160 (_add_login_or_run_common) + :262
     (_login): every field _login_with_rootfs reads from the namespace.
     get_proot_cmd is always True here — with False, upstream execvpe's the app.
+    `login_cmd` (the tokens after `--`) is threaded through login_opts: with a
+    non-empty command upstream builds `inner = [login_shell, "-c",
+    shlex.join(login_cmd)]` (login/__init__.py:401-402) and skips the
+    interactive-shell availability check entirely.
     """
     common = {**_LOGIN_RUN_COMMON, **login_opts}
+    login_cmd = common.pop("login_cmd", [])
     return SimpleNamespace(
         container_name=container,
         fix_low_ports=False,
@@ -246,6 +251,6 @@ def _ns_login_get_proot_cmd(container: str, **login_opts) -> SimpleNamespace:
         no_sysvipc=False,
         no_kill_on_exit=False,
         get_proot_cmd=True,
-        login_cmd=[],
+        login_cmd=list(login_cmd or []),
         **common,
     )

@@ -7,13 +7,86 @@ presets) — no hamburger in the header.
 
 from __future__ import annotations
 
+import re
+
 import flet as ft
 
 from core import theme, tokens
 from core.state import state
-from screens.terminal_controls import _confirm_close, _theme_name
+from screens.terminal_controls import _THEME_PRESETS, _confirm_close, _theme_name
 
-_THEME_PRESETS = ("JetBrains Dark", "Dracula", "Matrix Green", "Colab Light")
+# Terminal escape sequences: CSI (\x1b[…m], cursor moves, [6n replies, [J
+# clears), OSC (window title), charset shifts and lone ESC+char. The scrollback
+# is the RAW PTY stream, so prompts repeat and every escape the shell/terminal
+# exchanged sits in it — the readable copy strips all of it.
+_ANSI_RE = re.compile(
+    r"\x1b\[[0-?]*[ -/]*[@-~]"  # CSI … final byte
+    r"|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?"  # OSC … BEL or ST
+    r"|\x1b[=>cNOM78]"  # keypad / charset / RIS singles
+)
+
+_THEME_ICONS = {
+    "Dracula": ft.Icons.DARK_MODE_ROUNDED,
+    "JetBrains Dark": ft.Icons.CODE_ROUNDED,
+    "Matrix Green": ft.Icons.GRID_ON_ROUNDED,
+    "Colab Light": ft.Icons.LIGHT_MODE_ROUNDED,
+}
+
+
+def strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
+
+
+def show_full_output_dialog(page: ft.Page, entry) -> None:
+    """Copy FULL OUTPUT — the whole scrollback, not just what's on screen.
+
+    flet-terminal's native select_all only reaches the rendered viewport on
+    device, and the package exposes no buffer-dump API — but we own every
+    byte: SessionEntry.scrollback holds the complete PTY stream (capped at
+    SCROLLBACK_CHUNKS). Decode it, strip the escape-sequence noise ([6n
+    cursor queries, [J clears, SGR colors), then hand the clean text to the
+    clipboard."""
+    raw = b"".join(entry.scrollback)
+    text = strip_ansi(raw.decode("utf-8", "replace"))
+    # Collapse the blank runs the stripped clears leave behind.
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+
+    def _copy(_e) -> None:
+        from components.snack import show_snack
+
+        page.run_task(ft.Clipboard().set, text)
+        show_snack(page, "full output copied to clipboard")
+
+    page.show_dialog(
+        ft.AlertDialog(
+            title=ft.Text(
+                f"Full output — {entry.title or entry.key}",
+                size=tokens.FONT_LG,
+                weight=ft.FontWeight.BOLD,
+            ),
+            content=ft.Container(
+                content=ft.Text(
+                    text or "(empty)",
+                    font_family=tokens.MONO_FONT,
+                    size=tokens.FONT_XXS,
+                    selectable=True,
+                ),
+                width=tokens.DIALOG_WIDTH_LG,
+                height=360,
+            ),
+            actions=[
+                ft.FilledButton(
+                    f"Copy all ({len(text):,} chars)",
+                    icon=ft.Icons.COPY_ALL_ROUNDED,
+                    on_click=_copy,
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
+                    ),
+                ),
+                ft.TextButton("Close", on_click=lambda _e: page.pop_dialog()),
+            ],
+        )
+    )
 
 
 def _item(content: str, icon, on_click, checked: bool | None = None) -> ft.PopupMenuItem:
@@ -66,9 +139,9 @@ def build_terminal_fab(
             lambda _e: page.run_task(mt.copy_selection_async),
         ),
         _item(
-            "Select All",
-            ft.Icons.SELECT_ALL_ROUNDED,
-            lambda _e: mt.select_all(),  # synchronous API on MobileTerminal
+            "Copy Full Output",
+            ft.Icons.COPY_ALL_ROUNDED,
+            lambda _e: show_full_output_dialog(page, entry),
         ),
         _item("Paste", ft.Icons.CONTENT_PASTE_ROUNDED, lambda _e: page.run_task(mt.paste_async)),
         _item(
@@ -79,13 +152,8 @@ def build_terminal_fab(
         ft.PopupMenuItem(),
         _header("Theme Presets"),
         *[
-            _item(name, icon, _set_theme(name), cur_theme == name)
-            for name, icon in (
-                ("Dracula", ft.Icons.DARK_MODE_ROUNDED),
-                ("JetBrains Dark", ft.Icons.CODE_ROUNDED),
-                ("Matrix Green", ft.Icons.GRID_ON_ROUNDED),
-                ("Colab Light", ft.Icons.LIGHT_MODE_ROUNDED),
-            )
+            _item(name, _THEME_ICONS[name], _set_theme(name), cur_theme == name)
+            for name in _THEME_PRESETS
         ],
         ft.PopupMenuItem(),
         _header("Font Size / Zoom"),
@@ -137,7 +205,8 @@ def build_terminal_fab(
 
 def open_new_session_sheet(page: ft.Page, methods, manager) -> None:
     """New Terminal: every installed container — one already running gets a
-    SECOND shell on the same container (tmux-style), up to the cap."""
+    SECOND shell on the same container (tmux-style; no artificial cap,
+    the OS fd/memory limits are the only bound)."""
     installed = [r.get("name", "") for r in state.containers if r.get("name")]
     if not installed:
         page.show_dialog(

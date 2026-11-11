@@ -30,7 +30,7 @@ def _dialog_width(page: ft.Page) -> int:
     """Fits a narrow phone; the action row lives outside the scroll."""
     try:
         page_width = int(getattr(page, "width", 0) or 0)
-    except TypeError, ValueError:
+    except TypeError, ValueError:  # PEP 758 — parenthesized for clarity
         page_width = 0
     if not page_width:
         return tokens.DIALOG_WIDTH

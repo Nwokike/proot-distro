@@ -1,4 +1,8 @@
-"""Container picker and resume list for terminal sessions."""
+"""Container picker and resume list for terminal sessions.
+
+Layout matches the Files picker: section header → cards → banner at the
+bottom → NAV_BAR_CLEARANCE. Same visual rhythm on both tabs.
+"""
 
 from __future__ import annotations
 
@@ -24,6 +28,12 @@ def SessionSelectorView() -> ft.Control:
     sections: list[ft.Control] = []
     open_entries = list(manager.entries.values()) if manager else []
     if open_entries:
+
+        def _add_shell(_e) -> None:
+            from screens.terminal.menu import open_new_session_sheet
+
+            open_new_session_sheet(page, methods, manager)
+
         rows = []
         for entry in open_entries:
 
@@ -74,7 +84,18 @@ def SessionSelectorView() -> ft.Control:
             )
         sections.append(
             ft.Column(
-                controls=[section_header("Open shells"), *rows],
+                controls=[
+                    section_header(
+                        "Open shells",
+                        action=ft.IconButton(
+                            icon=ft.Icons.ADD_ROUNDED,
+                            icon_size=tokens.ICON_MD,
+                            tooltip="New shell",
+                            on_click=_add_shell,
+                        ),
+                    ),
+                    *rows,
+                ],
                 spacing=tokens.SPACE_SM,
             )
         )
@@ -127,13 +148,6 @@ def SessionSelectorView() -> ft.Control:
                     padding=tokens.SPACE_SM,
                 )
             )
-        # Banner rule (owner): more than 5 rows get a banner after every 5th;
-        # 5 or fewer get exactly one after the list.
-        if len(rows) > 5:
-            for i in range(4, len(rows), 5):
-                rows.insert(i + 1, pooled_banner_ad(f"terminal-containers-{i // 5 + 1}", page))
-        else:
-            rows.append(pooled_banner_ad("terminal-containers-1", page))
         sections.append(
             ft.Column(
                 controls=[section_header("Installed containers"), *rows],
@@ -150,6 +164,8 @@ def SessionSelectorView() -> ft.Control:
             )
         )
 
+    # Banner at the very bottom — same position as the Files picker.
+    sections.append(pooled_banner_ad("terminal-1", page))
     sections.append(ft.Container(height=tokens.NAV_BAR_CLEARANCE))
     return ft.Column(
         controls=sections,

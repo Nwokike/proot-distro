@@ -20,7 +20,7 @@ from core import storage_paths
 
 logger = logging.getLogger(__name__)
 
-_MAX_TEXT_BYTES = 128 * 1024  # 128 KB text preview cap
+_MAX_TEXT_BYTES = 10 * 1024 * 1024  # 10 MB text preview bound (memory guard only)
 
 
 def resolve_guest_path(container: str, guest_path: str = "/") -> tuple[Path, Path]:
@@ -107,7 +107,9 @@ def read_file_preview(container: str, guest_path: str) -> dict:
     is_truncated = len(chunk) > _MAX_TEXT_BYTES
     content = chunk[:_MAX_TEXT_BYTES].decode("utf-8", errors="replace")
     if is_truncated:
-        content += "\n... [Preview truncated: file exceeds 128 KB] ..."
+        content += (
+            f"\n... [Preview truncated: file exceeds {_MAX_TEXT_BYTES // (1024 * 1024)} MB] ..."
+        )
 
     return {
         "type": "text",

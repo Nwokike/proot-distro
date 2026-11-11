@@ -23,11 +23,14 @@ from services.proot_namespaces import (
 )
 
 from . import _core as _core_module
+from ._capabilities import DESKTOP_STARTERS, guest_capabilities
 from ._commands import (
     _call_get_proot_cmd,
+    fake_sysdata_bindings,
     get_proot_cmd,
     get_proot_cmd_with_options,
     run_command_argv,
+    setup_fake_sysdata,
 )
 from ._core import (
     Outcome,
@@ -75,6 +78,7 @@ def __getattr__(name: str):
 
 
 __all__ = [
+    "DESKTOP_STARTERS",
     "PULL_LIMIT_COPY",
     "Outcome",
     "ProotUnavailable",
@@ -105,9 +109,11 @@ __all__ = [
     "cached_images",
     "clear_cache",
     "copy_path",
+    "fake_sysdata_bindings",
     "friendly_job_error",
     "get_proot_cmd",
     "get_proot_cmd_with_options",
+    "guest_capabilities",
     "inspect_container",
     "install",
     "is_pull_limit",
@@ -121,6 +127,7 @@ __all__ = [
     "restore_container",
     "run_command_argv",
     "search_images",
+    "setup_fake_sysdata",
     "storage_bytes",
     "storage_detail",
     "sync_path",

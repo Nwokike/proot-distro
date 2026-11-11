@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import signal
-
 import flet as ft
 
 from core import theme, tokens
@@ -22,31 +20,16 @@ def _write(entry: SessionEntry, payload: bytes) -> None:
         entry.session.write(payload)
 
 
-# Job-control bytes the PTY line discipline would normally turn into signals.
-# The session child setsids in preexec_fn and takes the slave as its
-# controlling tty, but the bytes are delivered to the session's process group
-# directly anyway so Ctrl-C/Ctrl-\/Ctrl-Z always reach proot + guests.
-_SIGNAL_FOR_BYTE = {
-    0x03: signal.SIGINT,  # Ctrl-C
-    0x1C: signal.SIGQUIT,  # Ctrl-backslash
-    0x1A: signal.SIGTSTP,  # Ctrl-Z
-}
-
-
 def _input(entry: SessionEntry, payload: bytes) -> None:
-    """Terminal input: job-control bytes become killpg signals, the rest go to the PTY."""
-    session = entry.session
-    if session is None:
-        return
-    out = bytearray()
-    for b in payload:
-        sig = _SIGNAL_FOR_BYTE.get(b)
-        if sig is not None:
-            session.send_signal(sig)
-        else:
-            out.append(b)
-    if out:
-        session.write(bytes(out))
+    """Terminal input: every byte goes raw to the PTY (CollabShell pattern).
+
+    The PTY line discipline turns Ctrl-C/Ctrl-\\/Ctrl-Z into signals for the
+    foreground process group itself, and a raw-mode guest shell handles the
+    bytes in readline. Intercepting them here for killpg does NOT reach guests
+    under proot on Android (device-proven: Ctrl-C dead while Ctrl-X worked),
+    so don't intercept — write the bytes like any other input.
+    """
+    _write(entry, payload)
 
 
 def _compact_btn_style() -> ft.ButtonStyle:

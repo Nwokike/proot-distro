@@ -92,7 +92,9 @@ def DistroView() -> ft.Control:
         if not q:
             return
         try:
-            limit = max(1, min(int(search_limit or "25"), 1000))
+            # No ceiling — the limit is passed straight through to upstream,
+            # which forwards it to the Docker Hub API.
+            limit = max(1, int(search_limit or "25"))
         except ValueError:
             limit = 25
         if ":" in q:
@@ -101,11 +103,14 @@ def DistroView() -> ft.Control:
             page.run_task(methods.search_distro, q, limit)
 
     def _distro_tile(label: str, ref: str) -> ft.Container:
-        # If the exact container name (upstream derive_alias(ref) == ref for these
-        # bare names) is already installed, the button opens a shell instead of
-        # erroring with "container already exists".
+        # The container name is upstream derive_alias(ref): the last path
+        # component, tag stripped ("kalilinux/kali-rolling" → "kali-rolling",
+        # "opensuse/tumbleweed" → "tumbleweed", bare names unchanged). Compare
+        # THAT, not the raw ref — namespaced refs never equal the name, so
+        # Kali/openSUSE used to show Install while already installed.
+        alias = ref.strip().split("@")[0].split(":")[0].rsplit("/", 1)[-1]
         installed_names = {r.get("name", "") for r in (st.containers or [])}
-        already = ref in installed_names
+        already = alias in installed_names
 
         def _action(_e, r=ref) -> None:
             if already:
@@ -231,10 +236,8 @@ def DistroView() -> ft.Control:
                 if mode == "install"
                 else "search Docker Hub (e.g. archlinux)"
             ),
-            bar_leading=ft.Icon(
-                ft.Icons.DOWNLOAD_ROUNDED if mode == "install" else ft.Icons.SEARCH_ROUNDED,
-                color=theme.primary(),
-            ),
+            # No leading icon (owner ruling) — the action icon at the end IS
+            # the mode: big Download in install, Search in search.
             bar_trailing=[
                 insecure_switch if mode == "install" else limit_dropdown,
                 ft.IconButton(
@@ -244,10 +247,10 @@ def DistroView() -> ft.Control:
                     on_click=lambda _e: page.run_task(_on_paste),
                 ),
                 ft.IconButton(
-                    icon=ft.Icons.PLAY_ARROW_ROUNDED
-                    if mode == "search"
-                    else ft.Icons.DOWNLOAD_ROUNDED,
-                    icon_size=tokens.ICON_SM,
+                    icon=ft.Icons.DOWNLOAD_ROUNDED
+                    if mode == "install"
+                    else ft.Icons.SEARCH_ROUNDED,
+                    icon_size=tokens.ICON_MD,
                     icon_color=theme.primary(),
                     tooltip="Install" if mode == "install" else "Search",
                     on_click=lambda _e: _consent_install() if mode == "install" else _on_search(),
@@ -269,10 +272,15 @@ def DistroView() -> ft.Control:
     # Certified distros: bare names and bare refs. No versions, no sizes, no
     # descriptions — Docker Hub resolves each image's current latest when the
     # user taps Install, and upstream's derive_alias names the container.
+    # Modern/rolling first (Alpine, Arch, Fedora, openSUSE, Kali), the
+    # old-guard stable pair last.
     _POPULAR_DISTROS = (
-        ("Debian", "debian"),
-        ("Ubuntu", "ubuntu"),
         ("Alpine", "alpine"),
+        ("Fedora", "fedora"),
+        ("openSUSE", "opensuse/tumbleweed"),
+        ("Kali", "kalilinux/kali-rolling"),
+        ("Ubuntu", "ubuntu"),
+        ("Debian", "debian"),
     )
 
     controls: list[ft.Control] = [
@@ -339,7 +347,8 @@ def DistroView() -> ft.Control:
 
     # Search status + results sit DIRECTLY under the search bar in both modes
     # (mirrors the examples under the install box), so results never land after
-    # containers or bunched at the bottom. Banner after every 5 results.
+    # containers or bunched at the bottom. Long result lists get a banner after
+    # every 5th; an empty result set gets one sticky banner.
     if st.search_status:
         controls.append(ft.Text(st.search_status, size=tokens.FONT_XS, color=theme.text_dim()))
     result_cards = sections.build_search_results(st, _consent_install)
@@ -347,26 +356,20 @@ def DistroView() -> ft.Control:
         result_cards.insert(i + 1, pooled_banner_ad(f"search-{i // 5 + 1}", page))
     if result_cards:
         controls.extend(result_cards)
+    elif mode == "search":
+        # No results yet — including the fresh search screen before the first
+        # query — keeps one sticky banner (owner ruling).
+        controls.append(pooled_banner_ad("search-empty", page))
 
     if mode == "install":
-        # Installed containers section. Banner rule (owner): more than 5 containers
-        # get a banner after every 5th card; 5 or fewer (or none) get exactly one
-        # banner after the list.
+        # One banner between the install area and the Containers section
+        # (owner ruling) — none inside the container list.
+        controls.append(pooled_banner_ad("containers-1", page))
         controls.append(section_header("Containers"))
         if st.containers:
-            container_cards = [
+            controls.extend(
                 build_container_card(row, page, methods, is_narrow) for row in st.containers
-            ]
-            if len(container_cards) > 5:
-                with_banners: list[ft.Control] = []
-                for i, c in enumerate(container_cards):
-                    with_banners.append(c)
-                    if (i + 1) % 5 == 0:
-                        with_banners.append(pooled_banner_ad(f"containers-{(i + 1) // 5}", page))
-                controls.extend(with_banners)
-            else:
-                controls.extend(container_cards)
-                controls.append(pooled_banner_ad("containers-1", page))
+            )
         else:
             controls.append(
                 empty_state(
@@ -375,7 +378,6 @@ def DistroView() -> ft.Control:
                     icon=ft.Icons.INVENTORY_2_OUTLINED,
                 )
             )
-            controls.append(pooled_banner_ad("containers-empty", page))
         if st.data_note:
             controls.append(
                 ft.Text(st.data_note, size=tokens.FONT_XS, color=theme.warn(), selectable=True)

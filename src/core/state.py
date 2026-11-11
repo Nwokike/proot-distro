@@ -4,6 +4,17 @@ from __future__ import annotations
 
 import flet as ft
 
+# The ONE source of display-start defaults (used by state.__init__ and by
+# DisplayActions._display_settings — never duplicated).
+DEFAULT_DISPLAY_SETTINGS: dict = {
+    "fps": 12,
+    "quality": 70,
+    "geometry": "auto",
+    "orientation": "landscape",
+    "lan": False,
+    "tunnel": False,
+}
+
 
 @ft.observable
 class AppState:
@@ -56,6 +67,11 @@ class AppState:
     push_busy: bool = False
     push_status: str = ""
 
+    # Startup gate (CollabShell / AnimePahe pattern): the shell shows the
+    # splash until initial checks and container discovery finish.
+    app_ready: bool = False
+    startup_stage: str = ""
+
     # First run: the onboarding deck shows until it is dismissed once.
     onboarding_done: bool = False
 
@@ -71,6 +87,31 @@ class AppState:
     active_session: str | None = None
     session_error: str = ""
 
+    # Display / X11 (v1.1.0): the container whose display is open, or None.
+    active_display: str | None = None
+    # Bumped by DeskManager.on_sessions_changed on every session transition so
+    # the Display tab re-reads manager.running()/visible() immediately (the
+    # Stop button included) instead of waiting for a tab switch.
+    display_sessions_rev: int = 0
+    # Bumped on every guest log line so the display view's output panel streams
+    # live (the log is written from the reader thread, so it goes through
+    # page.run_task like the session rev).
+    display_log_rev: int = 0
+    display_status: str = "idle"  # idle | starting | running | stopping | error
+    display_status_text: str = ""
+    display_error: str = ""
+    display_url: str = ""
+    display_fullscreen: bool = False
+    display_support: dict | None = None  # per-container caps cache: name -> guest_capabilities
+    display_installing: str | None = None  # container currently installing the desktop
+    display_logs: list = None  # list[str] — bounded log tail for the active display
+    display_install_logs: list = None  # list[str] — live provisioning output
+    # Launcher-set options for the NEXT start — the 100% termux-desk wrap:
+    # fps/quality (server params), geometry (Xvfb screen, "auto" = device
+    # aspect), orientation (fullscreen lock), lan (host 0.0.0.0), tunnel
+    # (upstream localhost.run publish).
+    display_settings: dict | None = None
+
     def __init__(self):
         self.containers = []
         self.search_results = []
@@ -78,6 +119,49 @@ class AppState:
         self.busy_locks = []
         self.install_logs = []
         self.build_logs = []
+        self.display_support = {}
+        self.display_logs = []
+        self.display_install_logs = []
+        self.display_settings = dict(DEFAULT_DISPLAY_SETTINGS)
 
 
 state = AppState()
+
+
+@ft.observable
+class DisplayProgress:
+    """Dedicated observable model for the desktop-install progress card — the
+    CollabShell NotebookCell mechanism copied exactly: a SMALL observable
+    object passed as the component's argument (not a field on the global
+    AppState), so every mutation re-renders that one card reactively.
+    Mutate `logs` by REASSIGNMENT and bump `rev` (CellData.outputs_rev)."""
+
+    def __init__(self):
+        self.container: str | None = None
+        self.logs: list[str] = []
+        self.is_running: bool = False
+        self.rev: int = 0
+        self.finished_ok: bool | None = None
+
+    def append(self, line: str) -> None:
+        clean = line.rstrip()
+        if not clean:
+            return
+        self.logs = [*self.logs[-399:], clean]
+        self.rev += 1
+
+    def clear(self, container: str | None = None) -> None:
+        self.container = container
+        self.logs = []
+        self.rev += 1
+        self.finished_ok = None
+
+    def set_running(self, flag: bool) -> None:
+        self.is_running = bool(flag)
+
+    def finish(self, ok: bool | None) -> None:
+        self.is_running = False
+        self.finished_ok = ok
+
+
+display_progress = DisplayProgress()

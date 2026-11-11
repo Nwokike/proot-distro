@@ -9,9 +9,11 @@ import flet as ft
 
 from components.app_header import AppHeader
 from core import theme, tokens
-from core.state import state
+from core.state import display_progress, state
 from screens import (
     BuildView,
+    DesktopView,
+    DisplayView,
     DistroView,
     FilesView,
     OnboardingView,
@@ -22,13 +24,15 @@ from screens import (
 
 TAB_DISTRO = 0
 TAB_TERMINAL = 1
-TAB_FILES = 2
-TAB_BUILD = 3
-TAB_SETTINGS = 4
+TAB_DISPLAY = 2
+TAB_FILES = 3
+TAB_BUILD = 4
+TAB_SETTINGS = 5
 
 _TABS = (
     ("Distros", ft.Icons.APPS),
     ("Terminal", ft.Icons.TERMINAL),
+    ("Display", ft.Icons.DESKTOP_WINDOWS),
     ("Files", ft.Icons.FOLDER_OUTLINED),
     ("Build", ft.Icons.BUILD_ROUNDED),
     ("Settings", ft.Icons.SETTINGS),
@@ -50,6 +54,7 @@ def AppShell() -> ft.Control:
     # re-render a component — without use_state(state) the onboarding deck
     # dead-ends on first run and shell open/close never swaps the tree.
     st, _ = ft.use_state(state)
+    prog, _ = ft.use_state(display_progress)
     page = ft.context.page
     active_tab, set_active_tab = ft.use_state(TAB_DISTRO)
     controller = getattr(page, "_controller", None)
@@ -57,17 +62,78 @@ def AppShell() -> ft.Control:
     def _on_change(e):
         set_active_tab(int(e.data))
 
+    # ── Startup Splash Screen (CollabShell / AnimePahe pattern) ───────────────
+    if not st.app_ready:
+        _ = st.startup_stage
+        from components.brand_hero import app_icon_svg
+
+        return ft.Container(
+            content=ft.Column(
+                [
+                    # The responsive brand mark: white on dark, artwork's own
+                    # colors on light (same tinting as the home hero).
+                    ft.Image(
+                        src=app_icon_svg(),
+                        width=tokens.HERO_ICON_SIZE,
+                        height=tokens.HERO_ICON_SIZE,
+                        fit=ft.BoxFit.CONTAIN,
+                        color=None if theme.is_light_theme() else theme.WHITE,
+                        color_blend_mode=ft.BlendMode.SRC_IN,
+                        error_content=ft.Icon(ft.Icons.TERMINAL, size=tokens.ICON_HERO),
+                    ),
+                    ft.Container(height=tokens.SPACE_XL),
+                    ft.ProgressRing(
+                        width=tokens.PROGRESS_RING_XL,
+                        height=tokens.PROGRESS_RING_XL,
+                        stroke_width=3,
+                        color=theme.primary(),
+                    ),
+                    ft.Container(height=tokens.SPACE_MD),
+                    ft.Text(
+                        st.startup_stage or "Starting…",
+                        size=tokens.FONT_XS,
+                        color=theme.text_dim(),
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=tokens.SPACE_NONE,
+            ),
+            expand=True,
+            alignment=ft.Alignment.CENTER,
+            bgcolor=theme.bg(),
+        )
+
     if not st.onboarding_done:
         return OnboardingView()
 
     entry = _session_entry(controller, st.active_session)
     fullscreen = st.terminal_fullscreen
-    if entry is not None:
-        body = TerminalView(entry)
+    # A running display owns the screen first (it is the display surface);
+    # then an open shell; then the tabs.
+    desk_session = None
+    dmanager = getattr(controller, "desk_manager", None)
+    if st.active_display and dmanager is not None:
+        candidate = dmanager.get(st.active_display)
+        if candidate is not None and candidate.status.value == "running":
+            desk_session = candidate
+    # A display left running in the background (the terminal hand-off, or Back)
+    # stays one tap away on every tab.
+    background_displays = dmanager.running() if (dmanager and desk_session is None) else []
+    if desk_session is not None:
+        body = DesktopView(desk_session)
+    elif entry is not None:
+        # Key by session id: without it the reconciler patches the new
+        # MobileTerminal ONTO the previous widget's control id (same fn, no
+        # key → in-place diff) — no remount, no replay, and the screen keeps
+        # showing the previous shell while keystrokes go to the new one.
+        body = TerminalView(entry, key=entry.key)
     elif active_tab == TAB_DISTRO:
         body = DistroView()
     elif active_tab == TAB_TERMINAL:
         body = SessionSelectorView()
+    elif active_tab == TAB_DISPLAY:
+        body = DisplayView()
     elif active_tab == TAB_FILES:
         body = FilesView()
     elif active_tab == TAB_BUILD:
@@ -76,9 +142,9 @@ def AppShell() -> ft.Control:
         body = SettingsView()
 
     chrome: list[ft.Control] = []
-    if entry is None:
-        # CollabShell: one fixed bar for every tab; the session screen has
-        # its own header, so the shell bar steps aside while it is open.
+    if entry is None and desk_session is None:
+        # CollabShell: one fixed bar for every tab; the session/desktop screen
+        # has its own header, so the shell bar steps aside while either is open.
         chrome.append(
             AppHeader(
                 _TABS[active_tab][0],
@@ -86,8 +152,76 @@ def AppShell() -> ft.Control:
                 page=page,
             )
         )
+    if background_displays:
+        # One tap back to the display that is still running behind this tab.
+        names = ", ".join(s.key for s in background_displays)
+        chrome.append(
+            ft.Container(
+                content=ft.Row(
+                    controls=[
+                        ft.Icon(
+                            ft.Icons.DESKTOP_WINDOWS,
+                            size=tokens.ICON_SM,
+                            color=theme.primary(),
+                        ),
+                        ft.Text(
+                            f"display running: {names}",
+                            size=tokens.FONT_SM,
+                            color=theme.text(),
+                            expand=True,
+                            max_lines=1,
+                            overflow=ft.TextOverflow.ELLIPSIS,
+                        ),
+                        ft.Icon(ft.Icons.ARROW_FORWARD_ROUNDED, size=tokens.ICON_SM),
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=tokens.SPACE_SM,
+                ),
+                bgcolor=ft.Colors.with_opacity(tokens.OPACITY_LIGHT, theme.primary()),
+                padding=ft.Padding(
+                    tokens.SPACE_SM, tokens.SPACE_XS, tokens.SPACE_SM, tokens.SPACE_XS
+                ),
+                border_radius=tokens.RADIUS_MD,
+                ink=True,
+                on_click=lambda _e: set_active_tab(TAB_DISPLAY),
+            )
+        )
+    if prog.is_running and entry is None and desk_session is None:
+        # Global install-progress strip — visible on EVERY tab while a desktop
+        # install runs (owner request); tapping it jumps to the Display tab.
+        chrome.append(
+            ft.Container(
+                content=ft.Row(
+                    controls=[
+                        ft.ProgressRing(
+                            width=tokens.PROGRESS_RING_SM,
+                            height=tokens.PROGRESS_RING_SM,
+                            stroke_width=tokens.PROGRESS_RING_STROKE,
+                        ),
+                        ft.Text(
+                            f"installing desktop in {prog.container or '…'}…",
+                            size=tokens.FONT_SM,
+                            color=theme.text(),
+                            expand=True,
+                            max_lines=1,
+                            overflow=ft.TextOverflow.ELLIPSIS,
+                        ),
+                        ft.Icon(ft.Icons.ARROW_FORWARD_ROUNDED, size=tokens.ICON_SM),
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=tokens.SPACE_SM,
+                ),
+                bgcolor=ft.Colors.with_opacity(tokens.OPACITY_LIGHT, theme.primary()),
+                padding=ft.Padding(
+                    tokens.SPACE_SM, tokens.SPACE_XS, tokens.SPACE_SM, tokens.SPACE_XS
+                ),
+                border_radius=tokens.RADIUS_MD,
+                ink=True,
+                on_click=lambda _e: set_active_tab(TAB_DISPLAY),
+            )
+        )
     chrome.append(ft.Container(content=body, expand=True, bgcolor=theme.bg()))
-    if entry is None and not fullscreen:
+    if entry is None and desk_session is None and not fullscreen:
         # The session owns the whole screen (true full screen, extra room
         # for the keyboard) — the nav bar hides while a shell is open.
         chrome.append(

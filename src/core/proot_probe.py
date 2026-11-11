@@ -253,7 +253,7 @@ def bootstrap_env(runtime_root: Path | None = None) -> ProbeResult:
         proc = subprocess.run(  # noqa: S603 - our own staged payload from the flet-proot wheel
             [os.environ["PD_PROOT_BIN"], "--version"],
             capture_output=True,
-            timeout=30,
+            timeout=120,
             env=dict(os.environ),
         )
         if proc.returncode != 0:

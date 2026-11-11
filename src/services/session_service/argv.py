@@ -44,6 +44,7 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
 
     # Ensure shm and l2s directories on host filesystem
     shm_bind: str | None = None
+    sysdata_binds: list[str] = []
     if rootfs_path and rootfs_path.is_dir():
         shm = rootfs_path / "tmp"
         shm.mkdir(parents=True, exist_ok=True)
@@ -53,6 +54,44 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
         l2s = rootfs_path / ".l2s"
         l2s.mkdir(parents=True, exist_ok=True)
         env["PROOT_L2S_DIR"] = str(l2s)
+
+        # Fake sysdata stubs: masks /sys/fs/selinux with an empty directory
+        # so dpkg/passwd/chage know SELinux is absent rather than failing with
+        # ENOENT on Android SELinux transitions.
+        proot_service.setup_fake_sysdata(str(rootfs_path))
+        sysdata_binds = proot_service.fake_sysdata_bindings(str(rootfs_path))
+
+        # bwrap (used by glycin, gdk-pixbuf's SVG/image loader) sets up its uid
+        # map by reading /proc/sys/kernel/overflowuid|gid — Android blocks both
+        # the read and the real file, so bwrap exits and every GTK image load
+        # fails (device: "Loader process exited early … glycin-svg" → the XFCE
+        # panel aborts and the desktop stays black). Stubbing the two files lets
+        # bwrap get past the uid-map step; glycin then falls back to running
+        # unsandboxed, which is exactly what we want under proot.
+        sysdata_dir = rootfs_path / "sysdata"
+        sysdata_dir.mkdir(parents=True, exist_ok=True)
+        for name in ("overflowuid", "overflowgid"):
+            stub = sysdata_dir / name
+            if not stub.exists():
+                try:
+                    stub.write_text("65534\n", encoding="utf-8")
+                except OSError:
+                    continue
+            sysdata_binds.append(f"--bind={stub}:/proc/sys/kernel/{name}")
+
+        # APT reliability: under proot on Android, apt's sandbox user (_apt)
+        # cannot read cache archives, and dpkg fsync slows down operations.
+        apt_conf_dir = rootfs_path / "etc" / "apt" / "apt.conf.d"
+        if apt_conf_dir.is_dir():
+            conf_file = apt_conf_dir / "99-proot.conf"
+            if not conf_file.exists():
+                try:
+                    conf_file.write_text(
+                        'APT::Sandbox::User "root";\nAcquire::Retries "3";\nDPkg::Lock::Timeout "60";\n',
+                        encoding="utf-8",
+                    )
+                except OSError:
+                    pass
 
     # Hardened Android extensions (device-proven in M0 spike)
     # Only injected before the inner guest command on Android
@@ -90,6 +129,9 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
 
         if shm_bind:
             _add_if_missing(shm_bind)
+
+        for b in sysdata_binds:
+            _add_if_missing(b)
 
     env.setdefault("TERM", "xterm-256color")
     env.setdefault("COLORTERM", "truecolor")
@@ -142,8 +184,54 @@ def session_argv(container: str) -> tuple[Env, Argv]:
     return _harden_session(env, argv, container)
 
 
+def session_argv_with_options(container: str, options: dict | None = None) -> tuple[Env, Argv]:
+    """(env, argv) for `pd login <c> --get-proot-cmd` with the upstream login
+    options the "Shell with options…" dialog wraps one-to-one: user,
+    work_dir, env, bind, shared_tmp, shared_home, shared_x11, fix_low_ports
+    (→ upstream's redirect_ports destination), isolated. Interactive shell:
+    no login_cmd, exactly like `pd login <c>`."""
+    opts = options or {}
+    login_opts: dict[str, object] = {}
+    user = str(opts.get("user") or "root").strip()
+    if user and user != "root":
+        login_opts["user"] = user
+    if opts.get("work_dir"):
+        login_opts["work_dir"] = str(opts["work_dir"])
+    if opts.get("env"):
+        login_opts["env"] = [str(item) for item in opts["env"]]
+    if opts.get("bind"):
+        login_opts["bind"] = [str(item) for item in opts["bind"]]
+    for key in ("shared_tmp", "shared_home", "shared_x11", "isolated"):
+        if opts.get(key):
+            login_opts[key] = True
+    if opts.get("fix_low_ports"):
+        login_opts["redirect_ports"] = True
+    line = proot_service.get_proot_cmd_with_options(container, **login_opts)
+    env, argv = _parse_proot_cmd_line(line)
+    return _harden_session(env, argv, container)
+
+
 def run_argv(container: str, run_args: list[str], work_dir: str | None = None) -> tuple[Env, Argv]:
     """(env, argv) for `proot-distro run <c> -- args` — upstream prints it
     (get_proot_cmd=True, so it never execs in-process), then we harden it."""
     env, argv = _parse_proot_cmd_line(proot_service.run_command_argv(container, run_args, work_dir))
+    return _harden_session(env, argv, container)
+
+
+def command_argv(
+    container: str, command: list[str], work_dir: str | None = None
+) -> tuple[Env, Argv]:
+    """(env, argv) for `proot-distro login <c> -- <command>` — the arbitrary
+    guest-command path (probes, installs, the display server). Upstream builds
+    `[login_shell, "-c", shlex.join(login_cmd)]` for a non-empty login_cmd and
+    skips the interactive-shell check entirely, so the Entrypoint/Cmd refusal
+    never applies here. Callers that need shell syntax pass
+    `["/bin/sh", "-lc", script]`."""
+    if not command or not any(token.strip() for token in command):
+        raise ValueError("command must not be empty")
+    login_opts: dict[str, object] = {"login_cmd": list(command)}
+    if work_dir:
+        login_opts["work_dir"] = work_dir
+    line = proot_service.get_proot_cmd_with_options(container, **login_opts)
+    env, argv = _parse_proot_cmd_line(line)
     return _harden_session(env, argv, container)

@@ -9,11 +9,11 @@ on:
       build_version:
         description: "Build version"
         required: true
-        default: "1.0.1"
+        default: "1.1.0"
       build_number:
         description: "Build number"
         required: true
-        default: "2"
+        default: "3"
 
 permissions:
   contents: write
@@ -22,8 +22,8 @@ env:
   PYTHONUTF8: "1"
   FLET_CLI_NO_RICH_OUTPUT: "1"
   UV_PYTHON: "3.14"
-  BUILD_VERSION: ${{ inputs.build_version || '1.0.0' }}
-  BUILD_NUMBER: ${{ inputs.build_number || '1' }}
+  BUILD_VERSION: ${{ inputs.build_version || '1.1.0' }}
+  BUILD_NUMBER: ${{ inputs.build_number || '3' }}
 
 jobs:
   quality:
@@ -38,8 +38,8 @@ jobs:
         run: uv sync --frozen --group dev
       - name: Ruff
         run: |
-          uv run ruff check src tests scripts/build_flet_proot_wheel.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
-          uv run ruff format --check src tests scripts/build_flet_proot_wheel.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
+          uv run ruff check src tests scripts/build_flet_proot_wheel.py scripts/build_flet_pillow_wheel.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
+          uv run ruff format --check src tests scripts/build_flet_proot_wheel.py scripts/build_flet_pillow_wheel.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
       - name: Flet API guard (AST, installed flet)
         run: |
           for f in $(find src -name "*.py"); do
@@ -170,6 +170,9 @@ jobs:
       - name: Build native payload wheel set (flet-proot, pinned + sha256-verified)
         run: uv run python scripts/build_flet_proot_wheel.py --out wheels
 
+      - name: Build Pillow wheel WITH XCB (Termux debs, pinned + sha256-verified)
+        run: uv run python scripts/build_flet_pillow_wheel.py --out wheels
+
       - name: Decode signing keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -224,6 +227,9 @@ jobs:
 
       - name: Build native payload wheel set (flet-proot, pinned + sha256-verified)
         run: uv run python scripts/build_flet_proot_wheel.py --out wheels
+
+      - name: Build Pillow wheel WITH XCB (Termux debs, pinned + sha256-verified)
+        run: uv run python scripts/build_flet_pillow_wheel.py --out wheels
 
       - name: Decode signing keystore
         env:
@@ -285,13 +291,16 @@ jobs:
           # The ads SDK contributes the ACCESS_ADSERVICES_* advertising-id and
           # attribution permissions (AD_ID / ATTRIBUTION, play-services); the
           # data-safety form declares them. The build template's baseline carries
-          # FOREGROUND_SERVICE (no FGS type, no service — O-5 stays NO) and
-          # WAKE_LOCK (flet's boot_screen keep-screen-on shim; nothing in the
-          # app acquires a wakelock itself). Anything else, and above all any
-          # install permission, fails the build.
+          # WAKE_LOCK (flet's boot_screen keep-screen-on shim). FOREGROUND_SERVICE
+          # + FOREGROUND_SERVICE_SPECIAL_USE + POST_NOTIFICATIONS are for the
+          # Termux-style persistent notification (flet-notifications) that keeps
+          # Linux sessions alive in the background; that plugin's own manifest
+          # adds RECEIVE_BOOT_COMPLETED (restore scheduled notifications after
+          # reboot) and VIBRATE. Anything else, and above all any install
+          # permission, fails the build.
           for perm in $perms; do
             case "$perm" in
-              "android.permission.INTERNET"|"android.permission.ACCESS_NETWORK_STATE"|android.permission.ACCESS_ADSERVICES_*|"android.permission.FOREGROUND_SERVICE"|"android.permission.WAKE_LOCK") ;;
+              "android.permission.INTERNET"|"android.permission.ACCESS_NETWORK_STATE"|android.permission.ACCESS_ADSERVICES_*|"android.permission.FOREGROUND_SERVICE"|"android.permission.FOREGROUND_SERVICE_SPECIAL_USE"|"android.permission.WAKE_LOCK"|"android.permission.POST_NOTIFICATIONS"|"android.permission.RECEIVE_BOOT_COMPLETED"|"android.permission.VIBRATE") ;;
               *) echo "::error::unexpected permission $perm (A-12: no install permissions)"; exit 1;;
             esac
           done

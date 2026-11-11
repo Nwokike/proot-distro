@@ -86,12 +86,25 @@ def test_terminal_view_is_built_inside_the_component_tree():
 
 
 def test_terminal_view_source_has_switcher_tabs_and_fab_actions():
-    """Terminal view renders switcher tabs; all actions live in the page FAB."""
+    """Terminal view renders switcher tabs in the scrollable header; all
+    actions live in the page FAB; fullscreen only hides chrome (visible),
+    never unmounts the terminal widget."""
     from pathlib import Path
 
     pkg = Path(__file__).resolve().parents[1] / "src" / "screens" / "terminal"
     source = "\n".join(f.read_text(encoding="utf-8") for f in sorted(pkg.glob("*.py")))
-    assert "switcher_box" in source
+    assert "tab_chips" in source  # multi-shell tabs keep their own row
+    assert "tabs_row" in source  # tabs row below the banner, not crammed in header
+    assert "scroll=ft.ScrollMode.AUTO" in source  # header + tabs scroll horizontally
+    assert "visible=not fullscreen" in source  # fullscreen hides chrome, never unmounts
+    # The fullscreen toggle lives in the scrollable chrome; the app theme
+    # switch is the fixed button.
+    assert "header_chrome" in source
+    assert "expand=True, visible=not fullscreen" in source
+    # Regression: never mutate the pooled (mounted) banner control during
+    # render — flet 1.1 freezes mounted controls mid-patch and that raises
+    # "Frozen controls cannot be updated" (device-proven app hang).
+    assert "banner.visible =" not in source
     assert "floating_action_button" in source  # FAB, no header hamburger
     assert "build_terminal_fab" in source
     assert "CLEAR_ALL_ROUNDED" in source

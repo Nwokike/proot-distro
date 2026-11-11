@@ -13,7 +13,7 @@ from typing import ClassVar
 class MemoryLogHandler(logging.Handler):
     """Ring buffer log handler capturing recent logs for in-app terminal display."""
 
-    _logs: ClassVar[collections.deque[str]] = collections.deque(maxlen=500)
+    _logs: ClassVar[collections.deque[str]] = collections.deque(maxlen=5000)
 
     def __init__(self, level: int = logging.INFO):
         super().__init__(level=level)

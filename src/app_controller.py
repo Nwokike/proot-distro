@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import inspect
+import json
 import logging
 import os
 
@@ -12,11 +13,17 @@ import flet as ft
 import flet_notifications as ft_notifications
 
 from app_shell import AppShell
-from controller_actions import BuildActions, ContainerActions, DistroActions, SessionActions
+from controller_actions import (
+    BuildActions,
+    ContainerActions,
+    DisplayActions,
+    DistroActions,
+    SessionActions,
+)
 from core import proot_probe, shared_services, theme
 from core.constants import STORAGE_HINTS_DISMISSED, STORAGE_ONBOARDING_DONE
 from core.state import state
-from services import ad_service, proot_service, session_manager
+from services import ad_service, desk_service, proot_service, session_manager
 from state.controller_ctx import ControllerMethods, ControllerMethodsCtx
 
 logger = logging.getLogger(__name__)
@@ -32,20 +39,107 @@ _THEME_MODES = {
 _THEME_ORDER = ("light", "dark", "system")
 
 
-class AppController(DistroActions, ContainerActions, SessionActions, BuildActions):
+class AppController(DistroActions, ContainerActions, SessionActions, BuildActions, DisplayActions):
     def __init__(self, page: ft.Page):
         self.page = page
         self.proot = proot_service
-        self.session_manager = session_manager.SessionManager()
+        # Process-wide registry: the FGS keeps the process alive across
+        # activity destroy/recreate, so reopening the app re-attaches to the
+        # same live shells instead of losing them (Termux behavior).
+        self.session_manager = session_manager.shared_manager()
+        # Shared singleton (same pattern): the FGS keeps the process alive, so
+        # a reopened app re-adopts running display sessions instead of losing them.
+        self.desk_manager = desk_service.shared_manager()
+        # Session transitions (start/stop/fail) → observable rev bump, so the
+        # Display tab re-reads the manager's lists immediately.
+        self.desk_manager.on_sessions_changed = self._bump_display_sessions
+        self.desk_manager.on_log_line = self._bump_display_log
         self.ad_service = ad_service.AdService(page)
-        self.notifications = ft_notifications.Notifications()
+        # android_default_icon: our app-icon silhouette (bundled via
+        # tool.flet.android.res_dir), not the plugin's default Flet logo.
+        self.notifications = ft_notifications.Notifications(
+            android_default_icon="ic_stat_prootdistro"
+        )
+        self.notifications.on_action = self._on_notification_action
+        self.notifications.on_tap = self._on_notification_tap
         self.session_manager.notifications = self.notifications
+
+    async def _on_notification_action(self, e) -> None:
+        """Notification action buttons — the FGS notification's Exit tears down."""
+        if getattr(e, "action_id", "") == "exit":
+            self.page.run_task(self.exit_app)
+
+    def _bump_display_sessions(self) -> None:
+        """DeskManager fired a session transition: bump the observable rev so
+        subscribed views re-read the session lists right away (the Stop button
+        flips its row to "stopping…" without leaving the tab) AND reconcile the
+        display state — a crashed session must not leave the app pointing at a
+        dead display with the wakelock and FGS still held."""
+
+        async def _apply_bump() -> None:
+            state.display_sessions_rev = (state.display_sessions_rev or 0) + 1
+            active = state.active_display
+            if active:
+                s = self.desk_manager.get(active)
+                if s is None or s.status is not desk_service.DeskStatus.RUNNING:
+                    state.active_display = None
+                    state.display_status = "idle"
+                    state.display_status_text = ""
+                    state.display_url = ""
+                    self._wakelock(False)
+                    self._lock_orientation(False)
+            await self._update_fgs()
+
+        self.page.run_task(_apply_bump)
+
+    def _bump_display_log(self) -> None:
+        """A guest log line arrived: bump the rev so the display view's output
+        panel streams live (the reader thread can't touch the UI directly)."""
+
+        async def _apply() -> None:
+            state.display_log_rev = (state.display_log_rev or 0) + 1
+
+        self.page.run_task(_apply)
+
+    def _on_notification_tap(self, e) -> None:
+        """Tapping the persistent notification returns to the running work —
+        the open display if there is one, else the running shell."""
+        if state.active_display:
+            return
+        entries = list(self.session_manager.entries.values())
+        if entries and not state.active_session:
+            state.active_session = entries[-1].key
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
     async def init(self) -> None:
+        state.app_ready = False
+        state.startup_stage = "Starting…"
+        # Warm reopen (the FGS kept the process alive): never land in
+        # chrome-less fullscreen — the toolbar is hidden there, so a stale
+        # flag would leave no on-screen exit.
+        state.display_fullscreen = False
+
         # The env contract + grp shim must be set before proot_distro is importable.
         await self.check_probe()
+
+        # New page session (app reopened while the process stayed alive via the
+        # foreground service): drop stale terminal widgets so each live shell
+        # re-creates its MobileTerminal on THIS page and re-wires; the retained
+        # scrollback replays on mount.
+        for _entry in self.session_manager.entries.values():
+            _entry.mt = None
+            _entry.wired = False
+        # Display sessions keep their WebView too — it belongs to the old page.
+        self.desk_manager.release_page_bindings()
+
+        # Stale pooled-banner controls carry the PREVIOUS session's control
+        # ids; patching them into the fresh Dart tree makes the client drop
+        # patches ("unknown control … client is out of sync"). Rebuild the pool
+        # for this session.
+        from components.banner_ad import clear_banner_pool
+
+        clear_banner_pool()
 
         self._mount_services()
 
@@ -85,8 +179,20 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             kill_session=self.kill_session,
             kill_all_sessions=self.kill_all_sessions,
             open_session=self.open_session,
+            open_session_with_options=self.open_session_with_options,
             leave_session=self.leave_session,
             close_session=self.close_session,
+            open_display=self.open_display,
+            probe_display=self.probe_display,
+            start_display=self.start_display,
+            stop_display=self.stop_display,
+            resume_display=self.resume_display,
+            cancel_install_display=self.cancel_install_display,
+            leave_display=self.leave_display,
+            install_display_support=self.install_display_support,
+            show_display_logs=self.show_display_logs,
+            set_display_fullscreen=self.set_display_fullscreen,
+            share_display=self.share_display,
             finish_onboarding=self.finish_onboarding,
             dismiss_hints=self.dismiss_hints,
             exit_app=self.exit_app,
@@ -101,8 +207,25 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
         for _name, _fn in list(vars(methods).items()):
             if inspect.iscoroutinefunction(_fn):
                 setattr(methods, _name, self._guard(_fn))
+        self.methods = methods  # sheets opened imperatively (display launcher) need it
         self.page._controller = self
+
+        # Render immediately — AppShell shows the startup splash screen
+        # (brand icon + spinner + startup_stage) on cold boot only. A warm
+        # re-open (notification tap, FGS kept the process alive) already has
+        # the container list in memory: flip app_ready NOW so the shell lands
+        # straight on the terminal in ~1s, and refresh in the background.
         self.page.render(lambda: ControllerMethodsCtx(methods, lambda: AppShell()))
+
+        warm_reopen = bool(state.containers)
+        if warm_reopen:
+            state.app_ready = True
+            self.page.run_task(self.refresh_containers)
+        else:
+            state.startup_stage = "Loading containers…"
+            await self.refresh_containers()
+            # Startup complete: dismiss splash into fully-loaded UI.
+            state.app_ready = True
 
         # The update check runs in the background and only flips state.
         self.page.run_task(self._check_for_updates)
@@ -116,7 +239,17 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             await self.ad_service.preload_interstitial()
 
         self.page.run_task(_consent_and_preload)
-        await self.refresh_containers()
+
+        # Request notification permission at startup (Android 13+ requires a
+        # runtime prompt for POST_NOTIFICATIONS). If the user denies, we
+        # re-request each time a foreground service is about to start.
+        async def _request_notification_permission() -> None:
+            try:
+                await self.notifications.request_permissions()
+            except Exception as exc:
+                logger.debug("Notification permission request failed: %s", exc)
+
+        self.page.run_task(_request_notification_permission)
 
     def _mount_services(self) -> None:
         mounted = shared_services.mount_shared_services(self.page)
@@ -129,6 +262,9 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
         self.connectivity = ft.Connectivity()
         self.connectivity.on_change = self._on_connectivity
         self.page.services.append(self.connectivity)
+        # Wakelock/Clipboard/Share for the display wrap are the ONE app-wide
+        # instances already mounted by shared_services (page.wakelock,
+        # page.clipboard, page.share) — never mount a second instance.
         # Termux-style persistent notification: keeps the app alive in the
         # background while Linux sessions are running.
         self.page.services.append(self.notifications)
@@ -145,6 +281,16 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             state.docker_token = token
             if token:
                 os.environ["PD_DOCKER_AUTH"] = token
+        saved_settings = await self.prefs.get("display_settings")
+        if isinstance(saved_settings, str) and saved_settings:
+            try:
+                loaded = json.loads(saved_settings)
+                if isinstance(loaded, dict):
+                    from core.state import DEFAULT_DISPLAY_SETTINGS
+
+                    state.display_settings = {**DEFAULT_DISPLAY_SETTINGS, **loaded}
+            except ValueError, TypeError:
+                logger.debug("saved display_settings unparseable — keeping defaults")
         state.theme_revision += 1
 
     def _noop_cancel(self) -> None:
@@ -212,7 +358,7 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
     # ── misc ──────────────────────────────────────────────────────────────────
 
     def _guard(self, fn):
-        """Wrap a controller coroutine so BaseException exits never kill the app."""
+        """Wrap a controller coroutine so exits and session teardown never kill the app."""
 
         @functools.wraps(fn)
         async def _wrapped(*args, **kwargs):
@@ -223,6 +369,17 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
                 logger.exception("handler %s raised %s — contained", name, type(exc).__name__)
                 state.data_note = f"{name} tried to exit the app ({exc!r}) — contained"
                 return None
+            except RuntimeError as exc:
+                # A task can finish after the page session is destroyed (app
+                # closed mid-refresh): the observable values were already set —
+                # only the notify needs a live session. Contain like exits
+                # instead of surfacing "An attempt to fetch destroyed session".
+                if "destroyed session" in str(exc) or "not associated" in str(exc):
+                    logger.debug(
+                        "handler %s raced session teardown: %s", getattr(fn, "__name__", "?"), exc
+                    )
+                    return None
+                raise
 
         return _wrapped
 

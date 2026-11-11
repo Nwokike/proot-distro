@@ -209,6 +209,7 @@ def active_sessions() -> list[dict]:
             }
             for record in session.active_sessions()
         ]
-    except Exception as exc:
-        logger.warning("active_sessions failed: %r", exc)
-        return []
+    except Exception:
+        # Re-raise: the caller's "no running sessions" must not lie on failure.
+        logger.warning("active_sessions failed", exc_info=True)
+        raise

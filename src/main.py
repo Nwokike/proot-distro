@@ -39,13 +39,12 @@ def main(page) -> None:
 
     page.fonts = FONT_FILES
 
-    def _on_close(_e=None) -> None:
-        controller.session_manager.close_all()
-
-    # A disconnect is not a shutdown: the app may just be backgrounded, and the
-    # shells (with their scrollback) must survive the resume.
+    # A close/disconnect is NOT a shutdown: the foreground service (STICKY)
+    # keeps the process alive in the background, and the shells (with their
+    # scrollback) must survive until the user explicitly exits. Tearing down
+    # sessions here killed everything whenever the activity was destroyed.
     page.on_disconnect = lambda _e=None: None
-    page.on_close = _on_close
+    page.on_close = lambda _e=None: None
 
     def _on_brightness(_e=None) -> None:
         # "System" mode must follow a runtime dark/light flip too, not just
@@ -56,6 +55,30 @@ def main(page) -> None:
 
     page.on_platform_brightness_change = _on_brightness
     page.on_resize = lambda _e: page.update()
+
+    # Android back button: display fullscreen → display → terminal fullscreen
+    # → terminal → default. Without this handler the back button closes the
+    # activity outright.
+    def _on_view_pop(_e) -> None:
+        from core.state import state
+
+        if state.active_display:
+            if state.display_fullscreen:
+                # Route through the controller so the orientation lock is
+                # released too (setting the flag directly would leave the
+                # display pinned to landscape).
+                page.run_task(controller.set_display_fullscreen, False)
+            else:
+                page.run_task(controller.leave_display)
+        elif state.terminal_fullscreen:
+            state.terminal_fullscreen = False
+            page.update()
+        elif state.active_session:
+            state.active_session = None
+            page.update()
+
+    page.on_view_pop = _on_view_pop
+
     atexit.register(controller.session_manager.close_all)
     page.run_task(controller.init)
 

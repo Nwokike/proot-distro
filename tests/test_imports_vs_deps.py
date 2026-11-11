@@ -52,9 +52,17 @@ def test_imports_all_declared():
     # jnius (pyjnius) is part of the serious_python Android runtime — not a
     # pip dependency, not importable on desktop. Guarded at the call site.
     _ANDROID_RUNTIME = {"jnius"}
+    # python-xlib is termux-desk's own dependency — bundled transitively with
+    # the declared termux-desk pin (the owner rule forbids listing sub-deps).
+    _TRANSITIVE_PROVIDED = {"xlib"}
     for path in sorted((ROOT / "src").rglob("*.py")):
         for mod in _imports(path):
-            if mod in local or mod in sys.stdlib_module_names or mod in _ANDROID_RUNTIME:
+            if (
+                mod in local
+                or mod in sys.stdlib_module_names
+                or mod in _ANDROID_RUNTIME
+                or mod.lower() in _TRANSITIVE_PROVIDED
+            ):
                 continue
             providers = {d.lower().replace("-", "_") for d in (dist_map.get(mod) or [])}
             if not (providers & declared) and mod.lower() not in declared:
