@@ -207,9 +207,18 @@ jobs:
             fi
             # The display payloads MUST ship in every ABI (Xvnc + PulseAudio
             # run in-app; a missing one means the wheel did not reach jniLibs).
-            for lib in lib/arm64-v8a/libXvnc.so lib/x86_64/libXvnc.so \
-                       lib/arm64-v8a/libpulseaudio.so lib/x86_64/libpulseaudio.so \
-                       lib/arm64-v8a/module-aaudio-sink.so lib/x86_64/module-aaudio-sink.so; do
+            # split_per_abi = one artifact per ABI, so match the lib dir to the
+            # artifact name (arm64-v8a APK → lib/arm64-v8a/, etc.).
+            if [[ "$artifact" == *arm64* ]]; then
+              abi_dir="lib/arm64-v8a"
+            elif [[ "$artifact" == *x86_64* ]]; then
+              abi_dir="lib/x86_64"
+            else
+              echo "::error::unexpected artifact name $artifact"
+              exit 1
+            fi
+            for lib in "$abi_dir/libXvnc.so" "$abi_dir/libpulseaudio.so" \
+                       "$abi_dir/module-aaudio-sink.so"; do
               if ! unzip -l "$artifact" | grep -q "$lib"; then
                 echo "::error::$lib missing from $artifact — the display payload wheel did not ship"
                 exit 1
