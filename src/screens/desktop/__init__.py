@@ -1,4 +1,4 @@
-"""The desktop view — the TermuxDesk display surface, shown full-screen in the app.
+"""The desktop view — the display surface, shown full-screen in the app.
 
 Mirrors TerminalView's takeover: app_shell hides its chrome while a display
 runs and this view owns the screen. The WebView is created ONCE per session
@@ -6,24 +6,17 @@ and stored on the session object (`session.wv`) — rebuilding it per render
 would reload the viewer and, under flet 1.1, mutating mounted controls
 mid-patch raises the frozen-control error.
 
-Auto-authentication: TermuxDesk's viewer shows a 6-char access-code overlay
-before the WebSocket connects. The server writes the code to a rootfs file
-the manager reads; after `page_started` this view injects it via
-`run_javascript` (set the input value, click the connect button) — the
-overlay never blocks the user. `run_javascript` is async, and flet awaits
-async event handlers (base_control checks iscoroutinefunction), so the
-handler is a coroutine.
-
-Host↔guest input bridges (no upstream fork — they drive the viewer's own
-public surface): the viewer listens for window keydown/keyup and exposes
-`#pasteButton`/`#authInput`, so a touchscreen keyboard strip dispatches
-synthetic KeyboardEvents and the host clipboard lands in the guest by
-writing navigator.clipboard then clicking the viewer's Paste button.
+The WebView loads OUR viewer page (services/desk_service/novnc/index.html),
+which connects to the stream server's RFB WebSocket itself — the access code
+travels in the URL, so there is no auth overlay to inject. The page exposes
+`window.rfb` / `window.sendKeySym` / `window.pasteText`; the keyboard strip
+sends real X keysyms through `sendKeySym` and the host clipboard lands in the
+guest via `clipboardPasteFrom` (the VNC clipboard channel carries it — no
+xclip anywhere).
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 
 import flet as ft
@@ -42,50 +35,41 @@ from core import theme, tokens
 from core.state import state
 from state.controller_ctx import ControllerMethodsCtx
 
-
-def auth_js(code: str) -> str:
-    """Fill the viewer's access-code overlay and connect.
-
-    Overlay-guarded and retry-safe: a NO-OP once the overlay is hidden (the
-    session already connected) and a no-op marker when the DOM isn't ready —
-    the page-started handler retries on a timer because navigation can begin
-    before the viewer's elements exist."""
-    return (
-        "(function(){var o=document.getElementById('auth');"
-        "if(!o||o.hidden){return 'done';}"
-        "var i=document.getElementById('authInput');"
-        "if(!i){return 'retry';}"
-        f"i.setAttribute('value', {json.dumps(code)});"
-        "var b=document.getElementById('authButton');"
-        "if(!b){return 'retry';}"
-        "b.click();return 'sent';})()"
-    )
-
-
-def key_event_js(event: str, key: str) -> str:
-    """Dispatch one synthetic KeyboardEvent on window — exactly what the
-    viewer's own keydown/keyup listeners receive from a hardware keyboard."""
-    return (
-        f"window.dispatchEvent(new KeyboardEvent({json.dumps(event)},{{key:{json.dumps(key)}}}));"
-    )
+# The keyboard strip's keys → X keysyms (what RFB's sendKey expects).
+_KEYSYMS = {
+    "Escape": 0xFF1B,
+    "Tab": 0xFF09,
+    "Control": 0xFFE3,  # Control_L
+    "Alt": 0xFFE9,  # Alt_L
+    "ArrowLeft": 0xFF51,
+    "ArrowUp": 0xFF52,
+    "ArrowRight": 0xFF53,
+    "ArrowDown": 0xFF54,
+    "Enter": 0xFF0D,
+    "Backspace": 0xFF08,
+}
 
 
 def press_js(key: str) -> str:
-    """A full key press (down + up) — special keys and characters alike.
-    Sticky modifiers are separate: toggling Ctrl dispatches only the
-    keydown/keyup of 'Control' so the guest sees the modifier held, like a
-    real keyboard."""
-    return key_event_js("keydown", key) + key_event_js("keyup", key)
+    """A full key press (down + up) through the viewer's sendKeySym bridge.
+    Sticky modifiers are separate: toggling Ctrl sends only the down of
+    'Control' so the guest sees the modifier held, like a real keyboard."""
+    keysym = _KEYSYMS[key]
+    return f"window.sendKeySym({keysym}, true);window.sendKeySym({keysym}, false);"
+
+
+def key_event_js(event: str, key: str) -> str:
+    """Hold/release one modifier through the same bridge (`event` is only
+    'keydown'/'keyup' shaped for the caller's readability)."""
+    down = "true" if event == "keydown" else "false"
+    keysym = _KEYSYMS[key]
+    return f"window.sendKeySym({keysym}, {down});"
 
 
 def paste_js(text: str) -> str:
-    """Host clipboard → guest: write the text into the WebView's
-    navigator.clipboard, then click the viewer's Paste button, which sends
-    it to the X11 clipboard via xclip."""
-    return (
-        f"navigator.clipboard.writeText({json.dumps(text)}).then("
-        "() => document.querySelector('#pasteButton').click());"
-    )
+    """Host clipboard → guest through the viewer's paste bridge (VNC clipboard
+    channel → Xvnc sets the X selection)."""
+    return f"window.pasteText({json.dumps(text)});"
 
 
 @ft.component
@@ -202,29 +186,12 @@ def DesktopView(session) -> ft.Control:
                 session.log_tail.append(f"console: {message}")
                 state.display_logs = list(session.log_tail)
 
-        async def _on_page_started(e) -> None:
-            # Auto-authenticate: the viewer's overlay needs the 6-char access
-            # code the server generated. Navigation can begin before the
-            # viewer's DOM exists, so retry on a timer — the injected JS is
-            # overlay-guarded, so a retry after connect is a no-op.
-            code = session.code
-            if not code or session.wv is None:
-                return
-            await asyncio.sleep(0.4)
-            for _ in range(8):
-                try:
-                    await session.wv.run_javascript(auth_js(code))
-                except Exception:
-                    return
-                await asyncio.sleep(0.6)
-
         session.wv = WebView(
             url=st.display_url or session.url,
             expand=True,
             bgcolor=ft.Colors.BLACK,
             on_web_resource_error=_on_resource_error,
             on_console_message=_on_console,
-            on_page_started=_on_page_started,
         )
 
     async def _open_terminal(_e=None) -> None:

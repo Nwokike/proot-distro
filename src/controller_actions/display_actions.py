@@ -129,9 +129,9 @@ class DisplayActions:
     # ── routing ───────────────────────────────────────────────────────────────
 
     async def open_display(self, container: str) -> None:
-        """Card/tab entry point: probe, then open the running display (or start
-        the first one) — or open the install sheet when the container can't
-        run one yet."""
+        """Card/tab entry point: probe, then resume a running display — or start
+        the installed desktop — or open the launcher sheet (app-first, with the
+        desktop install below it) when no desktop is installed yet."""
         state.display_error = ""
         await self.probe_display(container)
         caps = self._display_caps(container)
@@ -145,12 +145,7 @@ class DisplayActions:
             state.active_display = (desktop or running[0]).key
             self._wakelock(True)
             return
-        ready = (
-            caps.get("desk_ready")
-            and caps.get("x_server")
-            and any((caps.get("desktops") or {}).values())
-        )
-        if ready:
+        if any((caps.get("desktops") or {}).values()):
             await self.start_display(container)
         else:
             from screens.display_launcher import show_display_sheet
@@ -202,8 +197,9 @@ class DisplayActions:
                 options=options,
                 fps=float(settings["fps"]),
                 quality=int(settings["quality"]),
+                compression=int(settings.get("compression", 2)),
                 geometry=self._resolve_geometry(settings),
-                # LAN sharing maps to upstream's host param (S104 is the point).
+                # LAN sharing maps to the server's bind host (S104 is the point).
                 host=(
                     "0.0.0.0" if settings["lan"] else "127.0.0.1"  # noqa: S104 - LAN feature
                 ),

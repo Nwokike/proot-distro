@@ -32,6 +32,7 @@
 | Capability | Description |
 | :--- | :--- |
 | **Rootless Linux Userspace** | Execute genuine Linux distributions (Debian, Ubuntu, Alpine) on Android and Linux without root privileges or system modifications. |
+| **X11 Display, Streamed In-App** | Run any GUI app — or a full desktop — on its own X display, streamed straight into the app. The X server (Xvnc) and audio (PulseAudio) run inside the app itself: single apps need **nothing** installed in the container. |
 | **Interactive PTY Terminal** | Real-time POSIX pseudo-terminal sessions with custom virtual extra keys, sticky modifiers (CTRL/ALT), search, zoom, and live title tracking. |
 | **Tabbed Multi-Shell Workspace** | Seamlessly switch between concurrent container shells directly above the terminal canvas. |
 | **Container Filesystem Explorer** | Browse container directories, preview text and images, upload files, download files, and zip entire directories with rootfs-jailed safety. |
@@ -67,6 +68,6 @@
 
 ## License & Compliance
 
-Proot Distro incorporates open-source components under free software licenses, including PRoot (GPL-2.0-or-later), PRoot-Distro (GPL-3.0-only), talloc (GPL-3.0-or-later), and Flet (Apache-2.0).
+Proot Distro incorporates open-source components under free software licenses, including PRoot (GPL-2.0-or-later), PRoot-Distro (GPL-3.0-only), talloc (GPL-3.0-or-later), TigerVNC's Xvnc (GPL-2.0-or-later), PulseAudio (GPL-2.0-or-later), noVNC (MPL-2.0), and Flet (Apache-2.0).
 
 Complete machine-readable Corresponding Source for all GPL components is available in accordance with GPL §6(b) at https://github.com/Nwokike/proot-distro. Full license texts are included in the repository's `LICENSES/` directory and in the app under **Settings → About → Open-Source Licenses**.

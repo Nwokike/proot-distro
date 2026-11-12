@@ -1,7 +1,7 @@
-"""Per-distro desktop provisioning — install the minimal X11 base (Xvfb + xauth
-+ xclip + dbus) plus the desktop-only extras and a desktop environment into the
-guest. The display SERVER is not installed here: it runs in the app, bundled
-with its deps.
+"""Per-distro desktop provisioning — install the session bus + the tunnel ssh
+client, plus the desktop-only extras and a desktop environment into the guest.
+The X server (Xvnc) and PulseAudio run IN THE APP (native payloads) — single-app
+displays install NOTHING here; only a desktop session needs packages.
 
 APT reliability block copied from ServalDesk (Acquire::Retries, lock timeout,
 dpkg --configure -a first) — it is what makes installs survive flaky mobile
@@ -38,10 +38,9 @@ _PM_BY_ID = {
     "sles": "zypper",
 }
 
-# Base stack — deliberately MINIMAL: the X server (+ xauth for the app-global
-# cookie), clipboard, dbus (GTK apps want a session bus) and openssh for the
-# upstream localhost.run tunnel. NO guest python — the display server is
-# bundled in the app. Running a single app needs nothing more than this.
+# Base stack — deliberately MINIMAL: the session bus (GTK/Qt apps want one)
+# and openssh for the upstream localhost.run tunnel. The X server (Xvnc) and
+# PulseAudio run IN THE APP — single-app displays install NOTHING here.
 #
 # The desktop-only extras (icon theme / pixbuf / mime / fonts / rsvg) live in
 # the per-DESKTOP-ENVIRONMENT lists below: a minimal container ships none of
@@ -51,38 +50,23 @@ _PM_BY_ID = {
 # pitch-black root window, device-proven 2026-11-10). Apps don't need them.
 _BASE_PACKAGES = {
     "apk": [
-        "xvfb",
-        "xauth",
-        "xclip",
         "dbus",
         "dbus-x11",
         "openssh-client",
     ],
     "apt-get": [
-        "xvfb",
-        "xauth",
-        "xclip",
         "dbus-x11",
         "openssh-client",
     ],
     "dnf": [
-        "xorg-x11-server-Xvfb",
-        "xauth",
-        "xclip",
         "dbus-x11",
         "openssh-clients",
     ],
     "pacman": [
-        "xorg-server-xvfb",
-        "xorg-xauth",
-        "xclip",
         "dbus",
         "openssh",
     ],
     "zypper": [
-        "xorg-x11-server-Xvfb",
-        "xauth",
-        "xclip",
         "dbus-1-x11",
         "openssh",
     ],

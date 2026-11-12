@@ -1,7 +1,6 @@
 """Responsive installed-container card — exactly three inline items: Open
-shell, Open display (or Install display support), and the ⋯ menu (rename/backup/copy/
-sync/inspect/run + reset/remove live there now, grouped with the destructive
-pair last)."""
+shell, Open display, and the ⋯ menu (rename/backup/copy/sync/inspect/run +
+reset/remove live there now, grouped with the destructive pair last)."""
 
 from __future__ import annotations
 
@@ -9,22 +8,17 @@ import flet as ft
 
 from components import card
 from core import theme, tokens
-from core.state import state
 from screens.container_actions import container_menu_items
 from screens.formatting import format_size
 
 
 def build_container_card(row: dict, page: ft.Page, methods, is_narrow: bool) -> ft.Control:
     cname = row.get("name", "?")
-    caps = (state.display_support or {}).get(cname) or {}
-    # desk_ready only proves Xvfb + dbus exist; require an installed desktop
-    # environment too, or the launch fails and the viewer shows a black screen.
-    ready = bool(
-        caps.get("desk_ready")
-        and caps.get("x_server")
-        and any((caps.get("desktops") or {}).values())
-    )
-    display_label = "Open display" if ready else "Install display support"
+    # The display runs IN THE APP (Xvnc + PulseAudio payloads) — single-app
+    # displays need nothing in the guest, so the card always opens one; the
+    # launcher sheet leads with the GUI-application path and only a desktop
+    # session touches the probed desktop facts.
+    display_label = "Open display"
 
     details_col = ft.Column(
         controls=[

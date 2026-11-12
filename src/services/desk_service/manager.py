@@ -1,18 +1,18 @@
 """DeskManager — N X11 display sessions per container (keyed `container:display`).
 
-ARCHITECTURE (the native wrap): the TermuxDeskServer runs IN THE APP PROCESS
-with its bundled deps (aiohttp/Pillow/python-xlib came in transitively with
-the termux-desk dependency). The guest container only provides the X
-framebuffer (`Xvfb :N` on TCP) and the desktop/app session. The server
-connects to `127.0.0.1:N` — proot shares the host network namespace, so guest
-loopback IS host loopback.
+ARCHITECTURE (the native wrap, Option D): Xvnc (X server + VNC server in ONE
+process) and PulseAudio run INSIDE THE APP from the APK's native-library dir —
+the same execution pattern as proot. The guest container only runs the session
+(desktop or single app) and connects to the display over loopback TCP; nothing
+X-related is installed in the guest. The framebuffer never touches Python:
+Xvnc pushes RFB on damage and `stream_server` proxies its WebSocket to the
+noVNC viewer. Input and clipboard ride the VNC connection itself.
 
-Lifecycle: IDLE → STARTING (spawn guest tree + wait for the Xvfb TCP port +
-start the in-process server) → RUNNING → STOPPING → IDLE, or ERROR with a
-bounded log tail and an explicit Retry. The guest tree is one proot process
-group (`start_new_session` + `--kill-on-exit`), so SIGTERM tears down Xvfb,
-the session, and any ssh tunnel together; `server.stop()` closes the aiohttp
-site and the X connection.
+Lifecycle: IDLE → STARTING (spawn Xvnc + the guest tree, wait for the X TCP
+port, start the stream server) → RUNNING → STOPPING → IDLE, or ERROR with a
+bounded log tail and an explicit Retry. Each side is its own process group
+(`start_new_session`), so SIGTERM tears down the session, the X server and any
+ssh tunnel together; either side dying marks the session ERROR.
 
 The manager is a process-wide singleton (like SessionManager): the FGS keeps
 the process alive across activity destroy/recreate, so a reopened app
@@ -22,7 +22,6 @@ re-adopts the still-running display sessions instead of losing them.
 from __future__ import annotations
 
 import asyncio
-import io
 import logging
 import os
 import secrets
@@ -35,11 +34,11 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from pathlib import Path
 
 from core import storage_paths
 from services import session_service
 
+from . import stream_server, xvnc_runtime
 from .environments import DEFAULT_DESKTOP
 from .script import TUNNEL_URL_RE, build_guest_script, guest_script_name, guest_tunnel_log
 
@@ -47,10 +46,14 @@ logger = logging.getLogger(__name__)
 
 MAX_LOG_LINES = 300
 MAX_LOG_BYTES = 2 * 1024 * 1024
-XVFB_READY_TIMEOUT = 60.0  # Xvfb itself is quick; the DE loads in parallel
+XVFB_READY_TIMEOUT = 60.0  # Xvnc itself is quick; the DE loads in parallel
 TUNNEL_RETRIES = 60  # polled on a daemon thread AFTER ready — never blocks start()
 MAX_DISPLAY_NUMBER = 99
-XVFB_TCP_BASE = 6000
+XVFB_TCP_BASE = xvnc_runtime.RFB_PORT_BASE  # the X port IS the RFB port base +N
+# noVNC knobs (0-9) — the session surface maps the launcher's quality preset
+# onto qualityLevel and exposes compression directly.
+DEFAULT_COMPRESSION_LEVEL = 2
+_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no ambiguous glyphs
 
 
 class DeskStatus(StrEnum):
@@ -84,10 +87,11 @@ class DeskSession:
     login_options: dict = field(default_factory=dict)  # advanced proot-distro login opts
     log_tail: deque[str] = field(default_factory=lambda: deque(maxlen=MAX_LOG_LINES))
     started_at: float = 0.0
-    server: object | None = None  # the in-process TermuxDeskServer
+    server: object | None = None  # the in-process stream server (aiohttp + RFB proxy)
     wv: object | None = None  # the WebView control, created once by DesktopView
     _loop: asyncio.AbstractEventLoop | None = None
-    _process: subprocess.Popen | None = None
+    _process: subprocess.Popen | None = None  # the guest tree (proot session)
+    _xvnc_process: subprocess.Popen | None = None  # the X server (own group)
     _log_file: object | None = None
     _reader: threading.Thread | None = None
 
@@ -130,16 +134,16 @@ def xauth_cookie() -> str:
         return _XAUTH_COOKIE
 
 
-def _cookie_host_path(container: str, display: int) -> Path:
-    """The HOST-side path of the guest's xauth file (inside the rootfs)."""
-    return (
-        storage_paths.containers_dir()
-        / container
-        / "rootfs"
-        / "tmp"
-        / "termux-desk"
-        / f"xauth-{display}"
-    )
+def xvfb_rfb_port(display: int) -> int:
+    """Xvnc serves the X protocol AND RFB from related ports: X on 6000+N
+    (what the guest apps use), RFB on 5900+N (what the stream proxy connects
+    to). Both are loopback-only from the guest's point of view."""
+    return xvnc_runtime.RFB_PORT_BASE + display
+
+
+def _quality_level(quality: int) -> int:
+    """Map the launcher's 1-95 quality preset onto noVNC's 0-9 qualityLevel."""
+    return max(0, min(9, round(int(quality) * 9 / 95)))
 
 
 def _write_guest_script(container: str, script: str, display: int) -> str:
@@ -148,10 +152,10 @@ def _write_guest_script(container: str, script: str, display: int) -> str:
     resolve into the wrong place — on-device lesson)."""
     rootfs = storage_paths.containers_dir() / container / "rootfs"
     name = guest_script_name(display)
-    target = rootfs / "tmp" / "termux-desk" / name
+    target = rootfs / "tmp" / "x11" / name
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(script, encoding="utf-8")
-    return f"/tmp/termux-desk/{name}"  # noqa: S108 - guest path in the rootfs
+    return f"/tmp/x11/{name}"  # noqa: S108 - guest path in the rootfs
 
 
 def _read_tunnel_url(container: str, display: int) -> str:
@@ -176,48 +180,23 @@ def _tcp_open(port: int) -> bool:
         return False
 
 
-# ── clipboard bridge ─────────────────────────────────────────────────────────
-# Upstream TermuxDeskServer shells out to `xclip` with DISPLAY set. On Android
-# there is no host xclip, so the server's clipboard call is rerouted straight
-# into the guest through proot. A PATH shim is NOT an option: Android 10+
-# (targetSdk 29+) removed execute permission for the app home directory
-# ("Untrusted apps that target Android 10 cannot invoke execve() directly on
-# files within the app's home directory"), so a script written to the cache dir
-# fails with EACCES — the on-device "permission denied: xclip". The proot
-# binary lives in the APK's native lib dir (executable), so running the guest
-# xclip through it is the only reliable path.
+# ── access code ──────────────────────────────────────────────────────────────
+# The 6-char code gates the stream server's WebSocket (and the page's pre-check).
+# Generated per session here — the old server generated its own; the alphabet
+# drops the ambiguous glyphs (0/O, 1/I/L).
 
 
-def _install_clipboard_bridge(server, container: str, display: int) -> None:
-    """Replace the server's host-side `xclip` call with a direct proot exec of
-    the guest's xclip, with DISPLAY/XAUTHORITY pointed at the guest's files."""
-
-    def _run_clipboard(cmd: list[str], text: str | None = None) -> str:
-        # Keep upstream's fallback shape: route by basename so the xsel attempt
-        # execs the guest xsel with xsel's own flags (rewriting xsel's args
-        # into xclip's argv just fails twice).
-        guest_bin = f"/usr/bin/{Path(cmd[0]).name}"
-        env, argv = session_service.command_argv(container, [guest_bin, *cmd[1:]])
-        env["DISPLAY"] = f"127.0.0.1:{display}"
-        env["XAUTHORITY"] = f"/tmp/termux-desk/xauth-{display}"  # noqa: S108 - guest path
-        result = subprocess.run(  # noqa: S603 - our hardened proot argv
-            argv,
-            input=text,
-            capture_output=True,
-            text=True,
-            timeout=3,
-            check=True,
-            env=env,
-        )
-        return result.stdout
-
-    server._run_clipboard = _run_clipboard
+def _generate_code() -> str:
+    return "".join(secrets.choice(_CODE_ALPHABET) for _ in range(6))
 
 
 class DeskManager:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._sessions: dict[str, DeskSession] = {}  # keyed by session key
+        # One PulseAudio daemon for the whole app (guest apps reach it over
+        # loopback); started with the first display, stopped with the last.
+        self._pulse_process: subprocess.Popen | None = None
         # Fired on every session-set/status transition (start, running, stop,
         # error) so the UI can re-read running()/visible() reactively — the
         # controller wires this to an observable rev bump.
@@ -242,15 +221,14 @@ class DeskManager:
         display: int | None = None,
         desktop_env: str = DEFAULT_DESKTOP,
         app_command: str | None = None,
-        fps: float = 12.0,
+        fps: float = 12.0,  # kept for the settings surface — RFB has no fps knob
         quality: int = 70,
+        compression: int = 2,
         geometry: str = "1280x720",
         host: str = "127.0.0.1",
         tunnel: bool = False,
         options: dict | None = None,
     ) -> DeskSession:
-        from termux_desk import TermuxDeskServer
-
         with self._lock:
             if display is None:
                 # Display numbers are GLOBAL: Xvfb binds TCP 6000+N on the host
@@ -299,57 +277,29 @@ class DeskManager:
             raise
         if session.status is DeskStatus.STOPPING:
             return session
-        # The server runs IN THIS PROCESS — upstream's async start() sets up
-        # the aiohttp site and returns; run() is never called.
+        # The stream server runs IN THIS PROCESS — its start() sets up the
+        # aiohttp site and returns; the RFB bytes flow through the proxy task.
         try:
-            if xauth_cookie():
-                cookie_path = _cookie_host_path(container, display)
-                if cookie_path.exists():
-                    os.environ["XAUTHORITY"] = str(cookie_path)
-                else:
-                    os.environ.pop("XAUTHORITY", None)
-            server = TermuxDeskServer(
+            server = stream_server.DisplayStreamServer(
                 host,
                 session.port,
-                display=f"127.0.0.1:{display}",
-                fps=float(fps),
-                quality=int(quality),
+                xvfb_rfb_port(session.display),
+                _generate_code(),
+                quality=_quality_level(quality),
+                compression=compression,
             )
-
-            # Wrap _capture_frame:
-            # 1. optimize=False avoids the second Huffman optimization pass that
-            #    holds the CPython GIL and freezes the Flet app.
-            # 2. Add logging so any failure in ImageGrab/XCB is immediately visible in logcat.
-            def _capture_frame_optimized() -> bytes:
-                try:
-                    image = server._runtime.image_grab.grab(xdisplay=server.display_name)
-                    if image.mode != "RGB":
-                        image = image.convert("RGB")
-                    output = io.BytesIO()
-                    image.save(output, "JPEG", quality=server.quality, optimize=False)
-                    return output.getvalue()
-                except Exception as exc:
-                    logger.warning("display capture on %s failed: %s", server.display_name, exc)
-                    session.log_tail.append(f"capture error: {exc}")
-                    raise
-
-            server._capture_frame = _capture_frame_optimized
             await server.start()
         except Exception as exc:
             self._fail(session, f"the display server could not start: {exc}", session.log_tail)
-            await asyncio.to_thread(self._kill_guest, session)
+            await asyncio.to_thread(self._kill_session, session)
             raise RuntimeError(session.error) from exc
         session.server = server
-        session.code = server._auth_code
-        session.url = server.local_url
+        session.code = server.code
+        session.url = server.local_url()
         session.status = DeskStatus.RUNNING
         session.error = ""
         self._notify_changed()
-        logger.info("display: %s ready on %s (server in-app)", session.key, session.url)
-        try:
-            await asyncio.to_thread(_install_clipboard_bridge, server, container, display)
-        except Exception as exc:
-            logger.warning("clipboard bridge setup failed for %s: %s", session.key, exc)
+        logger.info("display: %s ready on %s (Xvnc + noVNC in-app)", session.key, session.url)
         if session.tunnel:
             threading.Thread(target=self._poll_tunnel, args=(session,), daemon=True).start()
         return session
@@ -369,6 +319,10 @@ class DeskManager:
                 logger.debug("server stop failed for %s: %s", key, exc)
         session.server = None
         await asyncio.to_thread(self._stop_sync, session)
+        with self._lock:
+            live = any(s.status is not DeskStatus.IDLE for s in self._sessions.values())
+        if not live:
+            await asyncio.to_thread(self._stop_pulseaudio)
         self._notify_changed()  # the row disappears once fully stopped
 
     async def stop_all(self) -> None:
@@ -422,31 +376,14 @@ class DeskManager:
     # ── sync implementation (worker threads) ─────────────────────────────────
 
     def _spawn(self, session: DeskSession) -> None:
-        script = build_guest_script(
-            display=session.display,
-            port=session.port,
-            desktop_env=session.desktop_env,
-            geometry=session.geometry,
-            xauth_cookie=xauth_cookie(),
-            tunnel=session.tunnel,
-            app_command=session.app_command or None,
+        # The cookie file must exist before anything connects to the display:
+        # Xvnc reads it via -auth, the guest session exports it as XAUTHORITY.
+        cookie_path = xvnc_runtime.write_xauth_file(
+            xauth_cookie(),
+            session.display,
+            xvnc_runtime.guest_cookie_path(session.container, session.display),
         )
-        guest_script = _write_guest_script(session.container, script, session.display)
-        login_opts = getattr(session, "login_options", None)
-        if login_opts:
-            # Advanced login options: user/work_dir/env/bind/shared_*/isolated/
-            # fix_low_ports — everything proot-distro's login supports.
-            env, argv = session_service.session_argv_with_options(
-                session.container, {"login_cmd": ["/bin/sh", guest_script], **login_opts}
-            )
-        else:
-            env, argv = session_service.command_argv(
-                container=session.container, command=["/bin/sh", guest_script]
-            )
-        log_path = storage_paths.cache_root() / "display-logs" / f"{session.key}.log"
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        log_file = open(log_path, "wb", buffering=0)  # noqa: SIM115 - closed in _stop_sync / on failure
-        session._log_file = log_file
+        xkb_dir = xvnc_runtime.ensure_xkb_dir()
         session.status = DeskStatus.STARTING
         session.error = ""
         session.started_at = time.time()
@@ -458,7 +395,45 @@ class DeskManager:
             session.host,
             session.port,
         )
+        log_path = storage_paths.cache_root() / "display-logs" / f"{session.key}.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_file = open(log_path, "wb", buffering=0)  # noqa: SIM115 - closed in _stop_sync / on failure
+        session._log_file = log_file
         try:
+            # Xvnc FIRST — the guest session connects to its X port the moment
+            # it starts. Own process group, own log reader.
+            xvnc_argv, xvnc_env = xvnc_runtime.xvnc_command(
+                session.display, session.geometry, cookie_path, xkb_dir
+            )
+            session._xvnc_process = xvnc_runtime.spawn(xvnc_argv, xvnc_env)
+            threading.Thread(
+                target=self._read_logs,
+                args=(session, session._xvnc_process, "xvnc"),
+                daemon=True,
+            ).start()
+            self._ensure_pulseaudio()
+
+            script = build_guest_script(
+                display=session.display,
+                port=session.port,
+                desktop_env=session.desktop_env,
+                geometry=session.geometry,
+                xauth_cookie=xauth_cookie(),
+                tunnel=session.tunnel,
+                app_command=session.app_command or None,
+            )
+            guest_script = _write_guest_script(session.container, script, session.display)
+            login_opts = getattr(session, "login_options", None)
+            if login_opts:
+                # Advanced login options: user/work_dir/env/bind/shared_*/
+                # isolated/fix_low_ports — everything proot-distro supports.
+                env, argv = session_service.session_argv_with_options(
+                    session.container, {"login_cmd": ["/bin/sh", guest_script], **login_opts}
+                )
+            else:
+                env, argv = session_service.command_argv(
+                    container=session.container, command=["/bin/sh", guest_script]
+                )
             session._process = subprocess.Popen(  # noqa: S603 - our hardened login argv
                 argv,
                 env=env,
@@ -468,21 +443,23 @@ class DeskManager:
                 close_fds=True,
                 start_new_session=True,
             )
+            session.pid = session._process.pid
+            session._reader = threading.Thread(
+                target=self._read_logs, args=(session, session._process, "guest"), daemon=True
+            )
+            session._reader.start()
         except Exception:
-            # spawn failed — don't leak the log file handle
+            # spawn failed — kill whatever side already started, don't leak
+            self._kill_session(session)
             session._log_file = None
             try:
                 log_file.close()
             except OSError:
                 pass
             raise
-        session.pid = session._process.pid
-        session._reader = threading.Thread(target=self._read_logs, args=(session,), daemon=True)
-        session._reader.start()
 
-    def _read_logs(self, session: DeskSession) -> None:
-        process = session._process
-        if process is None or process.stdout is None:
+    def _read_logs(self, session: DeskSession, process: subprocess.Popen, kind: str) -> None:
+        if process.stdout is None:
             return
         log_file = session._log_file
         while True:
@@ -490,11 +467,11 @@ class DeskManager:
             if not line:
                 break  # EOF: the process closed its stdout (usually dead)
             text = line.decode("utf-8", "replace").rstrip()
-            session.log_tail.append(text)
-            # Surface every guest line in the app's diagnostic terminal — this
-            # is the ONLY place Xvfb/session errors appear, and a black screen
-            # is unreadable without them.
-            logger.info("display[%s] %s", session.key, text)
+            session.log_tail.append(f"[{kind}] {text}" if kind != "guest" else text)
+            # Surface every line in the app's diagnostic terminal — this is the
+            # ONLY place Xvnc/session errors appear, and a black screen is
+            # unreadable without them.
+            logger.info("display[%s][%s] %s", session.key, kind, text)
             cb = self.on_log_line
             if cb is not None:
                 try:
@@ -510,13 +487,14 @@ class DeskManager:
                         log_file.truncate()
                 except OSError:
                     pass
-        # Crash watcher: EOF while RUNNING means the guest tree (Xvfb) died
-        # after a successful start — mark ERROR so the UI stops offering
-        # Resume, and shut the in-process server down on the session loop.
+        # Crash watcher: EOF while RUNNING means that side died — the guest
+        # session ended (single app closed) or the X server died. Both end the
+        # session; shut the stream server down on the session loop.
         if session.status is DeskStatus.RUNNING and process.poll() is not None:
+            what = "the X server" if kind == "xvnc" else "the display session"
             self._fail(
                 session,
-                f"the display session exited (code {process.returncode})",
+                f"{what} exited (code {process.returncode})",
                 session.log_tail,
             )
             loop = session._loop
@@ -534,16 +512,58 @@ class DeskManager:
                 except RuntimeError:
                     pass  # loop gone (app closed) — the process is dying anyway
 
+    def _ensure_pulseaudio(self) -> None:
+        """One app-wide daemon; audio degrades gracefully if it cannot start."""
+        if self._pulse_process is not None and self._pulse_process.poll() is None:
+            return
+        try:
+            pa_argv, pa_env = xvnc_runtime.pulseaudio_command()
+            self._pulse_process = xvnc_runtime.spawn(pa_argv, pa_env)
+        except Exception as exc:
+            logger.warning("display: pulseaudio could not start (audio disabled): %s", exc)
+            self._pulse_process = None
+            return
+        threading.Thread(
+            target=self._read_pulse_logs, args=(self._pulse_process,), daemon=True
+        ).start()
+        for _ in range(10):
+            if xvnc_runtime.probe_pulseaudio():
+                logger.info("display: pulseaudio up on 127.0.0.1:%d", xvnc_runtime.PULSE_TCP_PORT)
+                return
+            time.sleep(0.3)
+        logger.warning("display: pulseaudio did not answer its tcp port (audio unavailable)")
+
+    def _read_pulse_logs(self, process: subprocess.Popen) -> None:
+        if process.stdout is None:
+            return
+        while True:
+            line = process.stdout.readline()
+            if not line:
+                break
+            logger.info("pulseaudio: %s", line.decode("utf-8", "replace").rstrip())
+        if self._pulse_process is process:
+            self._pulse_process = None
+        logger.info("pulseaudio: exited (code %s)", process.returncode)
+
+    def _stop_pulseaudio(self) -> None:
+        process = self._pulse_process
+        if process is not None and process.poll() is None:
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except OSError:
+                pass
+        self._pulse_process = None
+
     def _wait_xvfb(self, session: DeskSession, timeout: float) -> None:
         deadline = time.monotonic() + timeout
         port = XVFB_TCP_BASE + session.display
         while time.monotonic() < deadline:
             if session.status is DeskStatus.STOPPING:
                 return  # user pressed Cancel — not an error
-            process = session._process
-            if process is None or process.poll() is not None:
+            xvnc = session._xvnc_process
+            if xvnc is None or xvnc.poll() is not None:
                 if session.status is not DeskStatus.STOPPING:
-                    self._fail(session, "the display session exited", session.log_tail)
+                    self._fail(session, "the X server exited", session.log_tail)
                 return
             if _tcp_open(port):
                 return
@@ -551,7 +571,7 @@ class DeskManager:
         if session.status is not DeskStatus.STOPPING:
             self._fail(
                 session,
-                f"timed out waiting for Xvfb on :{session.display} after {timeout:.0f}s",
+                f"timed out waiting for the X display :{session.display} after {timeout:.0f}s",
                 session.log_tail,
             )
 
@@ -584,21 +604,24 @@ class DeskManager:
         self._notify_changed()
         logger.warning("display: %s — %s", session.key, session.error)
 
-    def _kill_guest(self, session: DeskSession) -> None:
-        """Kill the guest process group only (used when the server fails to
+    def _kill_session(self, session: DeskSession) -> None:
+        """SIGTERM both process groups (used when the stream server fails to
         start — no full stop() bookkeeping needed yet)."""
-        process = session._process
-        if process is not None and process.poll() is None:
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-            except OSError:
-                pass
+        for attr in ("_process", "_xvnc_process"):
+            process = getattr(session, attr)
+            if process is not None and process.poll() is None:
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except OSError:
+                    pass
 
     def _stop_sync(self, session: DeskSession) -> None:
-        # SIGTERM to the group tears down Xvfb, the session, and the tunnel;
+        # SIGTERM to both groups tears down the session, Xvnc and the tunnel;
         # the in-process server was already stopped by stop().
-        process = session._process
-        if process is not None and process.poll() is None:
+        for attr in ("_process", "_xvnc_process"):
+            process = getattr(session, attr)
+            if process is None or process.poll() is not None:
+                continue
             try:
                 os.killpg(process.pid, signal.SIGTERM)
             except OSError:
@@ -621,6 +644,7 @@ class DeskManager:
             except OSError:
                 pass
         session._process = None
+        session._xvnc_process = None
         session._reader = None
         session.pid = None
         session.status = DeskStatus.IDLE

@@ -1,0 +1,98 @@
+<!doctype html>
+<!--
+  The display viewer page — OUR code around the vendored noVNC library (MPL-2.0,
+  see novnc/PROVENANCE). No UI chrome: the Flet app owns the toolbar, keyboard
+  strip and output panel; this page is only the RFB surface.
+    ?code=          the session's access code (also enforced on the WebSocket)
+    ?quality=       noVNC qualityLevel 0-9
+    ?compression=   noVNC compressionLevel 0-9
+  Exposes window.rfb / window.sendKeySym / window.pasteText for the app's JS
+  bridges (the keyboard strip and host-clipboard paste).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>display</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
+  #screen { position: absolute; inset: 0; }
+  #status {
+    position: absolute; left: 0; right: 0; bottom: 6px; text-align: center;
+    color: #64748b; font: 11px system-ui; z-index: 5; pointer-events: none;
+  }
+  #gate {
+    position: absolute; inset: 0; display: none; align-items: center;
+    justify-content: center; background: #000; z-index: 10;
+  }
+  #gate input {
+    font: 16px system-ui; padding: 10px 14px; border-radius: 10px;
+    border: 1px solid #334155; background: #0f172a; color: #e2e8f0;
+    width: 9em; text-align: center; letter-spacing: 0.25em;
+  }
+</style>
+</head>
+<body>
+<div id="screen"></div>
+<div id="status">connecting…</div>
+<div id="gate"><form id="gateForm"><input id="codeInput" inputmode="numeric"
+  autocomplete="off" placeholder="access code" maxlength="6"></form></div>
+<script type="module">
+import RFB from "./novnc/core/rfb.js";
+
+const params = new URLSearchParams(location.search);
+const status = document.getElementById("status");
+const gate = document.getElementById("gate");
+let rfb = null;
+
+function wsUrl(code) {
+  const proto = location.protocol === "https:" ? "wss://" : "ws://";
+  return proto + location.host + "/websockify?code=" + encodeURIComponent(code);
+}
+
+async function connect(code) {
+  if (rfb) { rfb.disconnect(); rfb = null; }
+  // friendly pre-check so a wrong code shows the prompt instead of a dead stream
+  try {
+    const res = await fetch("/auth?code=" + encodeURIComponent(code));
+    if (res.status !== 200) { gate.style.display = "flex"; return; }
+  } catch (err) { status.textContent = "cannot reach the display server"; return; }
+  status.textContent = "connecting…";
+  rfb = new RFB(document.getElementById("screen"), wsUrl(code), { resizeSession: true });
+  rfb.qualityLevel = parseInt(params.get("quality") || "6", 10);
+  rfb.compressionLevel = parseInt(params.get("compression") || "2", 10);
+  rfb.addEventListener("connect", () => {
+    status.textContent = "";
+    gate.style.display = "none";
+    rfb.focus({ preventScroll: true });
+  });
+  rfb.addEventListener("disconnect", (e) => {
+    status.textContent = e.detail && e.detail.clean ? "disconnected" : "connection lost";
+  });
+  // guest → host clipboard (the VNC clipboard channel)
+  rfb.addEventListener("clipboard", (e) => {
+    if (e.detail && e.detail.text) {
+      navigator.clipboard && navigator.clipboard.writeText(e.detail.text).catch(() => {});
+    }
+  });
+  window.rfb = rfb;
+}
+
+const initial = params.get("code") || "";
+if (initial) { connect(initial); } else { gate.style.display = "flex"; }
+
+document.getElementById("gateForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const value = document.getElementById("codeInput").value.trim();
+  if (!value) { return; }
+  params.set("code", value);
+  history.replaceState(null, "", "?" + params.toString());
+  connect(value);
+});
+
+// bridges the Flet toolbar drives (keyboard strip keysyms, host clipboard paste)
+window.sendKeySym = (keysym, down) => { if (window.rfb) { window.rfb.sendKey(keysym, null, down); } };
+window.pasteText = (text) => { if (window.rfb) { window.rfb.clipboardPasteFrom(text); } };
+</script>
+</body>
+</html>

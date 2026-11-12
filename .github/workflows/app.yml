@@ -9,11 +9,11 @@ on:
       build_version:
         description: "Build version"
         required: true
-        default: "1.1.0"
+        default: "1.2.0"
       build_number:
         description: "Build number"
         required: true
-        default: "3"
+        default: "4"
 
 permissions:
   contents: write
@@ -22,8 +22,8 @@ env:
   PYTHONUTF8: "1"
   FLET_CLI_NO_RICH_OUTPUT: "1"
   UV_PYTHON: "3.14"
-  BUILD_VERSION: ${{ inputs.build_version || '1.1.0' }}
-  BUILD_NUMBER: ${{ inputs.build_number || '3' }}
+  BUILD_VERSION: ${{ inputs.build_version || '1.2.0' }}
+  BUILD_NUMBER: ${{ inputs.build_number || '4' }}
 
 jobs:
   quality:
@@ -38,8 +38,8 @@ jobs:
         run: uv sync --frozen --group dev
       - name: Ruff
         run: |
-          uv run ruff check src tests scripts/build_flet_proot_wheel.py scripts/build_flet_pillow_wheel.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
-          uv run ruff format --check src tests scripts/build_flet_proot_wheel.py scripts/build_flet_pillow_wheel.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
+          uv run ruff check src tests scripts/build_flet_proot_wheel.py scripts/build_flet_xvnc_wheel.py scripts/build_flet_pulseaudio_wheel.py scripts/fetch_novnc.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
+          uv run ruff format --check src tests scripts/build_flet_proot_wheel.py scripts/build_flet_xvnc_wheel.py scripts/build_flet_pulseaudio_wheel.py scripts/fetch_novnc.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
       - name: Flet API guard (AST, installed flet)
         run: |
           for f in $(find src -name "*.py"); do
@@ -170,8 +170,11 @@ jobs:
       - name: Build native payload wheel set (flet-proot, pinned + sha256-verified)
         run: uv run python scripts/build_flet_proot_wheel.py --out wheels
 
-      - name: Build Pillow wheel WITH XCB (Termux debs, pinned + sha256-verified)
-        run: uv run python scripts/build_flet_pillow_wheel.py --out wheels
+      - name: Build Xvnc wheel (Termux debs, pinned + sha256-verified)
+        run: uv run python scripts/build_flet_xvnc_wheel.py --out wheels
+
+      - name: Build PulseAudio wheel (Termux debs, pinned + sha256-verified)
+        run: uv run python scripts/build_flet_pulseaudio_wheel.py --out wheels
 
       - name: Decode signing keystore
         env:
@@ -202,6 +205,16 @@ jobs:
               echo "::error::development-only files found in $artifact"
               exit 1
             fi
+            # The display payloads MUST ship in every ABI (Xvnc + PulseAudio
+            # run in-app; a missing one means the wheel did not reach jniLibs).
+            for lib in lib/arm64-v8a/libXvnc.so lib/x86_64/libXvnc.so \
+                       lib/arm64-v8a/libpulseaudio.so lib/x86_64/libpulseaudio.so \
+                       lib/arm64-v8a/module-aaudio-sink.so lib/x86_64/module-aaudio-sink.so; do
+              if ! unzip -l "$artifact" | grep -q "$lib"; then
+                echo "::error::$lib missing from $artifact — the display payload wheel did not ship"
+                exit 1
+              fi
+            done
           done
 
       - name: Verify 16 KB page alignment (Google Play requirement)
@@ -228,8 +241,11 @@ jobs:
       - name: Build native payload wheel set (flet-proot, pinned + sha256-verified)
         run: uv run python scripts/build_flet_proot_wheel.py --out wheels
 
-      - name: Build Pillow wheel WITH XCB (Termux debs, pinned + sha256-verified)
-        run: uv run python scripts/build_flet_pillow_wheel.py --out wheels
+      - name: Build Xvnc wheel (Termux debs, pinned + sha256-verified)
+        run: uv run python scripts/build_flet_xvnc_wheel.py --out wheels
+
+      - name: Build PulseAudio wheel (Termux debs, pinned + sha256-verified)
+        run: uv run python scripts/build_flet_pulseaudio_wheel.py --out wheels
 
       - name: Decode signing keystore
         env:
@@ -296,11 +312,12 @@ jobs:
           # Termux-style persistent notification (flet-notifications) that keeps
           # Linux sessions alive in the background; that plugin's own manifest
           # adds RECEIVE_BOOT_COMPLETED (restore scheduled notifications after
-          # reboot) and VIBRATE. Anything else, and above all any install
-          # permission, fails the build.
+          # reboot) and VIBRATE. RECORD_AUDIO is the display's microphone path
+          # (PulseAudio's sles-source module serves the mic to guest apps).
+          # Anything else, and above all any install permission, fails the build.
           for perm in $perms; do
             case "$perm" in
-              "android.permission.INTERNET"|"android.permission.ACCESS_NETWORK_STATE"|android.permission.ACCESS_ADSERVICES_*|"android.permission.FOREGROUND_SERVICE"|"android.permission.FOREGROUND_SERVICE_SPECIAL_USE"|"android.permission.WAKE_LOCK"|"android.permission.POST_NOTIFICATIONS"|"android.permission.RECEIVE_BOOT_COMPLETED"|"android.permission.VIBRATE") ;;
+              "android.permission.INTERNET"|"android.permission.ACCESS_NETWORK_STATE"|android.permission.ACCESS_ADSERVICES_*|"android.permission.FOREGROUND_SERVICE"|"android.permission.FOREGROUND_SERVICE_SPECIAL_USE"|"android.permission.WAKE_LOCK"|"android.permission.POST_NOTIFICATIONS"|"android.permission.RECEIVE_BOOT_COMPLETED"|"android.permission.VIBRATE"|"android.permission.RECORD_AUDIO") ;;
               *) echo "::error::unexpected permission $perm (A-12: no install permissions)"; exit 1;;
             esac
           done

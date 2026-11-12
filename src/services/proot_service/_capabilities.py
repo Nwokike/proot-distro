@@ -39,8 +39,9 @@ def guest_capabilities(name: str) -> dict:
     Returns {"os": {...}, "desk_ready": bool, "dbus": bool, "x_server": bool,
     "desktops": {name: bool}}. Raises with the real reason when the
     container/rootfs is unavailable — the UI surfaces it, never a silently
-    empty probe. `desk_ready` means: Xvfb + dbus are present — the display
-    SERVER runs in the app (bundled deps), so the guest needs no python.
+    empty probe. `desk_ready` is ALWAYS true: Xvnc + PulseAudio run in the app
+    (native payloads), so a single-app display needs nothing in the guest —
+    only a full desktop session depends on the probed facts below.
     """
     paths = _imp("proot_distro.paths")
     guestfile = _imp("proot_distro.guestfile")
@@ -78,7 +79,7 @@ def guest_capabilities(name: str) -> dict:
             "version_id": os_release.get("VERSION_ID", ""),
             "pretty_name": os_release.get("PRETTY_NAME", ""),
         },
-        "desk_ready": x_server and dbus,
+        "desk_ready": True,
         "dbus": dbus,
         "x_server": x_server,
         "desktops": {

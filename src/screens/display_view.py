@@ -264,21 +264,11 @@ def DisplayView() -> ft.Control:
         rows = []
         for name in containers:
             caps = (st.display_support or {}).get(name) or {}
-            # desk_ready only proves Xvfb + dbus exist; a desktop environment
-            # must actually be installed or "Open desktop" launches a missing
-            # starter and streams a black screen.
-            ready = bool(
-                caps.get("desk_ready")
-                and caps.get("x_server")
-                and any((caps.get("desktops") or {}).values())
-            )
+            # The display runs IN THE APP — the card always opens one (the
+            # launcher sheet leads with GUI applications); only a full desktop
+            # session depends on the probed desktop facts.
             installing_this = progress.is_running and progress.container == name
-            if installing_this:
-                label = "Installing…"
-            elif ready:
-                label = "Open display"
-            else:
-                label = "Install display support"
+            label = "Installing…" if installing_this else "Open display"
 
             def _open(_e, container=name) -> None:
                 page.run_task(methods.open_display, container)

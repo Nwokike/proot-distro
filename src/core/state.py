@@ -7,8 +7,9 @@ import flet as ft
 # The ONE source of display-start defaults (used by state.__init__ and by
 # DisplayActions._display_settings — never duplicated).
 DEFAULT_DISPLAY_SETTINGS: dict = {
-    "fps": 12,
+    "fps": 12,  # kept for the settings surface — RFB adapts its own framerate
     "quality": 70,
+    "compression": 2,
     "geometry": "auto",
     "orientation": "landscape",
     "lan": False,
@@ -106,10 +107,10 @@ class AppState:
     display_installing: str | None = None  # container currently installing the desktop
     display_logs: list = None  # list[str] — bounded log tail for the active display
     display_install_logs: list = None  # list[str] — live provisioning output
-    # Launcher-set options for the NEXT start — the 100% termux-desk wrap:
-    # fps/quality (server params), geometry (Xvfb screen, "auto" = device
-    # aspect), orientation (fullscreen lock), lan (host 0.0.0.0), tunnel
-    # (upstream localhost.run publish).
+    # Launcher-set options for the NEXT start — the display wrap surface:
+    # quality/compression (noVNC knobs; fps kept for the persisted surface),
+    # geometry (Xvnc screen, "auto" = device aspect), orientation (fullscreen
+    # lock), lan (host 0.0.0.0), tunnel (upstream localhost.run publish).
     display_settings: dict | None = None
 
     def __init__(self):

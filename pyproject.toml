@@ -2,7 +2,7 @@
 # The uv project name must differ from the wrapped dependency "proot-distro"
 # (uv rejects self-dependencies); the repo itself is Nwokike/proot-distro.
 name = "proot-distro-flet"
-version = "1.1.0"
+version = "1.2.0"
 description = "Run Debian, Ubuntu, Alpine and any Docker image on your phone — terminal and X11 desktop, no root, no Termux. Built with Flet."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -17,12 +17,10 @@ dependencies = [
     "httpx>=0.28.1",
     "flet-terminal==0.4.2",
     "proot-distro>=5.10.0",
-    # PEP 508 direct URL (NOT [tool.uv.sources]): serious_python installs the
-    # APK's deps with pip, which ignores uv sources — a bare "termux-desk"
-    # resolved to PyPI 0.1.5 on device (no auth code) while desktop uv got
-    # 0.2.0. The direct URL pins 0.2.0 for BOTH installers.
-    "termux-desk @ git+https://github.com/amirghm/termux-desk.git@446fadf91d392ef4480fefd61e4a5b39c5567b9a",
-    ]
+    # The display stream server (WS↔RFB proxy + noVNC static hosting). Wheels
+    # with native code must have Android builds on pypi.flet.dev — aiohttp has.
+    "aiohttp>=3.14",
+]
 
 [tool.uv]
 package = false
@@ -31,7 +29,7 @@ package = false
 org = "ng.kiri"
 product = "Proot Distro X11"
 company = "Kiri Research Labs"
-build_number = 3
+build_number = 4
 icon = "src/assets/icon.png"
 
 [tool.flet.app]
@@ -52,7 +50,13 @@ bundle_id = "ng.kiri.prootdistro"
 split_per_abi = true
 legacy_packaging = true
 target_arch = ["arm64-v8a", "x86_64"]
-dependencies = ["flet-proot==5.1.107.102"]
+dependencies = [
+    "flet-proot==5.1.107.102",
+    # The display payloads (Xvnc + PulseAudio, Termux repackages) — jniLibs only,
+    # never imported on desktop; the runtime guards the manifest imports.
+    "flet-xvnc==1.16.2",
+    "flet-pulseaudio==17.0",
+]
 # Our own Android resources (notification small icon drawable), copied into
 # the generated android/app/src/main/res by flet build.
 res_dir = "android_res"
@@ -74,6 +78,9 @@ package_files = ["oauthlib/**"]
 "android.permission.FOREGROUND_SERVICE_SPECIAL_USE" = true
 "android.permission.POST_NOTIFICATIONS" = true
 "android.permission.WAKE_LOCK" = true
+# The display's microphone path: PulseAudio's sles-source module records the
+# mic and serves it to guest apps over PULSE_SERVER.
+"android.permission.RECORD_AUDIO" = true
 
 [tool.flet.android.service."com.dexterous.flutterlocalnotifications.ForegroundService"]
 exported = false
@@ -121,6 +128,8 @@ ignore = ["E501", "EM101", "EM102", "EM103", "TRY003", "BLE001", "S110", "SIM105
 "tests/test_desk_service.py" = ["S104", "S108"]  # asserts wrap-surface strings, never binds
 "tests/test_flet_api_guard.py" = ["S603"]
 "scripts/build_flet_proot_wheel.py" = ["T201", "S310"]
-"scripts/build_flet_pillow_wheel.py" = ["T201", "S310"]
+"scripts/build_flet_xvnc_wheel.py" = ["T201", "S310"]
+"scripts/build_flet_pulseaudio_wheel.py" = ["T201", "S310"]
+"scripts/fetch_novnc.py" = ["T201"]
 "scripts/check_elf_alignment.py" = ["T201"]
 "scripts/generate_third_party_sources.py" = ["T201", "E402"]

@@ -873,9 +873,10 @@ wheels = [
 
 [[package]]
 name = "proot-distro-flet"
-version = "1.1.0"
+version = "1.2.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "flet" },
     { name = "flet-ads" },
     { name = "flet-notifications" },
@@ -883,7 +884,6 @@ dependencies = [
     { name = "flet-webview" },
     { name = "httpx" },
     { name = "proot-distro" },
-    { name = "termux-desk" },
 ]
 
 [package.dev-dependencies]
@@ -898,6 +898,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.14" },
     { name = "flet", specifier = "==1.1.0" },
     { name = "flet-ads", specifier = "==1.1.0" },
     { name = "flet-notifications", specifier = "==1.1.0" },
@@ -905,7 +906,6 @@ requires-dist = [
     { name = "flet-webview", specifier = "==1.1.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "proot-distro", specifier = ">=5.10.0" },
-    { name = "termux-desk", git = "https://github.com/amirghm/termux-desk.git?rev=446fadf91d392ef4480fefd61e4a5b39c5567b9a" },
 ]
 
 [package.metadata.requires-dev]
@@ -1066,18 +1066,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/bd/e8/26b1af09d728d604dc16427a39f53985b22a170dbd61addac3f48db73f03/python_slugify-9.1.3.tar.gz", hash = "sha256:90e997f2e0987239ce95e12f700086eb18e1d1d3ee22624fbbdbd095afca42b6", size = 66093, upload-time = "2026-10-07T01:06:20.101Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/47/67/5598c98725332a6a4084c7b622d5a1ebe7d6745c1d2f434c9e4e89e04cba/python_slugify-9.1.3-py3-none-any.whl", hash = "sha256:9aced0670e54c5603e2335c0fa9a4011ad4bc41ecb3c46e8097294c46fd60ed4", size = 16032, upload-time = "2026-10-07T01:06:18.891Z" },
-]
-
-[[package]]
-name = "python-xlib"
-version = "0.33"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "six" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/86/f5/8c0653e5bb54e0cbdfe27bf32d41f27bc4e12faa8742778c17f2a71be2c0/python-xlib-0.33.tar.gz", hash = "sha256:55af7906a2c75ce6cb280a584776080602444f75815a7aff4d287bb2d7018b32", size = 269068, upload-time = "2022-12-25T18:53:00.824Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/fc/b8/ff33610932e0ee81ae7f1269c890f697d56ff74b9f5b2ee5d9b7fa2c5355/python_xlib-0.33-py2.py3-none-any.whl", hash = "sha256:c3534038d42e0df2f1392a1b30a15a4ff5fdc2b86cfa94f072bf11b10a164398", size = 182185, upload-time = "2022-12-25T18:52:58.662Z" },
 ]
 
 [[package]]
@@ -1245,16 +1233,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
-]
-
-[[package]]
-name = "termux-desk"
-version = "0.2.0"
-source = { git = "https://github.com/amirghm/termux-desk.git?rev=446fadf91d392ef4480fefd61e4a5b39c5567b9a#446fadf91d392ef4480fefd61e4a5b39c5567b9a" }
-dependencies = [
-    { name = "aiohttp" },
-    { name = "pillow" },
-    { name = "python-xlib" },
 ]
 
 [[package]]

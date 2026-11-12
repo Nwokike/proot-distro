@@ -75,18 +75,19 @@ async def _stream_session_log(page: ft.Page, ctrl, container: str) -> None:
         await asyncio.sleep(0.4)
 
 
-def _status_line(ready: bool, caps: dict) -> ft.Control:
+def _status_line(caps: dict) -> ft.Control:
+    """The sheet's status dot — the display runs in the app, so it is always
+    ready; the probed facts only matter to a full desktop session."""
     os_name = (caps.get("os") or {}).get("pretty_name", "") or "unknown distro"
-    label = "X11 display ready" if ready else "display support not installed"
     return ft.Row(
         controls=[
             ft.Container(
                 width=tokens.STATUS_DOT_SM,
                 height=tokens.STATUS_DOT_SM,
                 border_radius=50,
-                bgcolor=theme.ok() if ready else theme.warn(),
+                bgcolor=theme.ok(),
             ),
-            ft.Text(f"{label} · {os_name}", size=tokens.FONT_SM, color=theme.text_dim()),
+            ft.Text(f"X11 display ready · {os_name}", size=tokens.FONT_SM, color=theme.text_dim()),
         ],
         spacing=tokens.SPACE_XS,
     )
@@ -206,36 +207,35 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
     def _rebuild() -> None:
         # Repaint in place: build rows into a NAME, then assign (the files-modal
         # pattern) — never a literal list at the assignment site.
-        ready = bool((state.display_support or {}).get(container, {}).get("desk_ready")) and bool(
-            (state.display_support or {}).get(container, {}).get("x_server")
+        caps_now = (state.display_support or {}).get(container) or {}
+        has_desktop = any((caps_now.get("desktops") or {}).values())
+        pm = package_manager_for(caps_now)
+        rows = [_status_line(caps_now)]
+        # App-first in EVERY state: single apps run with zero guest installs.
+        rows.append(_app_cell[0])
+        rows.append(
+            ft.Text(
+                "Examples:  firefox  ·  xterm  ·  gimp  ·  python3 my_pywebview_app.py",
+                size=tokens.FONT_XXS,
+                color=theme.text_dim(),
+            )
         )
-        pm = package_manager_for((state.display_support or {}).get(container) or {})
-        rows = [_status_line(ready, (state.display_support or {}).get(container) or {})]
-        if ready:
-            # App-first: the command cell leads; the desktop is the alternative.
-            rows.append(_app_cell[0])
-            rows.append(
-                ft.Text(
-                    "Examples:  firefox  ·  xterm  ·  gimp  ·  python3 my_pywebview_app.py",
-                    size=tokens.FONT_XXS,
-                    color=theme.text_dim(),
-                )
-            )
 
-            def _open_apps(_e) -> None:
-                page.pop_dialog()
-                _show_app_sheet(page, methods, container)
+        def _open_apps(_e) -> None:
+            page.pop_dialog()
+            _show_app_sheet(page, methods, container)
 
-            rows.append(
-                ft.OutlinedButton(
-                    "Open an app on a new display…",
-                    icon=ft.Icons.WINDOW_ROUNDED,
-                    on_click=_open_apps,
-                    width=float("inf"),
-                    height=tokens.CONTROL_MD,
-                    style=_pill_style(),
-                )
+        rows.append(
+            ft.OutlinedButton(
+                "Open an app on a new display…",
+                icon=ft.Icons.WINDOW_ROUNDED,
+                on_click=_open_apps,
+                width=float("inf"),
+                height=tokens.CONTROL_MD,
+                style=_pill_style(),
             )
+        )
+        if has_desktop:
             rows.append(
                 ft.Dropdown(
                     label="Desktop environment (full desktop session)",
@@ -263,89 +263,12 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
                     style=_pill_style(),
                 )
             )
-            rows.append(
-                ft.Row(
-                    controls=[
-                        _picker_with_custom(
-                            "FPS",
-                            (("8", "8 fps"), ("12", "12 fps"), ("15", "15 fps"), ("24", "24 fps")),
-                            "fps",
-                            hint="any number > 0, e.g. 30",
-                        ),
-                        _picker_with_custom(
-                            "Quality",
-                            (("50", "50"), ("70", "70"), ("85", "85"), ("95", "95")),
-                            "quality",
-                            hint="1-95 (upstream JPEG bound)",
-                        ),
-                    ],
-                    spacing=tokens.SPACE_SM,
-                    wrap=True,
-                )
-            )
-            rows.append(
-                ft.Row(
-                    controls=[
-                        _picker_with_custom(
-                            "Resolution",
-                            (
-                                ("auto", "Auto (screen shape)"),
-                                ("1280x720", "1280 x 720"),
-                                ("1600x900", "1600 x 900"),
-                                ("1920x1080", "1920 x 1080"),
-                            ),
-                            "geometry",
-                            hint="WxH, e.g. 2560x1440",
-                        ),
-                        _picker_with_custom(
-                            "Fullscreen",
-                            (
-                                ("landscape", "Landscape"),
-                                ("portrait", "Portrait"),
-                                ("auto", "System default"),
-                            ),
-                            "orientation",
-                            hint="orientation",
-                        ),
-                    ],
-                    spacing=tokens.SPACE_SM,
-                    wrap=True,
-                )
-            )
-            rows.append(
-                ft.Row(
-                    controls=[
-                        ft.Switch(
-                            label="LAN — open to Wi-Fi devices",
-                            value=bool((state.display_settings or {}).get("lan")),
-                            on_change=lambda e: _set_setting("lan", bool(e.control.value)),
-                        ),
-                        ft.Switch(
-                            label="Public URL — localhost.run tunnel",
-                            value=bool((state.display_settings or {}).get("tunnel")),
-                            on_change=lambda e: _set_setting("tunnel", bool(e.control.value)),
-                        ),
-                    ],
-                    spacing=tokens.SPACE_SM,
-                    wrap=True,
-                ),
-            )
-            rows.append(
-                ft.Text(
-                    "LAN binds the server to the phone's Wi-Fi address; the tunnel "
-                    "publishes a public *.lhr.life URL. Both are protected by the "
-                    "access code — share it only with your own devices.",
-                    size=tokens.FONT_XXS,
-                    color=theme.text_dim(),
-                )
-            )
         else:
             rows.append(
                 ft.Text(
-                    "The desktop is not installed in this container. Installing pulls an X "
-                    "server, the desktop, and the clipboard tools (a few hundred MB) from "
-                    "the container's package manager. The display server itself is "
-                    "already bundled in this app.",
+                    "No desktop environment is installed here. Pick one and install it "
+                    "(a few hundred MB from the container's package manager) — the display "
+                    "itself runs in this app, so the apps above need nothing.",
                     size=tokens.FONT_SM,
                     color=theme.text(),
                 )
@@ -378,9 +301,7 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
                 # into the OUTPUT panel below until the desktop is installed.
                 # The DE pick regenerates the source (user edits are lost on
                 # pick — intentional: a new DE means a new script).
-                _install_cell[1].set_source(
-                    install_script((state.display_support or {}).get(container) or {}, _current())
-                )
+                _install_cell[1].set_source(install_script(caps_now, _current()))
                 rows.append(
                     ft.Text(
                         "Edit the script if you need to, then Run — output streams below.",
@@ -389,6 +310,82 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
                     )
                 )
                 rows.append(_install_cell[0])
+        rows.append(
+            ft.Row(
+                controls=[
+                    _picker_with_custom(
+                        "Quality",
+                        (("50", "50"), ("70", "70"), ("85", "85"), ("95", "95")),
+                        "quality",
+                        hint="1-95 (viewer image quality)",
+                    ),
+                    _picker_with_custom(
+                        "Compression",
+                        (("2", "2 — fast"), ("6", "6"), ("9", "9 — smallest")),
+                        "compression",
+                        hint="0-9 (CPU vs bandwidth)",
+                    ),
+                ],
+                spacing=tokens.SPACE_SM,
+                wrap=True,
+            )
+        )
+        rows.append(
+            ft.Row(
+                controls=[
+                    _picker_with_custom(
+                        "Resolution",
+                        (
+                            ("auto", "Auto (screen shape)"),
+                            ("1280x720", "1280 x 720"),
+                            ("1600x900", "1600 x 900"),
+                            ("1920x1080", "1920 x 1080"),
+                        ),
+                        "geometry",
+                        hint="WxH, e.g. 2560x1440",
+                    ),
+                    _picker_with_custom(
+                        "Fullscreen",
+                        (
+                            ("landscape", "Landscape"),
+                            ("portrait", "Portrait"),
+                            ("auto", "System default"),
+                        ),
+                        "orientation",
+                        hint="orientation",
+                    ),
+                ],
+                spacing=tokens.SPACE_SM,
+                wrap=True,
+            )
+        )
+        rows.append(
+            ft.Row(
+                controls=[
+                    ft.Switch(
+                        label="LAN — open to Wi-Fi devices",
+                        value=bool((state.display_settings or {}).get("lan")),
+                        on_change=lambda e: _set_setting("lan", bool(e.control.value)),
+                    ),
+                    ft.Switch(
+                        label="Public URL — localhost.run tunnel",
+                        value=bool((state.display_settings or {}).get("tunnel")),
+                        on_change=lambda e: _set_setting("tunnel", bool(e.control.value)),
+                    ),
+                ],
+                spacing=tokens.SPACE_SM,
+                wrap=True,
+            ),
+        )
+        rows.append(
+            ft.Text(
+                "LAN binds the server to the phone's Wi-Fi address; the tunnel "
+                "publishes a public *.lhr.life URL. Both are protected by the "
+                "access code — share it only with your own devices.",
+                size=tokens.FONT_XXS,
+                color=theme.text_dim(),
+            )
+        )
 
         body.controls = rows
         try:
@@ -798,6 +795,16 @@ def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None
                     text_size=tokens.FONT_XS,
                 )
             )
+            caps_now = (state.display_support or {}).get(container) or {}
+            if not any((caps_now.get("desktops") or {}).values()):
+                controls.append(
+                    ft.Text(
+                        "No desktop environment is installed in this container yet — "
+                        "open its card → Open display to install one first.",
+                        size=tokens.FONT_XXS,
+                        color=theme.warn(),
+                    )
+                )
         controls.append(
             ft.Row(
                 controls=[
@@ -871,7 +878,8 @@ def _show_app_sheet(page: ft.Page, methods, container: str) -> None:
                     session_service.command_capture,
                     container,
                     ["/bin/sh", "-c", f"command -v {cmd}"],
-                    10.0,
+                    # timeout=, NOT a positional: the 3rd arg is work_dir
+                    timeout=10.0,
                 ),
                 timeout=12.0,
             )

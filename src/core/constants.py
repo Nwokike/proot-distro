@@ -8,8 +8,8 @@ ship inside the APK), and CI checks it against pyproject + the workflow
 from __future__ import annotations
 
 APP_NAME = "Proot Distro X11"
-APP_VERSION = "1.1.0"
-APP_BUILD_NUMBER = 3
+APP_VERSION = "1.2.0"
+APP_BUILD_NUMBER = 4
 
 REPO_OWNER = "Nwokike"
 REPO_NAME = "proot-distro"

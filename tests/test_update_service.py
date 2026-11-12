@@ -13,6 +13,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 
+from core.constants import APP_BUILD_NUMBER, APP_VERSION
 from services.update_service import (
     check_for_update,
     is_allowed_launch_url,
@@ -72,24 +73,22 @@ def test_host_trusted_after_normalization(url):
 
 
 def test_is_newer_version_comparison():
-    # Current app: build 3, version 1.1.0
+    # Fixtures derive from the app identity (core.constants) so the version
+    # bump can never break this suite again.
     # Newer by build number
-    assert is_newer(4, "1.1.0") is True
+    assert is_newer(APP_BUILD_NUMBER + 1, APP_VERSION) is True
     # Same build number, same version
-    assert is_newer(3, "1.1.0") is False
-    # Same version string format (1.1.0 vs 1.1.0.0 normalized)
-    assert is_newer(3, "1.1.0") is False
+    assert is_newer(APP_BUILD_NUMBER, APP_VERSION) is False
     # Newer version string
-    assert is_newer(3, "1.2.0") is True
-    assert is_newer(3, "2.0.0") is True
+    assert is_newer(APP_BUILD_NUMBER, "99.0.0") is True
 
 
 def test_check_for_update_returns_data_when_newer():
     feed_data = {
-        "version": "1.2.0",
-        "build_number": 4,
+        "version": "99.0.0",
+        "build_number": APP_BUILD_NUMBER + 1,
         "type": "update",
-        "title": "Version 1.2.0 available",
+        "title": "Version 99.0.0 available",
         "release_notes": "New features and fixes",
         "mandatory": False,
         "github_url": "https://github.com/Nwokike/proot-distro/releases/latest",
@@ -105,15 +104,16 @@ def test_check_for_update_returns_data_when_newer():
 
     result = asyncio.run(_run())
     assert result is not None
-    assert result["version"] == "1.2.0"
-    assert result["build_number"] == 4
+    assert result["version"] == "99.0.0"
+    assert result["build_number"] == APP_BUILD_NUMBER + 1
     assert result["type"] == "update"
 
 
 def test_check_for_update_returns_none_when_up_to_date():
+    # The feed at the app's own identity: nothing newer.
     feed_data = {
-        "version": "1.1.0",
-        "build_number": 3,
+        "version": APP_VERSION,
+        "build_number": APP_BUILD_NUMBER,
         "type": "update",
     }
 
@@ -144,7 +144,7 @@ def test_check_for_update_handles_404_as_none():
 
 def test_check_for_update_retries_transient_500():
     attempts = 0
-    feed_data = {"version": "1.2.0", "build_number": 3}
+    feed_data = {"version": "99.0.0", "build_number": APP_BUILD_NUMBER + 1}
 
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal attempts
@@ -162,7 +162,7 @@ def test_check_for_update_retries_transient_500():
     result = asyncio.run(_run())
     assert attempts == 2
     assert result is not None
-    assert result["version"] == "1.2.0"
+    assert result["version"] == "99.0.0"
 
 
 def test_check_for_update_raises_on_permanent_network_failure():

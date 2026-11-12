@@ -10,7 +10,21 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from build_flet_proot_wheel import _PINNED_SOURCES
+from build_flet_proot_wheel import _PINNED_SOURCES as PROOT_PINS
+from build_flet_pulseaudio_wheel import _PINNED_SOURCES as PA_PINS
+from build_flet_pulseaudio_wheel import _POOL as PA_POOL
+from build_flet_xvnc_wheel import (
+    _PINNED_SOURCES as XVNC_PINS,
+)
+from build_flet_xvnc_wheel import (
+    _POOL_MAIN as XVNC_POOL_MAIN,
+)
+from build_flet_xvnc_wheel import (
+    _POOL_X11 as XVNC_POOL_X11,
+)
+from build_flet_xvnc_wheel import (
+    _X11_PACKAGES,
+)
 
 from core.constants import (
     APP_BUILD_NUMBER,
@@ -22,10 +36,127 @@ from core.constants import (
 
 OUTPUT_FILE = REPO_ROOT / "THIRD-PARTY-SOURCES.md"
 
+# License + upstream per package (the repackages are verbatim Termux binaries —
+# each carries its upstream license; unknowns fail loud here, not on a lawyer's desk).
+XVNC_LICENSES = {
+    "tigervnc": "GPL-2.0-or-later",
+    "xorg-xkbcomp": "MIT",
+    "openssl": "Apache-2.0",
+    "libjpeg-turbo": "BSD-3-Clause",
+    "libgnutls": "LGPL-2.1-or-later",
+    "libnettle": "LGPL-2.1-or-later",
+    "libgmp": "LGPL-3.0-or-later",
+    "zlib": "Zlib",
+    "libpixman": "MIT",
+    "libxfont2": "MIT",
+    "libxau": "MIT",
+    "libxdmcp": "MIT",
+    "libxshmfence": "MIT",
+    "libglvnd": "MIT",
+    "libxkbfile": "MIT",
+    "xkeyboard-config": "MIT",
+    "libx11": "MIT",
+    "libxcb": "MIT",
+    "libandroid-support": "Apache-2.0",
+    "zstd": "BSD-3-Clause",
+    "p11-kit": "BSD-3-Clause",
+    "libidn2": "GPL-2.0-or-later / LGPL-3.0-or-later",
+    "libunistring": "MIT OR LGPL-3.0-or-later",
+    "libtasn1": "LGPL-2.1-or-later",
+    "libffi": "MIT",
+    "libiconv": "LGPL-2.1-or-later",
+    "libfontenc": "MIT",
+    "freetype": "FTL / GPL-2.0-or-later",
+    "libpng": "Libpng",
+    "brotli": "MIT",
+    "libbz2": "BSD-4-Clause",
+}
+PA_LICENSES = {
+    "pulseaudio": "GPL-2.0-or-later",
+    "libltdl": "LGPL-2.1-or-later",
+    "dbus": "GPL-2.0-or-later / AFL-2.1",
+    "libiconv": "LGPL-2.1-or-later",
+    "libandroid-execinfo": "BSD-2-Clause",
+    "libsndfile": "LGPL-2.1-or-later",
+    "libsoxr": "LGPL-2.1-or-later",
+    "speexdsp": "BSD-3-Clause",
+    "libflac": "BSD-3-Clause",
+    "libvorbis": "BSD-3-Clause",
+    "libopus": "BSD-3-Clause",
+    "libogg": "BSD-3-Clause",
+    "libmpg123": "LGPL-2.1-or-later",
+    "libmp3lame": "LGPL-2.0-or-later",
+}
+XVNC_UPSTREAMS = {
+    "tigervnc": "https://tigervnc.org",
+    "xorg-xkbcomp": "https://gitlab.freedesktop.org/xorg/app/xkbcomp",
+    "xkeyboard-config": "https://gitlab.freedesktop.org/xkeyboard-config/xkeyboard-config",
+    "openssl": "https://www.openssl.org",
+    "libjpeg-turbo": "https://libjpeg-turbo.org",
+    "libgnutls": "https://www.gnutls.org",
+    "libnettle": "https://www.lysator.liu.se/~nisse/nettle",
+    "libgmp": "https://gmplib.org",
+    "libglvnd": "https://gitlab.freedesktop.org/glvnd/libglvnd",
+    "libx11": "https://gitlab.freedesktop.org/xorg/lib/libx11",
+    "libxcb": "https://gitlab.freedesktop.org/xorg/lib/libxcb",
+    "libxfont2": "https://gitlab.freedesktop.org/xorg/lib/libxfont2",
+    "freetype": "https://freetype.org",
+    "libpng": "http://www.libpng.org",
+    "zstd": "https://github.com/facebook/zstd",
+}
+PA_UPSTREAMS = {
+    "pulseaudio": "https://www.freedesktop.org/wiki/Software/PulseAudio",
+    "dbus": "https://www.freedesktop.org/wiki/Software/dbus",
+    "libsndfile": "https://libsndfile.github.io/libsndfile",
+    "libsoxr": "https://sourceforge.net/projects/soxr",
+    "speexdsp": "https://gitlab.xiph.org/xiph/speexdsp",
+    "libopus": "https://opus-codec.org",
+}
+
+
+def _deb_bits(rel: str) -> tuple[str, str, str]:
+    """pool/main/t/tigervnc/tigervnc_1.16.2-1_aarch64.deb → (name, version, arch)."""
+    filename = rel.rsplit("/", 1)[-1].removesuffix(".deb")
+    pkg, version, _arch = filename.rsplit("_", 2)
+    return pkg, version, _arch
+
+
+def _payload_table(
+    title: str, intro_lines: list[str], pins: dict, pool_for, licenses: dict, upstreams: dict
+) -> list[str]:
+    lines = [
+        "",
+        f"## {title}",
+        "",
+        *intro_lines,
+        "",
+        "| Package | Version | License | Upstream Source | Termux Pool URL | SHA-256 |",
+        "|---|---|---|---|---|---|",
+    ]
+    seen: set[str] = set()
+    for spec in pins.values():
+        for pkg, (rel, sha) in spec["packages"].items():
+            if pkg in seen:
+                continue  # one row per package (both arches carry the same pins)
+            seen.add(pkg)
+            name, version, _deb_arch = _deb_bits(rel)
+            license_name = licenses.get(pkg, "Open Source")
+            upstream = upstreams.get(pkg, "https://packages.termux.com")
+            lines.append(
+                f"| `{name}` | {version} | {license_name} | [{name}]({upstream}) | [{rel}]({pool_for(pkg)}/{rel}) | `{sha}` |"
+            )
+    return lines
+
 
 def generate_markdown() -> str:
-    packages = _PINNED_SOURCES["packages"]
-    pool_root = _PINNED_SOURCES["pool_root"]
+    packages = PROOT_PINS["packages"]
+    pool_root = PROOT_PINS["pool_root"]
+
+    def xvnc_pool(pkg: str) -> str:
+        return XVNC_POOL_X11 if pkg in _X11_PACKAGES else XVNC_POOL_MAIN
+
+    def pa_pool(_pkg: str) -> str:
+        return PA_POOL
 
     lines = [
         f"# Third-Party Sources — {REPO_NAME} v{APP_VERSION} (Build {APP_BUILD_NUMBER})",
@@ -36,23 +167,28 @@ def generate_markdown() -> str:
         "## Source Code Written Offer (GPL-2.0 §3(b) / GPL-3.0 §6(b))",
         "",
         "The complete machine-readable Corresponding Source for the GPL-licensed components",
-        "and for this application is available at:",
+        "(PRoot, TigerVNC's Xvnc, PulseAudio, talloc and friends) and for this application",
+        "is available at:",
         f"https://github.com/{REPO_OWNER}/{REPO_NAME}/tree/v{APP_VERSION}/",
         f"and via GitHub Releases at: {GITHUB_RELEASES_URL}",
         "",
         "This offer is valid for at least three (3) years from the date of release to any third",
         "party for no charge other than the cost of physically performing source distribution.",
         f"To request source code via durable physical medium, contact: contact@{REPO_OWNER.lower()}.ng",
-        "",
-        "## Native Payloads (Packaged in flet-proot)",
-        "",
-        "The native binaries are repackaged verbatim from the Termux repository with 16 KiB",
-        "PT_LOAD segment alignment, verified at build time:",
-        "",
-        "| Package | Version | License | Upstream Source | Termux Pool URL | SHA-256 |",
-        "|---|---|---|---|---|---|",
     ]
 
+    lines.extend(
+        [
+            "",
+            "## Native Payloads (Packaged in flet-proot)",
+            "",
+            "The proot binaries are repackaged verbatim from the Termux repository with 16 KiB",
+            "PT_LOAD segment alignment, verified at build time:",
+            "",
+            "| Package | Version | License | Upstream Source | Termux Pool URL | SHA-256 |",
+            "|---|---|---|---|---|---|",
+        ]
+    )
     for pkg_name, spec in packages.items():
         ver = spec["version"]
         pool_dir = spec["pool_dir"]
@@ -66,7 +202,6 @@ def generate_markdown() -> str:
             "libtalloc": "https://talloc.samba.org",
             "libandroid-shmem": "https://github.com/termux/libandroid-shmem",
         }.get(pkg_name, "https://github.com/termux")
-
         for arch, deb_info in spec["debs"].items():
             filename = deb_info["file"]
             sha256 = deb_info["sha256"]
@@ -76,7 +211,40 @@ def generate_markdown() -> str:
             )
 
     lines.extend(
+        _payload_table(
+            "Native Payloads (Packaged in flet-xvnc)",
+            [
+                "Xvnc (TigerVNC's X server + VNC server in one process) and its runtime",
+                "closure, repackaged verbatim from the Termux repositories:",
+            ],
+            XVNC_PINS,
+            xvnc_pool,
+            XVNC_LICENSES,
+            XVNC_UPSTREAMS,
+        )
+    )
+    lines.extend(
+        _payload_table(
+            "Native Payloads (Packaged in flet-pulseaudio)",
+            [
+                "PulseAudio with Termux's Android audio modules (AAudio sink, OpenSL ES",
+                "sink/source, native-protocol-tcp) and its runtime closure:",
+            ],
+            PA_PINS,
+            pa_pool,
+            PA_LICENSES,
+            PA_UPSTREAMS,
+        )
+    )
+
+    lines.extend(
         [
+            "",
+            "## Vendored Assets",
+            "",
+            "| Asset | Version | License | Upstream |",
+            "|---|---|---|---|",
+            "| `noVNC` (core/ + vendor/, served by the display stream server) | 1.7.0 | MPL-2.0 | https://github.com/novnc/noVNC |",
             "",
             "## Python Dependencies",
             "",
@@ -88,9 +256,7 @@ def generate_markdown() -> str:
             "| `flet-terminal` | MIT | https://github.com/Nwokike/flet-terminal |",
             "| `flet-notifications` | Apache-2.0 | https://github.com/flet-dev/flet |",
             "| `flet-webview` | Apache-2.0 | https://github.com/flet-dev/flet |",
-            "| `termux-desk` | MIT | https://github.com/amirghm/termux-desk |",
-            "| `python-xlib` | LGPL-2.1-or-later | https://github.com/python-xlib/python-xlib |",
-            "| `pillow` (XCB build, Termux repackage) | HPND | https://github.com/python-pillow/Pillow |",
+            "| `aiohttp` (display stream server) | Apache-2.0 | https://github.com/aio-libs/aiohttp |",
             "| `httpx` | BSD-3-Clause | https://github.com/encode/httpx |",
             "| `httpcore` | BSD-3-Clause | https://github.com/encode/httpcore |",
             "| `h11` | MIT | https://github.com/python-hyper/h11 |",

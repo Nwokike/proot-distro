@@ -3,6 +3,14 @@
 from __future__ import annotations
 
 CHANGELOG: dict[str, str] = {
+    "1.2.0": (
+        "• Display rebuilt: the X server now runs INSIDE the app\n"
+        "• Zero installs: single apps run on any container instantly\n"
+        "• Damage-driven streaming — a still screen costs nothing\n"
+        "• Audio output and microphone support for guest apps\n"
+        "• Clipboard over the stream itself — no guest tools needed\n"
+        "• Heavier capture machinery removed; the app got leaner"
+    ),
     "1.1.0": (
         "• Proot Distro X11: native X11 desktop on your phone\n"
         "• One tap from the Display tab: install desktop support, start, use\n"
