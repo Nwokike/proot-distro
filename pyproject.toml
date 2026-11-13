@@ -20,6 +20,7 @@ dependencies = [
     # The display stream server (WS↔RFB proxy + noVNC static hosting). Wheels
     # with native code must have Android builds on pypi.flet.dev — aiohttp has.
     "aiohttp>=3.14",
+    "flet-audio-recorder==1.1.0",
 ]
 
 [tool.uv]

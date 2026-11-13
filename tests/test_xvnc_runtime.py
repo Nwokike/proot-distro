@@ -25,6 +25,7 @@ def fake_native(monkeypatch, tmp_path):
     lib.mkdir(parents=True)
     for name in (
         "libXvnc.so",
+        "libxkbcomp.so",
         "libpulseaudio.so",
         "module-aaudio-sink.so",
         "module-null-sink.so",
@@ -167,6 +168,58 @@ def test_xvnc_command_creates_the_app_tmp_dir(fake_native, tmp_path):
     xvnc_runtime.xvnc_command(0, "1280x720", tmp_path / "xauth-0", tmp_path / "xkb")
     app_root = storage_paths.data_root().parents[1]
     assert (app_root / "tmp").is_dir()
+
+
+def test_xvnc_command_links_the_baked_prefix_binaries(fake_native, tmp_path, monkeypatch):
+    """Xvnc execs its baked prefix paths: `<app>//bin/sh -c "<app>//bin/xkbcomp …"`
+    (os/utils.c Popen + xkb/ddxLoad.c RunXkbComp — verified in the shipped
+    binary). Both must resolve to the native-lib payloads, which Android's
+    exec policy allows; a plain file in the app home would be blocked."""
+    shell = tmp_path / "platform-sh"
+    shell.write_bytes(b"#!/bin/sh\n")
+    monkeypatch.setattr(xvnc_runtime, "_SYSTEM_SHELL", str(shell))
+
+    xvnc_runtime.xvnc_command(0, "1280x720", tmp_path / "xauth-0", tmp_path / "xkb")
+    app_root = storage_paths.data_root().parents[1]
+    link = app_root / "bin" / "xkbcomp"
+    assert link.is_symlink()
+    assert Path(link.readlink()) == fake_native / "libxkbcomp.so"
+    assert (app_root / "bin" / "sh").readlink() == shell
+
+
+def test_prefix_bin_relinks_after_an_app_update(fake_native, tmp_path, monkeypatch):
+    """The native-lib dir changes on every install (`/data/app/~~hash/…`); a
+    stale link would point at the old dir. The target is compared, so a moved
+    payload re-links and an unchanged one is left alone."""
+    shell = tmp_path / "platform-sh"
+    shell.write_bytes(b"#!/bin/sh\n")
+    monkeypatch.setattr(xvnc_runtime, "_SYSTEM_SHELL", str(shell))
+    bin_dir = xvnc_runtime.ensure_prefix_bin()
+    link = bin_dir / "xkbcomp"
+    link.unlink()
+    link.symlink_to(tmp_path / "old-install" / "libxkbcomp.so")
+    xvnc_runtime.ensure_prefix_bin()
+    assert Path(link.readlink()) == fake_native / "libxkbcomp.so"
+    # idempotent: same target stays untouched
+    inode = link.lstat().st_ino
+    xvnc_runtime.ensure_prefix_bin()
+    assert link.lstat().st_ino == inode
+
+
+def test_prefix_bin_fails_loudly_without_xkbcomp(fake_native):
+    """Xorg ALWAYS spawns xkbcomp for its keymap; without the payload the
+    server would die with a generic XKB error — name the real reason."""
+    (fake_native / "libxkbcomp.so").unlink()
+    with pytest.raises(RuntimeError, match=r"libxkbcomp\.so missing"):
+        xvnc_runtime.ensure_prefix_bin()
+
+
+def test_prefix_bin_is_a_noop_without_the_payload_dir(monkeypatch):
+    """Desktop dev runs (no payload dir) must not raise or create links there."""
+    import core.proot_probe as probe
+
+    monkeypatch.setattr(probe, "_native_library_dir", lambda: None)
+    assert xvnc_runtime.ensure_prefix_bin() is None
 
 
 def _stub_pa_package(monkeypatch, libs, version="17.0"):

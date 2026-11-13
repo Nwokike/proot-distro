@@ -1005,3 +1005,22 @@ def test_display_settings_single_default_source():
     assert "DEFAULT_DISPLAY_SETTINGS" in src
     assert DEFAULT_DISPLAY_SETTINGS["orientation"] == "landscape"
     assert "compression" in DEFAULT_DISPLAY_SETTINGS
+
+
+async def test_mic_grant_asks_the_controller_recorder():
+    """The recorder lives on the CONTROLLER (the page has no such attribute).
+    Reading it from the page made the whole grant path dead code — the mic
+    module then fails with 'Failed to initialize OpenSL ES: error 9'."""
+    from controller_actions.display_actions import DisplayActions
+
+    class _Recorder:
+        asked = False
+
+        async def has_permission(self) -> bool:
+            self.asked = True
+            return True
+
+    holder = DisplayActions()
+    holder.mic_recorder = _Recorder()
+    await holder._ensure_mic_permission()
+    assert holder.mic_recorder.asked

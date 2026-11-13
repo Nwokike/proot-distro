@@ -232,6 +232,71 @@ def ensure_lock_dir() -> Path | None:
     return target
 
 
+# ── the baked prefix's executables ───────────────────────────────────────────
+# Xvnc was built for Termux's prefix and the builder rewrites that literal
+# prefix in place to our app dir. Two of those paths are EXECUTABLES Xvnc
+# spawns: its os/utils.c Popen runs `<app>//bin/sh -c "<app>//bin/xkbcomp …"`
+# and xkb/ddxLoad.c ALWAYS spawns xkbcomp to compile the keymap (the
+# `server-<N>.xkm` cache is written, read and unlinked in the same call — an
+# existing file is never reused, verified in xorg-server 21.1.25).
+#
+# Android's W^X rule forbids execve() of files under the app home, but execve
+# FOLLOWS symlinks and SELinux checks the resolved inode: the APK's
+# native-library files are apk_data_file, which apps may execute (the
+# documented python-for-android / Termux-bootstrap pattern). So the baked
+# paths are satisfied by links into the native dir — the payloads keep running
+# from the exec-allowed location, and xkbcomp derives the keymap from the
+# shipped xkeyboard-config data exactly as Xorg intends.
+_SYSTEM_SHELL = "/system/bin/sh"
+
+
+def app_root() -> Path | None:
+    """The app's private root (`<app>/files/data` → `<app>`), or None off-device."""
+    try:
+        root = storage_paths.data_root().parents[1]
+    except Exception:
+        return None
+    return root if root.is_dir() else None
+
+
+def ensure_prefix_bin() -> Path | None:
+    """Satisfy `<app>/bin/sh` and `<app>/bin/xkbcomp` with links to the
+    platform shell and the shipped libxkbcomp.so.
+
+    Called before every spawn and compares the link target, so an app update
+    (a new native-lib dir) re-links instead of silently pointing at the old
+    install. Off-device (no payload dir) this is a no-op."""
+    root = app_root()
+    if root is None:
+        return None
+    try:
+        native = native_dir()
+    except RuntimeError:
+        return None  # desktop dev — there is no payload dir to link into
+    compiler = native / "libxkbcomp.so"
+    if not compiler.is_file():
+        # Fatal for the display: Xorg always spawns xkbcomp to compile its
+        # keymap, so fail here with the real reason instead of a server exit.
+        raise RuntimeError(f"libxkbcomp.so missing from {native}")
+    bin_dir = root / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    for name, target in (("xkbcomp", compiler), ("sh", Path(_SYSTEM_SHELL))):
+        if not target.is_file():
+            # The platform shell is absent only in desktop dev runs.
+            logger.debug("display: %s not present at %s", name, target)
+            continue
+        link = bin_dir / name
+        try:
+            if link.is_symlink() and os.readlink(link) == str(target):
+                continue
+            if link.is_symlink() or link.exists():
+                link.unlink()
+            os.symlink(target, link)
+        except OSError as exc:
+            raise RuntimeError(f"could not link {link} → {target}: {exc}") from exc
+    return bin_dir
+
+
 def xvnc_command(
     display: int, geometry: str, xauth_path: Path, xkb_dir: Path
 ) -> tuple[list[str], dict[str, str]]:
@@ -239,6 +304,7 @@ def xvnc_command(
     to yes since 1.11 — our stream server is the only client, also local). The
     X port 6000+N serves the guest apps and is gated by the cookie file."""
     ensure_lock_dir()  # the rewritten prefix's <app>/tmp must exist before start
+    ensure_prefix_bin()  # <app>/bin/sh + <app>/bin/xkbcomp, the paths Xvnc execs
     binary = xvnc_binary()
     argv = [
         str(binary),

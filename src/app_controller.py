@@ -55,6 +55,17 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
         self.desk_manager.on_sessions_changed = self._bump_display_sessions
         self.desk_manager.on_log_line = self._bump_display_log
         self.ad_service = ad_service.AdService(page)
+        # Official Flet audio-recorder service — `has_permission()` is the
+        # supported way to obtain the RECORD_AUDIO runtime grant (the display's
+        # mic path asks through it before the PulseAudio daemon starts). A
+        # Service registers itself with the page on construction.
+        try:
+            import flet_audio_recorder as far
+
+            self.mic_recorder = far.AudioRecorder()
+        except Exception as exc:  # audio only — never a startup failure
+            logger.debug("audio recorder service unavailable: %s", exc)
+            self.mic_recorder = None
         # android_default_icon: our app-icon silhouette (bundled via
         # tool.flet.android.res_dir), not the plugin's default Flet logo.
         self.notifications = ft_notifications.Notifications(

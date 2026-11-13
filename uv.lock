@@ -347,6 +347,18 @@ wheels = [
 ]
 
 [[package]]
+name = "flet-audio-recorder"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "flet" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/68/06/eb6c275342e4183d3ea8924313aac012ba6f209b6aa8d6f5a0e2501fa049/flet_audio_recorder-1.1.0.tar.gz", hash = "sha256:fed222f63f0ebb482ca46214f46a71b72e34b43838f6792482631945f86a12ec", size = 18911, upload-time = "2026-11-05T17:25:48.071Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f8/c8/0ee3ecd1622f6f615ec04adf3ac7815d72b8ac02b20c67ff629b4019cb8b/flet_audio_recorder-1.1.0-py3-none-any.whl", hash = "sha256:6913f3c3208928ce0128e9f040dfa63ce237afb1911ac3c689b45d2af882fc63", size = 20136, upload-time = "2026-11-05T17:25:46.834Z" },
+]
+
+[[package]]
 name = "flet-cli"
 version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -879,6 +891,7 @@ dependencies = [
     { name = "aiohttp" },
     { name = "flet" },
     { name = "flet-ads" },
+    { name = "flet-audio-recorder" },
     { name = "flet-notifications" },
     { name = "flet-terminal" },
     { name = "flet-webview" },
@@ -901,6 +914,7 @@ requires-dist = [
     { name = "aiohttp", specifier = ">=3.14" },
     { name = "flet", specifier = "==1.1.0" },
     { name = "flet-ads", specifier = "==1.1.0" },
+    { name = "flet-audio-recorder", specifier = "==1.1.0" },
     { name = "flet-notifications", specifier = "==1.1.0" },
     { name = "flet-terminal", specifier = "==0.4.2" },
     { name = "flet-webview", specifier = "==1.1.0" },

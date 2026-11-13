@@ -126,6 +126,20 @@ class DisplayActions:
         except Exception as exc:
             logger.debug("wakelock toggle failed: %s", exc)
 
+    async def _ensure_mic_permission(self) -> None:
+        """Obtain the RECORD_AUDIO runtime grant through Flet's official
+        AudioRecorder service (`has_permission()` requests it when needed)
+        BEFORE the display's PulseAudio daemon starts — the mic module cannot
+        open the recorder without it (device: 'Failed to initialize OpenSL ES:
+        error 9'). A denied/absent service degrades audio only."""
+        recorder = getattr(self, "mic_recorder", None)
+        if recorder is None:
+            return
+        try:
+            await recorder.has_permission()
+        except Exception as exc:
+            logger.debug("mic permission check failed: %s", exc)
+
     # ── routing ───────────────────────────────────────────────────────────────
 
     async def open_display(self, container: str) -> None:
@@ -188,6 +202,11 @@ class DisplayActions:
         # Immediate, visible feedback wherever the user is (home, display, or
         # any tab) — the in-app snack, like the distro install flow.
         self.show_snack(state.display_status_text)
+        # The mic grant is asked through the official recorder service right
+        # before the PulseAudio daemon (which loads the mic module) starts —
+        # AFTER the starting feedback, so the dialog never appears out of
+        # nowhere. A denial degrades audio only.
+        await self._ensure_mic_permission()
         try:
             session = await manager.start(
                 container,
