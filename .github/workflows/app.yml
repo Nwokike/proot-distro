@@ -192,9 +192,24 @@ jobs:
           FLET_ANDROID_SIGNING_KEY_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           FLET_ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          uv run flet build apk --yes -v \
-            --build-version ${{ env.BUILD_VERSION }} \
-            --build-number ${{ env.BUILD_NUMBER }}
+          # serious_python's downloadDistArchive_<abi> task (Gradle Download
+          # plugin with useETag/tempAndMove) fails hard when the release-asset
+          # GET returns a truncated/NUL body ("Unable to determine the current
+          # character ... '^@' int 0") — an upstream-CDN flake that hit one ABI
+          # per run. A clean retry (the plugin's ETag/temp state removed with
+          # build/) is the fix; three attempts.
+          for attempt in 1 2 3; do
+            echo "== flet build apk — attempt $attempt"
+            if uv run flet build apk --yes -v \
+                --build-version ${{ env.BUILD_VERSION }} \
+                --build-number ${{ env.BUILD_NUMBER }}; then
+              exit 0
+            fi
+            echo "== attempt $attempt failed — cleaning and retrying"
+            uv run flet clean || true
+            sleep 15
+          done
+          exit 1
 
       - name: Size report & prune check
         run: |
@@ -272,9 +287,19 @@ jobs:
           FLET_ANDROID_SIGNING_KEY_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           FLET_ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          uv run flet build aab --yes -v \
-            --build-version ${{ env.BUILD_VERSION }} \
-            --build-number ${{ env.BUILD_NUMBER }}
+          # Same upstream download flake as the APK job — clean retry, 3 attempts.
+          for attempt in 1 2 3; do
+            echo "== flet build aab — attempt $attempt"
+            if uv run flet build aab --yes -v \
+                --build-version ${{ env.BUILD_VERSION }} \
+                --build-number ${{ env.BUILD_NUMBER }}; then
+              exit 0
+            fi
+            echo "== attempt $attempt failed — cleaning and retrying"
+            uv run flet clean || true
+            sleep 15
+          done
+          exit 1
 
       - name: Inspect the merged manifest (SDK levels + permissions)
         run: |

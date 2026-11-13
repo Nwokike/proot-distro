@@ -179,6 +179,13 @@ def _stub_pa_package(monkeypatch, libs, version="17.0"):
     monkeypatch.setitem(sys.modules, "flet_pulseaudio", stub)
 
 
+def test_request_mic_permission_is_a_noop_off_android():
+    """RECORD_AUDIO is a dangerous permission requiring a RUNTIME grant; the
+    helper asks through serious_python's Activity. On desktop (no pyjnius) it
+    must degrade silently — audio only, never a display failure."""
+    xvnc_runtime.request_mic_permission()  # no exception, no output
+
+
 def test_pulseaudio_libs_are_staged_without_libcrypto(monkeypatch, fake_native):
     """The daemon's linker path must be a libcrypto-free staging dir — with the
     native dir on it, vendor libs that dlopen system libs expecting the old

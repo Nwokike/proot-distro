@@ -23,6 +23,7 @@ import shutil
 import struct
 import subprocess
 from pathlib import Path
+from typing import ClassVar
 
 from core import storage_paths
 
@@ -321,10 +322,49 @@ def ensure_pa_libs() -> Path:
     return dest
 
 
+def request_mic_permission() -> None:
+    """Grant RECORD_AUDIO at RUNTIME before the mic module loads.
+
+    Android's dangerous permissions need a runtime grant — declaring
+    RECORD_AUDIO in the manifest is not enough, and PulseAudio's sles-source
+    fails with "Failed to initialize OpenSL ES: error 9" until the user allows
+    it (device 2026-11-13). The Activity comes from serious_python's own
+    embedding class; requestPermissions runs on the UI thread."""
+    try:
+        from jnius import PythonJavaClass, autoclass, java_method
+
+        activity = autoclass("com.flet.serious_python_android.PythonActivity").mActivity
+        if activity is None:
+            return
+        PackageManager = autoclass("android.content.pm.PackageManager")
+        if (
+            activity.checkSelfPermission("android.permission.RECORD_AUDIO")
+            == PackageManager.PERMISSION_GRANTED
+        ):
+            return
+
+        def _ask() -> None:
+            activity.requestPermissions(["android.permission.RECORD_AUDIO"], 4713)
+
+        class _UiRunnable(PythonJavaClass):  # pyjnius Java-interface shape
+            __javainterfaces__: ClassVar[list] = ["java/lang/Runnable"]
+            __javacontext__: ClassVar[str] = "app"
+
+            @java_method("()V")
+            def run(self) -> None:
+                _ask()
+
+        activity.runOnUiThread(_UiRunnable())
+        logger.info("display: requested the microphone permission")
+    except Exception as exc:  # desktop/no pyjnius — audio degradation only
+        logger.debug("mic permission request skipped: %s", exc)
+
+
 def pulseaudio_command() -> tuple[list[str], dict[str, str]]:
     """The PulseAudio daemon argv + env (one app-wide daemon; the manager starts
     it with the first display and stops it with the last). -n skips the missing
     system default.pa; -F runs ours, which loads every module by absolute path."""
+    request_mic_permission()
     binary = pulseaudio_binary()
     runtime = storage_paths.support_root() / "runtime"
     script = write_pulse_config(runtime)
