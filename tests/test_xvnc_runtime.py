@@ -161,7 +161,34 @@ def test_xvnc_command_argv_and_env(fake_native):
     assert "XDG_RUNTIME_DIR" in env
 
 
-def test_pulseaudio_command_argv(fake_native):
+def _stub_pa_package(monkeypatch, libs, version="17.0"):
+    import sys
+    import types
+
+    stub = types.ModuleType("flet_pulseaudio")
+    stub.PA_VERSION = version
+    stub.LIBS = list(libs)
+    monkeypatch.setitem(sys.modules, "flet_pulseaudio", stub)
+
+
+def test_pulseaudio_libs_are_staged_without_libcrypto(monkeypatch, fake_native):
+    """The daemon's linker path must be a libcrypto-free staging dir — with the
+    native dir on it, vendor libs that dlopen system libs expecting the old
+    OpenSSL ABI fail (device 2026-11-13, module-sles-source → libsqlite)."""
+    _stub_pa_package(monkeypatch, ["libpulseaudio.so", "libpulse.so", "libcrypto.so"])
+    (fake_native / "libpulse.so").write_bytes(b"\x7fELF-fake")
+    stage = xvnc_runtime.ensure_pa_libs()
+    assert (stage / "libpulseaudio.so").is_file()
+    assert (stage / "libpulse.so").is_file()
+    # libcrypto is NOT in the wheel's PA payloads — never staged, never shadowing
+    assert not (stage / "libcrypto.so").exists()
+    _argv, env = xvnc_runtime.pulseaudio_command()
+    assert env["LD_LIBRARY_PATH"] == str(stage)
+    assert str(fake_native) not in env["LD_LIBRARY_PATH"]
+
+
+def test_pulseaudio_command_argv(fake_native, monkeypatch):
+    _stub_pa_package(monkeypatch, ["libpulseaudio.so"])
     argv, _env = xvnc_runtime.pulseaudio_command()
     assert argv[0] == str(fake_native / "libpulseaudio.so")
     joined = " ".join(argv)

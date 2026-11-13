@@ -275,6 +275,35 @@ def write_pulse_config(runtime: Path) -> Path:
     return path
 
 
+def ensure_pa_libs() -> Path:
+    """Stage the PulseAudio closure into its OWN dir and use it as the linker path.
+
+    The native dir also holds Xvnc's libcrypto.so (OpenSSL 3.x); with it on the
+    daemon's LD_LIBRARY_PATH, vendor libraries that dlopen system libs expecting
+    the old OpenSSL ABI fail (device 2026-11-13: module-sles-source →
+    /system/lib64/libsqlite.so → missing OpenSSL_add_all_algorithms). A
+    libcrypto-free dir keeps the daemon's namespace clean."""
+    import flet_pulseaudio  # type: ignore[import-not-found]
+
+    native = native_dir()
+    runtime = storage_paths.support_root() / "runtime"
+    dest = runtime / "pa-libs"
+    version = str(getattr(flet_pulseaudio, "PA_VERSION", ""))
+    marker = dest / ".version"
+    if marker.is_file() and marker.read_text(encoding="utf-8").strip() == version:
+        return dest
+    if dest.exists():
+        shutil.rmtree(dest, ignore_errors=True)
+    dest.mkdir(parents=True, exist_ok=True)
+    for name in getattr(flet_pulseaudio, "LIBS", []):
+        src = native / name
+        if src.is_file():
+            (dest / name).write_bytes(src.read_bytes())
+    marker.write_text(version, encoding="utf-8")
+    logger.info("pulseaudio libs staged at %s (%s)", dest, version)
+    return dest
+
+
 def pulseaudio_command() -> tuple[list[str], dict[str, str]]:
     """The PulseAudio daemon argv + env (one app-wide daemon; the manager starts
     it with the first display and stops it with the last). -n skips the missing
@@ -282,6 +311,10 @@ def pulseaudio_command() -> tuple[list[str], dict[str, str]]:
     binary = pulseaudio_binary()
     runtime = storage_paths.support_root() / "runtime"
     script = write_pulse_config(runtime)
+    env = _payload_env(binary.parent)
+    pa_libs = ensure_pa_libs()
+    # libcrypto-free linker path (see ensure_pa_libs)
+    env["LD_LIBRARY_PATH"] = str(pa_libs)
     argv = [
         str(binary),
         "--daemonize=no",
@@ -292,7 +325,7 @@ def pulseaudio_command() -> tuple[list[str], dict[str, str]]:
         "-n",
         f"--file={script}",
     ]
-    return argv, _payload_env(binary.parent)
+    return argv, env
 
 
 def probe_pulseaudio() -> bool:

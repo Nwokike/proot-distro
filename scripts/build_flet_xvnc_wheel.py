@@ -96,6 +96,9 @@ _ELF_PAYLOADS: dict[str, tuple[str, str, str | None]] = {
     "libbrotlidec.so": (_POOL_MAIN, "brotli", None),
     "libbrotlicommon.so": (_POOL_MAIN, "brotli", None),
     "libbz2.so": (_POOL_MAIN, "libbz2", None),
+    # Xvnc links libc++_shared.so at load time — the app's runtime does NOT
+    # provide it (device 2026-11-13: "library libc++_shared.so not found").
+    "libc++_shared.so": (_POOL_MAIN, "libc++", None),
 }
 
 # Package-data payloads: (package, source prefix, destination prefix). Termux
@@ -239,6 +242,10 @@ _PINNED_SOURCES = {
                 "pool/main/libb/libbz2/libbz2_1.0.8-8_aarch64.deb",
                 "4335d7f060650b0aabef545d1334c2f9f280223d5962e13c24a00ec934b794ba",
             ),
+            "libc++": (
+                "pool/main/libc/libc++/libc++_30_aarch64.deb",
+                "53d0b84a7ba7459024257cb94d5b136fe13ef858567f65a8064b35950799f2ca",
+            ),
         },
     },
     "x86_64": {
@@ -369,12 +376,16 @@ _PINNED_SOURCES = {
                 "pool/main/libb/libbz2/libbz2_1.0.8-8_x86_64.deb",
                 "f6f81d38a40c1626202da1e87727e5a3e6de296b1c0eb252af8948646b164ca0",
             ),
+            "libc++": (
+                "pool/main/libc/libc++/libc++_30_x86_64.deb",
+                "c9bcd9a8067a19c9c0e4893a72d314a2e37d6b67ce8dd05c67b9bbacad044b4f",
+            ),
         },
     },
 }
 
 # Provided by other wheels / the runtime / Android — never shipped here.
-_EXTERNAL_SONAMES = {"libandroid-shmem.so", "libc++_shared.so"}
+_EXTERNAL_SONAMES = {"libandroid-shmem.so"}
 
 # Packages that live in the Termux x11 repo rather than main.
 _X11_PACKAGES = {
