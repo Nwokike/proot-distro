@@ -101,8 +101,11 @@ def _ns_copy(
     )
 
 
-def _ns_kill(target: str, all_sessions: bool = False, signal: str | None = None) -> SimpleNamespace:
-    # Verified: _kill defines target/-s/--signal/--all.
+def _ns_kill(
+    target: str | None, all_sessions: bool = False, signal: str | None = None
+) -> SimpleNamespace:
+    # Verified: _kill defines target/-s/--signal/--all. --all requires the
+    # target to be None (absent) — an empty string trips upstream's check.
     return SimpleNamespace(target=target, all=all_sessions, signal=signal)
 
 

@@ -54,8 +54,19 @@ def show_full_output_dialog(page: ft.Page, entry) -> None:
     def _copy(_e) -> None:
         from components.snack import show_snack
 
-        page.run_task(ft.Clipboard().set, text)
-        show_snack(page, "full output copied to clipboard")
+        # The ONE app-wide Clipboard (mounted by shared_services) — a fresh
+        # ft.Clipboard() is an unmounted Service and its set() raises while
+        # the snack still claims success (device audit 2026-11-13).
+        clipboard = getattr(page, "clipboard", None)
+        if clipboard is None:
+            show_snack(page, "clipboard unavailable")
+            return
+
+        async def _do() -> None:
+            await clipboard.set(text)
+            show_snack(page, "full output copied to clipboard")
+
+        page.run_task(_do)
 
     page.show_dialog(
         ft.AlertDialog(

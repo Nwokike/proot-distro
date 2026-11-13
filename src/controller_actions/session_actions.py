@@ -35,9 +35,15 @@ class SessionActions:
     async def _start_fgs(self, label: str) -> None:
         """Start the Termux-style foreground service notification (keeps the
         app alive in the background while Linux sessions run). `label` is the
-        notification body line, e.g. "Desktop running: debian"."""
+        notification body line, e.g. "Desktop running: debian". Re-issued only
+        when the label actually changes — every manager transition used to
+        re-post the notification (device audit 2026-11-13: start/stop churn
+        on every shell open/close)."""
         notifications = getattr(self, "notifications", None)
         if notifications is None:
+            return
+        active = getattr(self, "_fgs_active", None)
+        if active is True and getattr(self, "_fgs_label", "") == label:
             return
         try:
             from flet_notifications import (
@@ -57,26 +63,31 @@ class SessionActions:
                 # action that tears down sessions + FGS and closes the app.
                 actions=[NotificationAction(id="exit", title="Exit")],
             )
+            self._fgs_active = True
+            self._fgs_label = label
             logger.info("FGS started (%s)", label)
         except Exception as exc:
             logger.warning("FGS start failed: %s", exc)
 
     async def _update_fgs(self) -> None:
-        """Ref-count the foreground service: it runs while ANY shell or display
-        session is alive and stops only when both are gone. Closing one shell
-        must not kill the background service while a display (or another shell)
-        runs."""
+        """Ref-count the foreground service: it runs while ANY shell or
+        display session is alive and stops only when both are gone. Closing
+        one shell must not kill the background service while a display (or
+        another shell) runs. STARTING and STOPPING sessions count too — a
+        display takes up to 60s to come up, and backgrounding during that
+        window used to kill the process and the start with it (device audit
+        2026-11-13)."""
         shells = list(getattr(self.session_manager, "entries", {}) or {})
-        desktops = []
+        displays = []
         manager = getattr(self, "desk_manager", None)
         if manager is not None:
-            desktops = manager.running()
-        if desktops:
-            names = ", ".join(sorted(s.key for s in desktops))
+            displays = manager.starting() + manager.visible()
+        if displays:
+            names = ", ".join(sorted(s.key for s in displays))
             label = (
                 f"Display running: {names}"
-                if len(desktops) == 1
-                else f"{len(desktops)} displays running: {names}"
+                if len(displays) == 1
+                else f"{len(displays)} displays running: {names}"
             )
             await self._start_fgs(label)
         elif shells:
@@ -94,8 +105,14 @@ class SessionActions:
         notifications = getattr(self, "notifications", None)
         if notifications is None:
             return
+        # None = unknown (a fresh controller after a warm reopen — the
+        # OS-level service can outlive the old page session): still attempt.
+        if getattr(self, "_fgs_active", None) is False:
+            return
         try:
             await notifications.stop_foreground_service()
+            self._fgs_active = False
+            self._fgs_label = ""
             logger.info("FGS stopped")
         except Exception as exc:
             logger.debug("FGS stop failed: %s", exc)
@@ -180,7 +197,7 @@ class SessionActions:
         )
 
     async def kill_all_sessions(self, signal: str | None = None) -> None:
-        outcome = await asyncio.to_thread(self.proot.kill_session, "", True, signal)
+        outcome = await asyncio.to_thread(self.proot.kill_session, None, True, signal)
         self.show_snack(
             "stopped all sessions" if outcome.ok else self.proot.friendly_job_error(outcome)
         )

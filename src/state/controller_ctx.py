@@ -79,6 +79,7 @@ class ControllerMethods:
         default=_noop_async
     )
     stop_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    retry_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     resume_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     cancel_install_display: Callable[[], Awaitable[None]] = field(default=_noop_async)
     leave_display: Callable[[], Awaitable[None]] = field(default=_noop_async)

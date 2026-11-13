@@ -5,6 +5,7 @@ v1.1.0 UI-structure pins (card 3-item, grouped menu, files banner).
 
 from __future__ import annotations
 
+from collections import deque
 from pathlib import Path
 
 import pytest
@@ -399,6 +400,74 @@ async def test_start_picks_the_lowest_free_display_globally(monkeypatch):
     assert again is s1
 
 
+async def test_start_failure_leaves_an_error_session_and_kills_the_groups(monkeypatch):
+    """A readiness failure must never surface as RUNNING (device
+    2026-11-13: the user got a "running" dead surface with the error wiped).
+    start() re-checks the ERROR status, kills both process groups and
+    raises; the session stays listable as failed."""
+    manager = desk_manager.DeskManager()
+    _stub_server(monkeypatch, manager, _FakeServer)
+    killed: list[str] = []
+
+    def _failing_wait(session, timeout):
+        manager._fail(session, "the X server exited", session.log_tail)
+
+    monkeypatch.setattr(manager, "_wait_xvfb", _failing_wait)
+    monkeypatch.setattr(manager, "_kill_session", lambda s: killed.append(s.key))
+
+    with pytest.raises(RuntimeError, match="the X server exited"):
+        await manager.start("debian", display=0)
+
+    assert killed == ["debian:0"]
+    session = manager.get("debian:0")
+    assert session is not None and session.status is desk_manager.DeskStatus.ERROR
+    assert manager.failed() == [session]
+    assert manager.visible() == []
+
+
+def test_failed_rows_survive_until_dismissed():
+    """ERROR is a visible state: failed() lists it (the Display tab renders
+    Logs/Retry/Dismiss from it) while the running rows exclude it."""
+    manager = desk_manager.DeskManager()
+    session = desk_manager.DeskSession(container="debian", key="debian:0")
+    session.status = desk_manager.DeskStatus.ERROR
+    session.error = "the X server exited (code 1)"
+    manager._sessions[session.key] = session
+
+    assert manager.failed() == [session]
+    assert manager.visible() == []
+    session.status = desk_manager.DeskStatus.IDLE
+    assert manager.failed() == []
+
+
+def test_fail_closes_the_log_handle():
+    """An ERROR session must not keep the log file pinned open (it used to
+    leak until the user happened to press Stop)."""
+    import io
+
+    manager = desk_manager.DeskManager()
+    session = desk_manager.DeskSession(container="debian", key="debian:0")
+    closed = []
+
+    class _Handle(io.BytesIO):
+        def close(self):
+            closed.append(True)
+            super().close()
+
+    session._log_file = _Handle()
+    manager._fail(session, "the X server exited", deque(["boom"]))
+    assert closed == [True]
+    assert session._log_file is None
+
+
+def test_display_logs_live_in_the_durable_data_root():
+    """Upstream clear-cache empties the CACHE root — crash logs must live in
+    the data root or "clear cached downloads" destroys the only evidence."""
+    src = (ROOT / "src" / "services" / "desk_service" / "manager.py").read_text(encoding="utf-8")
+    assert 'data_root() / "display-logs"' in src
+    assert 'cache_root() / "display-logs"' not in src
+
+
 def test_the_clipboard_bridge_is_gone_vnc_carries_it():
     """RFB's clipboard channel moves text BOTH ways (ServerCutText) — the old
     proot'd xclip bridge (and its W^X execve workaround) is deleted."""
@@ -705,13 +774,21 @@ class _StubDesk:
     def __init__(self, keys: list[str]) -> None:
         self._keys = keys
 
-    def running(self) -> list:
-        class _R:
-            def __init__(self, key: str) -> None:
-                self.key = key
-                self.container = key.split(":")[0]
+    class _R:
+        def __init__(self, key: str) -> None:
+            self.key = key
+            self.container = key.split(":")[0]
 
-        return [_R(key) for key in self._keys]
+    def running(self) -> list:
+        return [self._R(key) for key in self._keys]
+
+    # STARTING sessions hold the FGS too (a display takes up to 60s to come
+    # up — backgrounding during that window used to kill the start).
+    def starting(self) -> list:
+        return []
+
+    def visible(self) -> list:
+        return self.running()
 
 
 async def test_update_fgs_prefers_desktops_then_shells_then_stops(monkeypatch):
@@ -746,6 +823,19 @@ async def test_update_fgs_prefers_desktops_then_shells_then_stops(monkeypatch):
     sa.session_manager = type("M", (), {"entries": {}})()
     await sa._update_fgs()
     assert stopped[-1] is True
+
+
+def test_the_mic_recorder_is_mounted_per_page_session():
+    """A Flet Service registers with the page AT CONSTRUCTION: the recorder
+    must be built in _mount_services (which runs on every init). Building it
+    in __init__ leaves a dead registration after a warm reopen — the FGS
+    keeps the process alive, main() constructs a fresh controller, and
+    has_permission() failed silently (device audit 2026-11-13)."""
+    src = (ROOT / "src" / "app_controller.py").read_text(encoding="utf-8")
+    before_init = src.split("async def init(self)")[0]
+    assert "flet_audio_recorder" not in before_init
+    mount_region = src.split("def _mount_services")[1].split("async def _restore_prefs")[0]
+    assert "far.AudioRecorder()" in mount_region
 
 
 def test_desk_service_exports_the_full_surface():

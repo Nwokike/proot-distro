@@ -5,6 +5,7 @@ from __future__ import annotations
 import errno
 import logging
 import os
+import signal
 import struct
 import subprocess
 import threading
@@ -66,6 +67,13 @@ class ProotSession:
         process = self._process
         if process is None or process.poll() is not None:
             return
+        self._signal_process_group(process, sig)
+
+    @staticmethod
+    def _signal_process_group(process: subprocess.Popen, sig: int) -> None:
+        """killpg first; fall back to the single pid when the group is gone.
+        stop() uses this directly — it clears _process before signaling, so
+        send_signal's None check must not gate it."""
         try:
             os.killpg(process.pid, sig)
         except OSError:
@@ -166,13 +174,20 @@ class ProotSession:
         master_fd, self._master_fd = self._master_fd, None
         # Terminate the guest FIRST: if the fd close raises (raced close),
         # teardown must still happen — never let an EBADF skip the kill.
+        # The GROUP signal path (send_signal → killpg) is mandatory here:
+        # proot SIG_IGNs SIGTERM, and SIGKILL on the leader alone orphans the
+        # whole guest tree ("the whole guest running, reparented to init" —
+        # upstream kill.py). Leader-only terminate()/kill() is wrong.
         if process is not None and process.poll() is None:
-            process.terminate()
+            self._signal_process_group(process, signal.SIGTERM)
             try:
                 process.wait(timeout=2.0)
             except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=1.0)
+                self._signal_process_group(process, signal.SIGKILL)
+                try:
+                    process.wait(timeout=1.0)
+                except subprocess.TimeoutExpired:
+                    logger.warning("guest process group refused to die")
             self.returncode = process.poll()
         if master_fd is not None:
             try:

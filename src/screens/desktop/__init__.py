@@ -33,6 +33,7 @@ except ImportError:
 
 from core import theme, tokens
 from core.state import state
+from services.desk_service import DeskStatus
 from state.controller_ctx import ControllerMethodsCtx
 
 # The keyboard strip's keys → X keysyms (what RFB's sendKey expects).
@@ -84,11 +85,17 @@ def DesktopView(session) -> ft.Control:
     # Subscribe to the guest-log rev so the output panel streams live.
     _ = st.display_log_rev
     log_lines = list(session.log_tail)
-    controller = getattr(page, "_controller", None)
-    clipboard = getattr(controller, "clipboard", None)
+    # The ONE app-wide Clipboard (mounted by shared_services on the page) —
+    # a fresh ft.Clipboard() is an unmounted Service and its set() raises;
+    # the controller exposes no clipboard attribute.
+    clipboard = getattr(page, "clipboard", None)
 
     # ── starting / stopping ───────────────────────────────────────────────────
-    if st.display_status in ("starting", "stopping"):
+    # Keyed off THIS session's status — the global display_status belongs to
+    # whichever session last transitioned, and a second display starting
+    # while this one is viewed must not replace the live viewer (device
+    # audit 2026-11-13).
+    if session.status is DeskStatus.STARTING or session.status is DeskStatus.STOPPING:
         return ft.Column(
             controls=[
                 ft.ProgressRing(width=36, height=36, stroke_width=3),
@@ -116,12 +123,15 @@ def DesktopView(session) -> ft.Control:
         )
 
     # ── error ─────────────────────────────────────────────────────────────────
-    if st.display_status == "error":
+    if session.status is DeskStatus.ERROR:
         tail = "\n".join(list(session.log_tail)[-20:])
         return ft.Column(
             controls=[
                 ft.Icon(ft.Icons.ERROR_OUTLINE, size=48, color=theme.warn()),
-                ft.Text(st.display_error or "The display could not start.", size=tokens.FONT_MD),
+                ft.Text(
+                    session.error or st.display_error or "The display could not start.",
+                    size=tokens.FONT_MD,
+                ),
                 ft.Container(
                     content=ft.Text(
                         tail or "(no logs)",
@@ -137,9 +147,7 @@ def DesktopView(session) -> ft.Control:
                     controls=[
                         ft.FilledButton(
                             "Retry",
-                            on_click=lambda _e: page.run_task(
-                                methods.start_display, session.container, None, None, None
-                            ),
+                            on_click=lambda _e: page.run_task(methods.retry_display, session.key),
                         ),
                         ft.TextButton(
                             "Show logs",
@@ -383,7 +391,9 @@ def DesktopView(session) -> ft.Control:
     last_line = log_lines[-1] if log_lines else "no output yet"
 
     async def _copy_log() -> None:
-        await ft.Clipboard().set("\n".join(log_lines))
+        if clipboard is None:
+            return
+        await clipboard.set("\n".join(log_lines))
 
     output_panel = ft.Container(
         content=ft.Column(

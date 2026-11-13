@@ -51,12 +51,15 @@ def DisplayView() -> ft.Control:
 
         show_new_display_sheet(page, methods)
 
-    plus_button = ft.IconButton(
-        icon=ft.Icons.ADD_ROUNDED,
-        icon_size=tokens.ICON_MD,
-        tooltip="New display — GUI app or desktop",
-        on_click=_new_display,
-    )
+    def _plus_button() -> ft.IconButton:
+        # A control can only have ONE parent: each section header gets its
+        # own instance (one shared IconButton mounted twice is undefined).
+        return ft.IconButton(
+            icon=ft.Icons.ADD_ROUNDED,
+            icon_size=tokens.ICON_MD,
+            tooltip="New display — GUI app or desktop",
+            on_click=_new_display,
+        )
 
     def _single_app(_e) -> None:
         from screens.display_launcher import show_new_display_sheet
@@ -146,8 +149,86 @@ def DisplayView() -> ft.Control:
             )
         return rows
 
+    def _failed_rows(sessions: list) -> list:
+        """Crash honesty: a failed display is a VISIBLE row — what happened,
+        its log, a same-shape Retry, and a Dismiss (never silent; device
+        audit 2026-11-13: crashed rows used to vanish without a word)."""
+        rows = []
+        for session in sessions:
+
+            def _retry(_e, s=session) -> None:
+                page.run_task(methods.retry_display, s.key)
+
+            def _logs(_e, key=session.key) -> None:
+                page.run_task(methods.show_display_logs, key)
+
+            def _dismiss(_e, key=session.key) -> None:
+                page.run_task(methods.stop_display, key)
+
+            rows.append(
+                card(
+                    ft.Container(
+                        content=ft.Row(
+                            controls=[
+                                ft.Icon(
+                                    ft.Icons.ERROR_OUTLINE,
+                                    size=tokens.ICON_MD,
+                                    color=theme.warn(),
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text(
+                                            session.key,
+                                            size=tokens.FONT_LG,
+                                            weight=ft.FontWeight.W_600,
+                                            color=theme.text(),
+                                        ),
+                                        ft.Text(
+                                            session.error or "the display failed",
+                                            size=tokens.FONT_XS,
+                                            color=theme.text_dim(),
+                                            max_lines=2,
+                                            overflow=ft.TextOverflow.ELLIPSIS,
+                                        ),
+                                    ],
+                                    spacing=tokens.SPACE_XXS,
+                                    expand=True,
+                                ),
+                                ft.TextButton("Logs", on_click=_logs),
+                                ft.TextButton("Retry", on_click=_retry),
+                                ft.IconButton(
+                                    icon=ft.Icons.CLOSE_ROUNDED,
+                                    icon_color=theme.warn(),
+                                    tooltip="Dismiss (stop the failed display)",
+                                    on_click=_dismiss,
+                                ),
+                            ],
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                            spacing=tokens.SPACE_SM,
+                        ),
+                    ),
+                    padding=tokens.SPACE_SM,
+                )
+            )
+        return rows
+
+    # Errors render ABOVE the content — never under the banner.
+    if state.display_error:
+        sections.append(
+            ft.Text(
+                state.display_error,
+                size=tokens.FONT_XS,
+                color=theme.warn(),
+                selectable=True,
+            )
+        )
+
     if running:
-        sections.append(_section("Running", plus_button, _session_rows(running)))
+        sections.append(_section("Running", _plus_button(), _session_rows(running)))
+
+    failed = manager.failed() if manager else []
+    if failed:
+        sections.append(_section("Failed", None, _failed_rows(failed)))
 
     # A display still starting gets a live progress card — driven by the
     # OBSERVABLE display_status (set the instant start_display begins), so it
@@ -317,17 +398,7 @@ def DisplayView() -> ft.Control:
                 )
             )
 
-        sections.append(_section("Desktop", plus_button, rows))
-
-    if state.display_error:
-        sections.append(
-            ft.Text(
-                state.display_error,
-                size=tokens.FONT_XS,
-                color=theme.warn(),
-                selectable=True,
-            )
-        )
+        sections.append(_section("Desktop", _plus_button(), rows))
 
     # Banner at the very bottom — same position as the Terminal tab.
     sections.append(pooled_banner_ad("display-1", page))

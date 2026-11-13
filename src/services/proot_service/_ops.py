@@ -234,9 +234,14 @@ def clear_cache(
     )
 
 
-def kill_session(target: str, all_sessions: bool = False, signal: str | None = None) -> Outcome:
+def kill_session(
+    target: str | None = None, all_sessions: bool = False, signal: str | None = None
+) -> Outcome:
     """Stop running session(s): `signal` is a name/number (default SIGTERM);
-    upstream escalates SIGTERM→SIGQUIT→SIGKILL for stubborn guests."""
+    upstream escalates SIGTERM→SIGQUIT→SIGKILL for stubborn guests.
+    `target=None` + `all_sessions=True` is upstream's --all: the target must
+    be ABSENT (None), not an empty string — upstream fails
+    "a target cannot be combined with --all." on any non-None target."""
     return _run_command(
         "proot_distro.commands.kill",
         "command_kill",

@@ -150,22 +150,18 @@ def test_proot_session_writes_complete_payload_in_chunks(monkeypatch):
 
 
 def test_proot_session_stop_escalates_to_kill(monkeypatch):
-    """When terminate() does not stop the process within 2s, kill() must be called."""
+    """stop() signals the whole PROCESS GROUP: SIGTERM first, SIGKILL when the
+    guest ignores it for 2s. proot SIG_IGNs SIGTERM, and a leader-only signal
+    orphans the guest tree (upstream kill.py) — terminate()/kill() on the
+    single pid is never correct here."""
 
     class _StubProcess:
         def __init__(self):
-            self.terminated = False
-            self.killed = False
+            self.pid = 4242
             self._waits = 0
 
         def poll(self):
-            return -9 if self.killed else None
-
-        def terminate(self):
-            self.terminated = True
-
-        def kill(self):
-            self.killed = True
+            return -9 if self._waits >= 2 else None
 
         def wait(self, timeout=None):
             self._waits += 1
@@ -180,12 +176,20 @@ def test_proot_session_stop_escalates_to_kill(monkeypatch):
     session._process = proc
     session._master_fd = 999
 
+    signaled: list[tuple[int, int]] = []
+
+    def _fake_killpg(pgid, sig):
+        signaled.append((pgid, sig))
+
+    monkeypatch.setattr(session_service.os, "killpg", _fake_killpg)
     closed_fds: list[int] = []
     monkeypatch.setattr("os.close", closed_fds.append)
 
     session.stop()
-    assert proc.terminated is True
-    assert proc.killed is True
+    import signal as _signal
+
+    assert signaled[0] == (4242, _signal.SIGTERM)
+    assert (4242, _signal.SIGKILL) in signaled
     assert 999 in closed_fds
     assert session.returncode == -9
 

@@ -280,7 +280,11 @@ def test_build_push_kill_namespaces_match_parser():
     kill_fields = set(vars(p.parse_args(["kill", "123", "-s", "9"])))
     assert set(vars(_ns_kill("123", signal="9"))) <= kill_fields
     kill_all_fields = set(vars(p.parse_args(["kill", "--all"])))
-    assert set(vars(_ns_kill("", all_sessions=True))) <= kill_all_fields
+    # --all requires the target to be ABSENT (None): an empty string trips
+    # upstream's "a target cannot be combined with --all." and every Stop All
+    # failed (device audit 2026-11-13).
+    assert set(vars(_ns_kill(None, all_sessions=True))) <= kill_all_fields
+    assert _ns_kill(None, all_sessions=True).target is None
 
 
 def test_inprocess_login_run_refused_without_get_proot_cmd():

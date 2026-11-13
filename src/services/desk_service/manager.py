@@ -277,6 +277,14 @@ class DeskManager:
             raise
         if session.status is DeskStatus.STOPPING:
             return session
+        if session.status is DeskStatus.ERROR:
+            # _wait_xvfb does not raise on failure — it marks the session ERROR
+            # ("the X server exited" / readiness timeout). A failed start must
+            # never reach RUNNING: tear the process tree down and surface it
+            # (device 2026-11-13: the user got a "running" dead surface with
+            # the error wiped).
+            self._kill_session(session)
+            raise RuntimeError(session.error or "the display failed to start")
         # The stream server runs IN THIS PROCESS — its start() sets up the
         # aiohttp site and returns; the RFB bytes flow through the proxy task.
         try:
@@ -365,6 +373,14 @@ class DeskManager:
                 if s.status in (DeskStatus.RUNNING, DeskStatus.STOPPING)
             ]
 
+    def failed(self) -> list[DeskSession]:
+        """Sessions that died on their own (start failure or mid-run crash).
+        ERROR is a visible state: the tab lists each one with its log tail,
+        a Retry and a Dismiss — a crash must never be silent (device
+        2026-11-13: rows vanished and nothing explained why)."""
+        with self._lock:
+            return [s for s in self._sessions.values() if s.status is DeskStatus.ERROR]
+
     def starting(self) -> list[DeskSession]:
         with self._lock:
             return [s for s in self._sessions.values() if s.status is DeskStatus.STARTING]
@@ -395,7 +411,10 @@ class DeskManager:
             session.host,
             session.port,
         )
-        log_path = storage_paths.cache_root() / "display-logs" / f"{session.key}.log"
+        # Durable by design: upstream `clear-cache` empties the CACHE root,
+        # which would destroy the only crash evidence if these lived there
+        # (device audit 2026-11-13). The data root survives clear-cache.
+        log_path = storage_paths.data_root() / "display-logs" / f"{session.key}.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_file = open(log_path, "wb", buffering=0)  # noqa: SIM115 - closed in _stop_sync / on failure
         session._log_file = log_file
@@ -603,6 +622,16 @@ class DeskManager:
         session.status = DeskStatus.ERROR
         self._notify_changed()
         logger.warning("display: %s — %s", session.key, session.error)
+        # The log handle must not leak into the ERROR state: the reader
+        # threads are done with it (EOF path) or their writes no-op through
+        # the OSError guard, and a leaked fd keeps the file pinned until the
+        # user happens to press Stop.
+        log_file, session._log_file = session._log_file, None
+        if log_file is not None:
+            try:
+                log_file.close()
+            except OSError:
+                pass
 
     def _kill_session(self, session: DeskSession) -> None:
         """SIGTERM both process groups (used when the stream server fails to

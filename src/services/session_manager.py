@@ -127,7 +127,17 @@ class SessionManager:
                     pass
 
             def _on_exit(returncode: int | None) -> None:
-                loop.call_soon_threadsafe(_record_exit, returncode)
+                # Same loop discipline as _on_bytes: prefer the CURRENT page
+                # loop (the app may have been reopened in this process while
+                # the foreground service kept it alive) and swallow a dead
+                # loop — the byte path already did; the exit path missed it
+                # and stranded the tab + FGS on reopen (device audit
+                # 2026-11-13).
+                target = entry.loop or loop
+                try:
+                    target.call_soon_threadsafe(_record_exit, returncode)
+                except RuntimeError:
+                    pass
 
             session = session_service.ProotSession(argv, env, _on_bytes, _on_exit)
             try:

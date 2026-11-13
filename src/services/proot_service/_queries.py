@@ -63,21 +63,30 @@ def search_images(query: str, limit: int = 20) -> list[dict]:
 
 
 def cached_images() -> list[dict]:
-    """Cached OCI images (host-side sizes) for the storage screen."""
+    """Cached OCI images (host-side sizes) for the storage screen.
+
+    Upstream's record (helpers/docker/cache.py) already carries the computed
+    blob total in `size` — the old `full_path`/`id` keys do not exist in the
+    record, and `path` is the manifest-cache JSON file, so walking it made
+    every size read 0 (device audit 2026-11-13)."""
     cache = _imp("proot_distro.helpers.docker.cache")
 
     rows = []
     for image in cache.iter_cached_images():
-        size = 0
-        try:
-            path = image.get("full_path") or image.get("path")
-            if path and Path(path).is_dir():
-                size = _tree_bytes(Path(path))
-        except Exception as exc:
-            logger.debug("cached image size unavailable: %r", exc)
+        size = image.get("size") or 0
+        if not size:
+            try:
+                path = image.get("path")
+                if path and Path(path).is_dir():
+                    size = _tree_bytes(Path(path))
+            except Exception as exc:
+                logger.debug("cached image size unavailable: %r", exc)
         rows.append(
             {
-                "identifier": image.get("image_ref") or image.get("id") or "?",
+                "identifier": image.get("image_ref")
+                or image.get("image_id")
+                or image.get("key")
+                or "?",
                 "arch": image.get("arch", ""),
                 "size_bytes": size,
             }

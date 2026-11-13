@@ -258,6 +258,22 @@ class DisplayActions:
             self._lock_orientation(False)
         await self._update_fgs()
 
+    async def retry_display(self, key: str) -> None:
+        """Retry a failed display with the SAME shape it had (mode, desktop
+        env, login options, display number) — a bare start_display call
+        would turn a failed single-app session into a desktop."""
+        session = self.desk_manager.get(key)
+        if session is None:
+            self.show_snack("that display is gone")
+            return
+        await self.start_display(
+            session.container,
+            desktop_env=session.desktop_env,
+            app_command=session.app_command or None,
+            display=session.display,
+            options=dict(getattr(session, "login_options", None) or {}),
+        )
+
     async def resume_display(self, key: str) -> None:
         """Re-enter a running display (Running-row Open / card tap) — reacquire
         the wakelock exactly like start_display does, which leave_display
@@ -299,8 +315,10 @@ class DisplayActions:
         if session is None or not session.url:
             self.show_snack("the display is not running")
             return
-        clipboard = getattr(self.page, "clipboard", None) or ft.Clipboard()
-        share = getattr(self.page, "share", None) or ft.Share()
+        # The ONE app-wide instances (shared_services) — never a fresh
+        # Service per click (each construction registers another instance).
+        clipboard = getattr(self.page, "clipboard", None)
+        share = getattr(self.page, "share", None)
         rows: list[ft.Control] = []
 
         def _url_row(label: str, url: str) -> ft.Control:
@@ -530,7 +548,20 @@ class DisplayActions:
 
     async def show_display_logs(self, key: str) -> None:
         session = self.desk_manager.get(key)
-        lines = list(session.log_tail) if session else list(state.display_logs or [])
+        if session is not None:
+            lines = list(session.log_tail)
+        else:
+            # The session object is gone (cold reopen): the durable log file
+            # is the only surviving evidence (data root — clear-cache can't
+            # touch it).
+            from core import storage_paths
+
+            path = storage_paths.data_root() / "display-logs" / f"{key}.log"
+            lines = []
+            try:
+                lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            except OSError:
+                pass
         tail = "\n".join(lines[-200:]) or "(no logs yet)"
         self.page.show_dialog(
             ft.AlertDialog(

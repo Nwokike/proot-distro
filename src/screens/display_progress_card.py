@@ -32,7 +32,12 @@ def DisplayProgressCard(
     expanded, set_expanded = ft.use_state(True)
 
     def _copy_output(e=None) -> None:
-        page.run_task(ft.Clipboard().set, "\n".join(progress.logs))
+        # The ONE app-wide Clipboard (mounted by shared_services) — a fresh
+        # ft.Clipboard() is an unmounted Service and its set() raises.
+        clipboard = getattr(page, "clipboard", None)
+        if clipboard is None:
+            return
+        page.run_task(clipboard.set, "\n".join(progress.logs))
 
     # Incremental body: only render the tail, fresh list every time.
     lines = list(progress.logs[-60:])

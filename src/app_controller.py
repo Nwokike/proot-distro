@@ -55,17 +55,6 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
         self.desk_manager.on_sessions_changed = self._bump_display_sessions
         self.desk_manager.on_log_line = self._bump_display_log
         self.ad_service = ad_service.AdService(page)
-        # Official Flet audio-recorder service — `has_permission()` is the
-        # supported way to obtain the RECORD_AUDIO runtime grant (the display's
-        # mic path asks through it before the PulseAudio daemon starts). A
-        # Service registers itself with the page on construction.
-        try:
-            import flet_audio_recorder as far
-
-            self.mic_recorder = far.AudioRecorder()
-        except Exception as exc:  # audio only — never a startup failure
-            logger.debug("audio recorder service unavailable: %s", exc)
-            self.mic_recorder = None
         # android_default_icon: our app-icon silhouette (bundled via
         # tool.flet.android.res_dir), not the plugin's default Flet logo.
         self.notifications = ft_notifications.Notifications(
@@ -94,8 +83,14 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
                 s = self.desk_manager.get(active)
                 if s is None or s.status is not desk_service.DeskStatus.RUNNING:
                     state.active_display = None
-                    state.display_status = "idle"
-                    state.display_status_text = ""
+                    if s is not None and s.status is desk_service.DeskStatus.ERROR:
+                        # A crash is never silent: the error text drives the
+                        # viewer's error branch and the tab's Failed rows.
+                        state.display_status = "error"
+                        state.display_error = s.error
+                    else:
+                        state.display_status = "idle"
+                        state.display_status_text = ""
                     state.display_url = ""
                     self._wakelock(False)
                     self._lock_orientation(False)
@@ -197,6 +192,7 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             probe_display=self.probe_display,
             start_display=self.start_display,
             stop_display=self.stop_display,
+            retry_display=self.retry_display,
             resume_display=self.resume_display,
             cancel_install_display=self.cancel_install_display,
             leave_display=self.leave_display,
@@ -273,6 +269,21 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
         self.connectivity = ft.Connectivity()
         self.connectivity.on_change = self._on_connectivity
         self.page.services.append(self.connectivity)
+        # Official Flet audio-recorder service — `has_permission()` is the
+        # supported way to obtain the RECORD_AUDIO runtime grant (the display's
+        # mic path asks through it before the PulseAudio daemon starts). A
+        # Service registers with the page AT CONSTRUCTION, so it must be built
+        # HERE (per page session) — a warm reopen (FGS kept the process alive)
+        # re-runs init() but not __init__, and a recorder built for the dead
+        # page session makes has_permission() fail silently (device audit
+        # 2026-11-13). Audio only — never a startup failure.
+        try:
+            import flet_audio_recorder as far
+
+            self.mic_recorder = far.AudioRecorder()
+        except Exception as exc:
+            logger.debug("audio recorder service unavailable: %s", exc)
+            self.mic_recorder = None
         # Wakelock/Clipboard/Share for the display wrap are the ONE app-wide
         # instances already mounted by shared_services (page.wakelock,
         # page.clipboard, page.share) — never mount a second instance.
