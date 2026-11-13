@@ -196,8 +196,8 @@ _PINNED_SOURCES = {
                 "e1b4a5113648da8de189620ba1fce74c48b2d0833d9043391b9a1c91fb606fd3",
             ),
             "p11-kit": (
-                "pool/main/p/p11-kit/p11-kit_0.26.5_aarch64.deb",
-                "7911d7427e3c7182cf364e56a45a92307e5e7fddc105dc468f25ae39aa3e0ad7",
+                "pool/main/p/p11-kit/p11-kit_0.26.6_aarch64.deb",
+                "e6a305edbfcf6a907bd1f09bedbcbbb06ca7784116300bd297a769c971595424",
             ),
             "libidn2": (
                 "pool/main/libi/libidn2/libidn2_2.3.8-1_aarch64.deb",
@@ -326,8 +326,8 @@ _PINNED_SOURCES = {
                 "a76ba6c3d8742819bf4fff7780eb2e022269412700fc8f4471f530cc0d81833f",
             ),
             "p11-kit": (
-                "pool/main/p/p11-kit/p11-kit_0.26.5_x86_64.deb",
-                "15395569169bbb32d54a34f6849ca4e4b10752ecccc9383f3806a02a3af07a61",
+                "pool/main/p/p11-kit/p11-kit_0.26.6_x86_64.deb",
+                "6fa55cdc0fb71c3f805a2362427d2063d319309baa4e4c3e8b243c8d8894d607",
             ),
             "libidn2": (
                 "pool/main/libi/libidn2/libidn2_2.3.8-1_x86_64.deb",
