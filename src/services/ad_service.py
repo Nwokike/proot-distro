@@ -65,11 +65,11 @@ class AdService:
         not silently disable ads there.
         """
         if not _HAS_ADS:
-            logger.info("AdService: flet_ads not available — ads disabled this build")
+            logger.debug("AdService: flet_ads not available — ads disabled this build")
             self._can_request_ads = False
             return
         if not self._is_mobile():
-            logger.info("AdService: non-mobile platform — consent flow skipped")
+            logger.debug("AdService: non-mobile platform — consent flow skipped")
             self._can_request_ads = True
             return
         try:
@@ -84,40 +84,40 @@ class AdService:
                 self._privacy_options_required = (
                     status == fta.PrivacyOptionsRequirementStatus.REQUIRED
                 )
-                logger.info(
+                logger.debug(
                     "AdService: consent status=%s can_request_ads=%s",
                     status,
                     self._can_request_ads,
                 )
             except Exception as exc:
-                logger.warning("AdService: privacy-requirement probe failed: %s", exc)
+                logger.debug("AdService: privacy-requirement probe failed: %s", exc)
             # Recorded, never obeyed — ads show with or without consent.
         except Exception as e:
-            logger.warning("AdService: UMP consent flow failed, defaulting to allow ads: %s", e)
+            logger.debug("AdService: UMP consent flow failed, defaulting to allow ads: %s", e)
             self._can_request_ads = True
 
     async def show_privacy_options(self) -> str:
         if not self._consent_manager:
-            logger.warning("AdService: privacy options requested but consent manager is missing")
+            logger.debug("AdService: privacy options requested but consent manager is missing")
             return "no_manager"
         try:
             status = await self._consent_manager.get_privacy_options_requirement_status()
         except Exception as e:
-            logger.warning("AdService: privacy options status check failed: %s", e)
+            logger.debug("AdService: privacy options status check failed: %s", e)
             return f"error:{e}"
         if status != fta.PrivacyOptionsRequirementStatus.REQUIRED:
-            logger.info("AdService: privacy options form not required (status=%s)", status)
+            logger.debug("AdService: privacy options form not required (status=%s)", status)
             return "not_required"
         try:
             await self._consent_manager.show_privacy_options_form()
             self._can_request_ads = await self._consent_manager.can_request_ads()
-            logger.info(
+            logger.debug(
                 "AdService: privacy options form shown, can_request_ads=%s",
                 self._can_request_ads,
             )
             return "form_shown"
         except Exception as e:
-            logger.warning("AdService: privacy options form failed to open: %s", e)
+            logger.debug("AdService: privacy options form failed to open: %s", e)
             return f"error:{e}"
 
     # ── Interstitial Ads ──────────────────────────────────────────────────
@@ -126,32 +126,32 @@ class AdService:
         """Pre-load an interstitial ad for later display."""
         self._on_close = on_close
         if self._is_shutting_down:
-            logger.info("AdService: preload skipped — shutting down")
+            logger.debug("AdService: preload skipped — shutting down")
             return
         if not _HAS_ADS or not self._is_mobile():
-            logger.info("AdService: preload skipped — flet_ads missing or non-mobile")
+            logger.debug("AdService: preload skipped — flet_ads missing or non-mobile")
             return
         try:
             ad = fta.InterstitialAd(
                 unit_id=self.interstitial_id,
-                on_load=lambda _e: logger.info("InterstitialAd loaded"),
-                on_error=lambda e: logger.warning(
+                on_load=lambda _e: logger.debug("InterstitialAd loaded"),
+                on_error=lambda e: logger.debug(
                     "InterstitialAd load error: %s", getattr(e, "data", e)
                 ),
                 on_close=self._handle_close,
             )
         except Exception as exc:
-            logger.warning("AdService: failed to construct InterstitialAd: %s", exc)
+            logger.debug("AdService: failed to construct InterstitialAd: %s", exc)
             return
         self.interstitial = ad
         try:
             if ad not in self.page.services:
                 self.page.services.append(ad)
         except Exception as exc:
-            logger.warning("AdService: could not register preloaded interstitial: %s", exc)
+            logger.debug("AdService: could not register preloaded interstitial: %s", exc)
             self.interstitial = None
             return
-        logger.info("AdService: interstitial preloaded (unit=%s)", self.interstitial_id)
+        logger.debug("AdService: interstitial preloaded (unit=%s)", self.interstitial_id)
 
     async def _handle_close(self, _e):
         if self._shown_interstitial is not None:
@@ -165,12 +165,12 @@ class AdService:
 
     async def show_interstitial(self) -> bool:
         if not _HAS_ADS or not self._is_mobile():
-            logger.info("AdService: interstitial skipped — ads unavailable or consent gate closed")
+            logger.debug("AdService: interstitial skipped — ads unavailable or consent gate closed")
             return False
         if self._last_interstitial_at is not None:
             elapsed = time.monotonic() - self._last_interstitial_at
             if elapsed < self.INTERSTITIAL_MIN_INTERVAL_SEC:
-                logger.info(
+                logger.debug(
                     "AdService: interstitial skipped — %.0fs since the last one (min interval %.0fs)",
                     elapsed,
                     self.INTERSTITIAL_MIN_INTERVAL_SEC,
@@ -185,10 +185,10 @@ class AdService:
                 # Consume the interval only on a successful show — a failed
                 # one should not penalize the user with a 30 s dead window.
                 self._last_interstitial_at = time.monotonic()
-                logger.info("InterstitialAd shown (preloaded instance)")
+                logger.debug("InterstitialAd shown (preloaded instance)")
                 return True
             except Exception as e:
-                logger.warning("AdService: preloaded interstitial show failed: %s", e)
+                logger.debug("AdService: preloaded interstitial show failed: %s", e)
                 self._shown_interstitial = None
                 _release_service(self.page.services, ad_to_show)
                 return False
@@ -200,10 +200,10 @@ class AdService:
 
             async def _show(e):
                 await e.control.show()
-                logger.info("InterstitialAd shown (fresh instance)")
+                logger.debug("InterstitialAd shown (fresh instance)")
 
             def _on_error(e):
-                logger.warning("InterstitialAd load error: %s", getattr(e, "data", e))
+                logger.debug("InterstitialAd load error: %s", getattr(e, "data", e))
                 if self._shown_interstitial is not None:
                     _release_service(self.page.services, self._shown_interstitial)
                     self._shown_interstitial = None
@@ -215,17 +215,17 @@ class AdService:
                 on_close=self._handle_close,
             )
         except Exception as e:
-            logger.warning("AdService: fresh interstitial construction failed: %s", e)
+            logger.debug("AdService: fresh interstitial construction failed: %s", e)
             return False
         self._shown_interstitial = ad
         try:
             if ad not in self.page.services:
                 self.page.services.append(ad)
         except Exception as exc:
-            logger.warning("AdService: could not register fresh interstitial: %s", exc)
+            logger.debug("AdService: could not register fresh interstitial: %s", exc)
             self._shown_interstitial = None
             return False
-        logger.info("AdService: fresh interstitial queued — it will show on load")
+        logger.debug("AdService: fresh interstitial queued — it will show on load")
         return True
 
     async def close(self):

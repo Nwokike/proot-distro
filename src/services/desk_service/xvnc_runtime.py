@@ -215,12 +215,29 @@ def _payload_env(native: Path) -> dict[str, str]:
     return env
 
 
+def ensure_lock_dir() -> Path | None:
+    """Create `<app>/tmp` — where the builder rewrote Xvnc's compiled Termux
+    prefix. The server creates `<prefix>/tmp/.tX{N}-lock` there (fatal when
+    unwritable, device 2026-11-13) and compiles keymaps under `<prefix>/tmp/`.
+    The app root is derived from our own storage path: `<app>/files/data` → `<app>`."""
+    try:
+        app_root = storage_paths.data_root().parents[1]
+    except Exception:
+        return None
+    if not app_root.is_dir():
+        return None
+    target = app_root / "tmp"
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
 def xvnc_command(
     display: int, geometry: str, xauth_path: Path, xkb_dir: Path
 ) -> tuple[list[str], dict[str, str]]:
     """The Xvnc argv + env. RFB stays loopback-only (TigerVNC defaults -localhost
     to yes since 1.11 — our stream server is the only client, also local). The
     X port 6000+N serves the guest apps and is gated by the cookie file."""
+    ensure_lock_dir()  # the rewritten prefix's <app>/tmp must exist before start
     binary = xvnc_binary()
     argv = [
         str(binary),

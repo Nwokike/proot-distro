@@ -488,6 +488,26 @@ def _rewrite(blob: bytes, rewrites: tuple[tuple[bytes, bytes], ...]) -> bytes:
     return blob
 
 
+# Xvnc is built against the Termux prefix, and its lock dir + xkb-compile output
+# dir are COMPILED-IN paths under it ("Could not create lock file in
+# /data/data/com.termux/files/usr/tmp/.tX0-lock" — fatal on device, 2026-11-13).
+# The app cannot create another app's directory, so the literal prefix is
+# rewritten in place to our own app dir, which the runtime creates before
+# spawning the server. The replacement is the SAME byte length (trailing slash;
+# POSIX collapses "//") so the following "/tmp/…" suffix stays intact.
+_APP_ID = "ng.kiri.prootdistro"  # must match [tool.flet.android].bundle_id
+_PREFIX_REWRITES: tuple[tuple[bytes, bytes], ...] = (
+    (
+        b"/data/data/com.termux/files/usr",
+        f"/data/data/{_APP_ID}/".encode(),
+    ),
+)
+
+
+def _rewrite_prefixes(blob: bytes) -> bytes:
+    return _rewrite(blob, _PREFIX_REWRITES)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", default="wheels", help="output directory for wheels")
@@ -521,7 +541,7 @@ def main() -> int:
             resolved[wanted] = (real, blob)
         rewrites = _soname_rewrites(resolved)
         for wanted, (_real, blob) in resolved.items():
-            entries[f"opt/lib/{jni}/{wanted}"] = _rewrite(blob, rewrites)
+            entries[f"opt/lib/{jni}/{wanted}"] = _rewrite_prefixes(_rewrite(blob, rewrites))
 
         shipped = set(resolved) | _EXTERNAL_SONAMES
         for wanted in resolved:

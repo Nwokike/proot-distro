@@ -161,6 +161,14 @@ def test_xvnc_command_argv_and_env(fake_native):
     assert "XDG_RUNTIME_DIR" in env
 
 
+def test_xvnc_command_creates_the_app_tmp_dir(fake_native, tmp_path):
+    """The builder rewrites Xvnc's compiled Termux prefix to <app>/tmp (the lock
+    file + compiled keymaps live there) — the dir must exist before start."""
+    xvnc_runtime.xvnc_command(0, "1280x720", tmp_path / "xauth-0", tmp_path / "xkb")
+    app_root = storage_paths.data_root().parents[1]
+    assert (app_root / "tmp").is_dir()
+
+
 def _stub_pa_package(monkeypatch, libs, version="17.0"):
     import sys
     import types

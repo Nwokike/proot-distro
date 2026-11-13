@@ -84,6 +84,17 @@ def test_soname_rewrites_are_applied_to_the_blob(monkeypatch):
 # ── pin-set integrity (what CI fetches, sha-verified) ────────────────────────
 
 
+def test_prefix_rewrite_points_xvnc_at_our_app_dir():
+    """The device-fatal lock dir is a COMPILED-IN Termux prefix path; the builder
+    rewrites it in place (SAME byte length — a trailing slash keeps the "/tmp"
+    suffix intact) to our app dir, which the runtime creates before start."""
+    blob = b"junk\0/data/data/com.termux/files/usr/tmp/.tX%d-lock\0tail"
+    rewritten = xv_builder._rewrite_prefixes(blob)
+    assert b"/data/data/com.termux/files/usr" not in rewritten
+    assert f"/data/data/{xv_builder._APP_ID}//tmp/.tX%d-lock".encode() in rewritten
+    assert len(rewritten) == len(blob)  # in place, nothing shifts
+
+
 def test_pin_sets_match_across_arches():
     aarch64 = set(xv_builder._PINNED_SOURCES["aarch64"]["packages"])
     x86_64 = set(xv_builder._PINNED_SOURCES["x86_64"]["packages"])
