@@ -182,8 +182,7 @@ def ensure_xkb_dir() -> Path:
             raise FileNotFoundError("flet_xvnc/data/xkb")
     except Exception as exc:
         raise RuntimeError(
-            "the flet-xvnc payload data is unreadable (the wheel's xkb tree is "
-            f"missing): {exc}"
+            f"the flet-xvnc payload data is unreadable (the wheel's xkb tree is missing): {exc}"
         ) from exc
     if dest.exists():
         shutil.rmtree(dest, ignore_errors=True)
