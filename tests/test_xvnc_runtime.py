@@ -189,36 +189,66 @@ def test_pulseaudio_command_argv(fake_native):
 # ── xkb staging ──────────────────────────────────────────────────────────────
 
 
-def _stage_xkb_source(tmp_path):
-    source = tmp_path / "wheel" / "xkb"
-    (source / "symbols").mkdir(parents=True)
-    (source / "symbols" / "us").write_text("xkb_symbols\n")
-    return source
-
-
-def test_ensure_xkb_dir_copies_once_then_on_version_bump(monkeypatch, tmp_path):
+def test_xkb_data_is_staged_from_a_zipped_wheel(monkeypatch, tmp_path):
+    """THE DEVICE SHAPE: serious_python imports pip packages from a stored ZIP
+    (sitepackages.zip) — a __file__-relative data path does not exist on disk.
+    The resources Traversable API must reach inside the zip (device failure
+    2026-11-13: 'the xkb data is missing — the flet-xvnc wheel did not load')."""
     import sys
-    import types
+    import zipfile
 
-    source = _stage_xkb_source(tmp_path)
-    stub = types.ModuleType("flet_xvnc")
-    stub.__file__ = str(tmp_path / "wheel" / "flet_xvnc" / "__init__.py")
-    stub.XVNC_VERSION = "1.16.2"
-    monkeypatch.setitem(sys.modules, "flet_xvnc", stub)
-    monkeypatch.setattr(xvnc_runtime, "_xkb_source", lambda: source)
+    zip_path = tmp_path / "sitepackages.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("flet_xvnc/__init__.py", 'XVNC_VERSION = "1.16.2"\n')
+        zf.writestr("flet_xvnc/data/xkb/symbols/us", "xkb_symbols\n")
+        zf.writestr("flet_xvnc/data/xkb/rules/evdev", "rules\n")
+    monkeypatch.syspath_prepend(str(zip_path))
+    monkeypatch.delitem(sys.modules, "flet_xvnc", raising=False)
+    monkeypatch.setattr(xvnc_runtime.storage_paths, "support_root", lambda: tmp_path / "support")
 
     dest = xvnc_runtime.ensure_xkb_dir()
-    assert (dest / "symbols" / "us").is_file()
+    assert (dest / "symbols" / "us").read_text(encoding="utf-8") == "xkb_symbols\n"
+    assert (dest / "rules" / "evdev").read_text(encoding="utf-8") == "rules\n"
+    assert (dest / ".version").read_text(encoding="utf-8").strip() == "1.16.2"
 
-    # same version: no recopy (edits survive — the dir may hold compiled keymaps)
-    (dest / "symbols" / "us").write_text("edited")
+
+def test_xkb_data_recopies_on_version_bump(monkeypatch, tmp_path):
+    """Same version: no recopy (the dir may hold compiled keymaps). New version:
+    re-staged from the wheel."""
+    import sys
+
+    pkg_root = tmp_path / "pkgroot"
+    pkg = pkg_root / "flet_xvnc"
+    (pkg / "data" / "xkb" / "symbols").mkdir(parents=True)
+    (pkg / "__init__.py").write_text('XVNC_VERSION = "1.16.2"\n', encoding="utf-8")
+    (pkg / "data" / "xkb" / "symbols" / "us").write_text("xkb_symbols\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(pkg_root))
+    monkeypatch.delitem(sys.modules, "flet_xvnc", raising=False)
+    monkeypatch.setattr(xvnc_runtime.storage_paths, "support_root", lambda: tmp_path / "support")
+
+    dest = xvnc_runtime.ensure_xkb_dir()
+    (dest / "symbols" / "us").write_text("edited", encoding="utf-8")
+    # same version: edits survive
     assert xvnc_runtime.ensure_xkb_dir() == dest
     assert (dest / "symbols" / "us").read_text(encoding="utf-8") == "edited"
+    # version bump: tree re-staged (clear the stale .pyc too — same size/second
+    # would otherwise be accepted by the bytecode cache)
+    (pkg / "__init__.py").write_text('XVNC_VERSION = "1.17.0"\n', encoding="utf-8")
+    import shutil as _shutil
 
-    # version bump: the tree is re-staged from the wheel
-    stub.XVNC_VERSION = "1.17.0"
+    _shutil.rmtree(pkg / "__pycache__", ignore_errors=True)
+    monkeypatch.delitem(sys.modules, "flet_xvnc", raising=False)
     xvnc_runtime.ensure_xkb_dir()
     assert (dest / "symbols" / "us").read_text(encoding="utf-8") == "xkb_symbols\n"
+
+
+def test_xkb_missing_payload_names_the_reason(monkeypatch, tmp_path):
+    import sys
+
+    monkeypatch.delitem(sys.modules, "flet_xvnc", raising=False)
+    monkeypatch.setattr(xvnc_runtime.storage_paths, "support_root", lambda: tmp_path / "support")
+    with pytest.raises(RuntimeError, match="payload data is unreadable"):
+        xvnc_runtime.ensure_xkb_dir()
 
 
 # ── audio probe + spawn shape ────────────────────────────────────────────────

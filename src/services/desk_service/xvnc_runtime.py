@@ -139,37 +139,56 @@ def guest_cookie_path(container: str, display: int) -> Path:
 # ── xkb data ─────────────────────────────────────────────────────────────────
 
 
-def _xkb_source() -> Path | None:
-    """The xkb tree inside the flet-xvnc wheel (share/xkeyboard-config-2 content)."""
+def _xkb_version() -> str:
     try:
         import flet_xvnc  # type: ignore[import-not-found]
+
+        return str(getattr(flet_xvnc, "XVNC_VERSION", ""))
     except Exception:  # desktop/dev runs — the payload wheel is Android-only
-        return None
-    path = Path(getattr(flet_xvnc, "__file__", "")).parent / "data" / "xkb"
-    return path if path.is_dir() else None
+        return ""
+
+
+def _copy_tree(node, target: Path) -> None:
+    """Copy an importlib.resources Traversable tree onto disk (works whether the
+    package lives in a directory OR inside the Android runtime's ZIP)."""
+    for entry in node.iterdir():
+        out = target / entry.name
+        if entry.is_dir():
+            out.mkdir(exist_ok=True)
+            _copy_tree(entry, out)
+        else:
+            out.write_bytes(entry.read_bytes())
 
 
 def ensure_xkb_dir() -> Path:
-    """Copy the xkb tree to a writable dir (Xvnc may write compiled keymaps
-    beside it) and return it for -xkbdir."""
-    source = _xkb_source()
-    if source is None:
-        raise RuntimeError("the xkb data is missing — the flet-xvnc wheel did not load")
+    """Copy the wheel's xkb tree to a writable dir (Xvnc may write compiled
+    keymaps beside it) and return it for -xkbdir.
+
+    The Android runtime imports pip packages from a stored ZIP (sitepackages.zip),
+    so a `__file__`-relative path does NOT exist on disk — the tree is read
+    through the importlib.resources Traversable API, which works inside zips.
+    """
     runtime = storage_paths.support_root() / "runtime"
     dest = runtime / "xkb"
+    version = _xkb_version()
     marker = dest / ".version"
-    version = ""
-    try:
-        import flet_xvnc  # type: ignore[import-not-found]
-
-        version = str(getattr(flet_xvnc, "XVNC_VERSION", ""))
-    except Exception:
-        pass
     if marker.is_file() and marker.read_text(encoding="utf-8").strip() == version:
         return dest
+    try:
+        from importlib import resources
+
+        root = resources.files("flet_xvnc") / "data" / "xkb"
+        if not root.is_dir():
+            raise FileNotFoundError("flet_xvnc/data/xkb")
+    except Exception as exc:
+        raise RuntimeError(
+            "the flet-xvnc payload data is unreadable (the wheel's xkb tree is "
+            f"missing): {exc}"
+        ) from exc
     if dest.exists():
         shutil.rmtree(dest, ignore_errors=True)
-    shutil.copytree(source, dest)
+    dest.mkdir(parents=True, exist_ok=True)
+    _copy_tree(root, dest)
     marker.write_text(version, encoding="utf-8")
     logger.info("xkb data staged at %s (%s)", dest, version or "unknown version")
     return dest
