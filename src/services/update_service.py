@@ -13,6 +13,7 @@ import logging
 import re
 from urllib.parse import urlsplit
 
+from core import tokens
 from core.constants import (
     APP_BUILD_NUMBER,
     APP_VERSION,
@@ -97,11 +98,11 @@ async def check_for_update(
     """
     import httpx
 
-    timeout = httpx.Timeout(15.0, connect=10.0)
+    timeout = httpx.Timeout(tokens.HTTP_TIMEOUT_SEC, connect=tokens.HTTP_CONNECT_TIMEOUT_SEC)
 
     async def _fetch(c: httpx.AsyncClient) -> httpx.Response:
         last_exc: Exception | None = None
-        for attempt in range(2):
+        for attempt in range(tokens.HTTP_MAX_ATTEMPTS):
             try:
                 resp = await c.get(config_url)
                 if resp.status_code >= 500 and attempt == 0:

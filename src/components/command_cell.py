@@ -67,8 +67,8 @@ class CommandCellController:
         if not clean:
             return
         self._lines.append(clean)
-        if len(self._lines) > 400:
-            self._lines = self._lines[-400:]
+        if len(self._lines) > tokens.COMMAND_CELL_MAX_LINES:
+            self._lines = self._lines[-tokens.COMMAND_CELL_MAX_LINES :]
         self._output_list.controls = [
             ft.Text(
                 ln,
@@ -76,10 +76,17 @@ class CommandCellController:
                 size=tokens.FONT_XXS,
                 color=theme.text_dim(),
             )
-            for ln in self._lines[-200:]
+            for ln in self._lines[-tokens.COMMAND_CELL_RENDER_LINES :]
         ]
         # Dynamic height, CollabShell's 36..220 clamp.
-        self._output_list.height = min(max(len(self._output_list.controls) * 18 + 8, 36), 220)
+        self._output_list.height = min(
+            max(
+                len(self._output_list.controls) * tokens.OUTPUT_LINE_HEIGHT
+                + tokens.OUTPUT_VERTICAL_PAD,
+                tokens.OUTPUT_MIN_HEIGHT,
+            ),
+            tokens.OUTPUT_MAX_HEIGHT,
+        )
         self._output_panel.visible = True
         try:
             self._output_list.update()
@@ -120,7 +127,7 @@ def build_command_cell(
         max_lines=10,
         text_style=ft.TextStyle(font_family=tokens.MONO_FONT, size=tokens.FONT_SM),
         border=ft.OutlineInputBorder(side=ft.BorderSide(color=theme.TRANSPARENT)),
-        bgcolor=ft.Colors.TRANSPARENT,
+        bgcolor=theme.TRANSPARENT,
         hint_text=hint,
         content_padding=tokens.SPACE_SM,
         expand=True,

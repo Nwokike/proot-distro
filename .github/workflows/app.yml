@@ -252,6 +252,25 @@ jobs:
       - name: Verify 16 KB page alignment (Google Play requirement)
         run: uv run python scripts/check_elf_alignment.py build/apk/*.apk
 
+      - name: Verify the packaged display payload budget
+        run: |
+          set -e
+          limit=58720256   # 56 MiB — the Latin-only font bundle keeps us ~52
+          for apk in build/apk/*.apk; do
+            size=$(stat -c%s "$apk")
+            echo "$apk: $size bytes"
+            if [ "$size" -gt "$limit" ]; then
+              echo "::error::$apk is $size bytes (over the 56 MiB payload budget)"
+              exit 1
+            fi
+            fonts=$(unzip -l "$apk" | grep -c "flet_xvnc/data/fonts/misc/.*\.pcf\.gz" || true)
+            echo "bundled bitmap fonts: $fonts"
+            if [ "$fonts" -gt 120 ]; then
+              echo "::error::$apk ships $fonts bitmap fonts (Latin-only allowlist expected)"
+              exit 1
+            fi
+          done
+
       - name: Upload APKs to Release
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v3

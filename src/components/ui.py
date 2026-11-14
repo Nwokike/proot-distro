@@ -5,6 +5,7 @@ from __future__ import annotations
 import flet as ft
 
 from core import styles, theme, tokens
+from core.constants import AD_SLOT_NO_CONTAINERS
 
 NO_CONTAINERS_TITLE = "No containers installed"
 NO_CONTAINERS_MESSAGE = "Install a container first to get started."
@@ -34,7 +35,7 @@ def no_containers_empty_state() -> ft.Control:
     )
 
 
-def containers_required_empty_state(page=None, ad_slot: str = "no-containers") -> ft.Control:
+def containers_required_empty_state(page=None, ad_slot: str = AD_SLOT_NO_CONTAINERS) -> ft.Control:
     """The ONE no-container state for Files AND Terminal — the Files empty
     state (icon + title + message) with the banner ad row beneath, so both
     tabs show the identical thing instead of hardcoded copies."""

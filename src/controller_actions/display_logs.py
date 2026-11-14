@@ -25,8 +25,8 @@ class DisplayLogsMixin:
             from core import storage_paths
 
             path = storage_paths.data_root() / "display-logs" / f"{key}.log"
-            lines = _tail_file_lines(path, 64 * 1024)
-        tail = "\n".join(lines[-200:]) or "(no logs yet)"
+            lines = _tail_file_lines(path, tokens.DISPLAY_LOG_TAIL_BYTES)
+        tail = "\n".join(lines[-tokens.DISPLAY_LOG_TAIL_LINES :]) or "(no logs yet)"
         self.page.show_dialog(
             ft.AlertDialog(
                 title=ft.Text(

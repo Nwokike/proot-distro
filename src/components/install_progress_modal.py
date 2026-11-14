@@ -26,7 +26,7 @@ def show_install_progress_modal(page: ft.Page, target: str) -> None:
                 size=tokens.FONT_XXS,
                 color=theme.text_dim(),
             )
-            for line in state.install_logs[-60:]
+            for line in state.install_logs[-tokens.INSTALL_LOG_TAIL_LINES :]
         ],
         spacing=tokens.SPACE_NANO,
         scroll=ft.ScrollMode.AUTO,
@@ -188,7 +188,7 @@ def build_active_install_banner(page: ft.Page) -> ft.Control | None:
                                 state.install_stage or "Downloading layers…",
                                 size=tokens.FONT_XS,
                                 color=theme.text_dim(),
-                                max_lines=1,
+                                max_lines=tokens.MAX_LINES_ONE,
                             ),
                         ],
                         spacing=tokens.SPACE_NONE,
@@ -220,7 +220,7 @@ def show_run_dialog(page: ft.Page, container: str, args_text: str) -> None:
         controls=(
             [
                 ft.Text(
-                    state.run_output[-4000:],
+                    state.run_output[-tokens.RUN_OUTPUT_TAIL_CHARS :],
                     font_family=_t.MONO_FONT,
                     size=_t.FONT_XXS,
                     color=theme.text_dim(),

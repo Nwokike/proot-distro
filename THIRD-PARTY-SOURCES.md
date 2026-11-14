@@ -51,7 +51,7 @@ closure, repackaged verbatim from the Termux repositories:
 | `libxshmfence` | 1.3.3-1 | MIT | [libxshmfence](https://packages.termux.com) | [pool/main/libx/libxshmfence/libxshmfence_1.3.3-1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libx/libxshmfence/libxshmfence_1.3.3-1_aarch64.deb) | `7644c2969c2ce4d763785bd2a85eb32ccf8e5ad40228cd92b193f7edb6398d92` |
 | `libglvnd` | 1.7.0-1 | MIT | [libglvnd](https://gitlab.freedesktop.org/glvnd/libglvnd) | [pool/main/libg/libglvnd/libglvnd_1.7.0-1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libg/libglvnd/libglvnd_1.7.0-1_aarch64.deb) | `67f3fd247e4279a7fceddbd2929f8b53e87c255edfc9c07d0dee7df5fe243d2c` |
 | `libxkbfile` | 1.2.0 | MIT | [libxkbfile](https://packages.termux.com) | [pool/main/libx/libxkbfile/libxkbfile_1.2.0_aarch64.deb](https://packages.termux.dev/apt/termux-x11/pool/main/libx/libxkbfile/libxkbfile_1.2.0_aarch64.deb) | `2456caefcf93f5821f6c7c753eae50ea015864c948e678f3c8e2aec9c3c3dbd5` |
-| `xorg-fonts-misc` | 1.0.4 | Open Source | [xorg-fonts-misc](https://packages.termux.com) | [pool/main/x/xorg-fonts-misc/xorg-fonts-misc_1.0.4_all.deb](https://packages.termux.dev/apt/termux-x11/pool/main/x/xorg-fonts-misc/xorg-fonts-misc_1.0.4_all.deb) | `147796032e94f6dfbdfc71948a95fbaf791e62a5eff9eac8baf3b11d7af6fa0c` |
+| `xorg-fonts-misc` | 1.0.4 | X11 / MIT | [xorg-fonts-misc](https://gitlab.freedesktop.org/xorg/font/misc-misc) | [pool/main/x/xorg-fonts-misc/xorg-fonts-misc_1.0.4_all.deb](https://packages.termux.dev/apt/termux-x11/pool/main/x/xorg-fonts-misc/xorg-fonts-misc_1.0.4_all.deb) | `147796032e94f6dfbdfc71948a95fbaf791e62a5eff9eac8baf3b11d7af6fa0c` |
 | `xkeyboard-config` | 2.49 | MIT | [xkeyboard-config](https://gitlab.freedesktop.org/xkeyboard-config/xkeyboard-config) | [pool/main/x/xkeyboard-config/xkeyboard-config_2.49_all.deb](https://packages.termux.dev/apt/termux-x11/pool/main/x/xkeyboard-config/xkeyboard-config_2.49_all.deb) | `9523dbe04fd7fba2218451813041872957dca459d86dfed9c23a3b247e8fa371` |
 | `libx11` | 1.8.14 | MIT | [libx11](https://gitlab.freedesktop.org/xorg/lib/libx11) | [pool/main/libx/libx11/libx11_1.8.14_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libx/libx11/libx11_1.8.14_aarch64.deb) | `c5206ee9cc26a63985d110b57bc24f23c7c97505e6100c4d6a8547a1aeed5532` |
 | `libxcb` | 1.17.0-1 | MIT | [libxcb](https://gitlab.freedesktop.org/xorg/lib/libxcb) | [pool/main/libx/libxcb/libxcb_1.17.0-1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libx/libxcb/libxcb_1.17.0-1_aarch64.deb) | `191c3642b6a8c754bc75b69b94a81858ecb5f18766dc085aff55559b8087ad34` |
@@ -68,7 +68,7 @@ closure, repackaged verbatim from the Termux repositories:
 | `libpng` | 1.6.59 | Libpng | [libpng](http://www.libpng.org) | [pool/main/libp/libpng/libpng_1.6.59_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libp/libpng/libpng_1.6.59_aarch64.deb) | `32d61f0b1a60cf7283aa3a80e288737493df2c6b84c8c749606b77c94a10f2b2` |
 | `brotli` | 1.2.1 | MIT | [brotli](https://packages.termux.com) | [pool/main/b/brotli/brotli_1.2.1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/b/brotli/brotli_1.2.1_aarch64.deb) | `4fba29438b2b44f8470d52173b4548e938542dc2fc632f8699be5a284cbb9485` |
 | `libbz2` | 1.0.8-8 | BSD-4-Clause | [libbz2](https://packages.termux.com) | [pool/main/libb/libbz2/libbz2_1.0.8-8_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libb/libbz2/libbz2_1.0.8-8_aarch64.deb) | `4335d7f060650b0aabef545d1334c2f9f280223d5962e13c24a00ec934b794ba` |
-| `libc++` | 30 | Open Source | [libc++](https://packages.termux.com) | [pool/main/libc/libc++/libc++_30_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libc/libc++/libc++_30_aarch64.deb) | `53d0b84a7ba7459024257cb94d5b136fe13ef858567f65a8064b35950799f2ca` |
+| `libc++` | 30 | Apache-2.0 (LLVM exception) | [libc++](https://libcxx.llvm.org/) | [pool/main/libc/libc++/libc++_30_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libc/libc++/libc++_30_aarch64.deb) | `53d0b84a7ba7459024257cb94d5b136fe13ef858567f65a8064b35950799f2ca` |
 
 ## Native Payloads (Packaged in flet-pulseaudio)
 
@@ -129,7 +129,15 @@ written offer above covers it:
 | `flet-terminal` | MIT | https://github.com/Nwokike/flet-terminal |
 | `flet-notifications` | Apache-2.0 | https://github.com/flet-dev/flet |
 | `flet-webview` | Apache-2.0 | https://github.com/flet-dev/flet |
+| `flet-audio-recorder` | Apache-2.0 | https://github.com/flet-dev/flet |
 | `aiohttp` (display stream server) | Apache-2.0 | https://github.com/aio-libs/aiohttp |
+| `aiohappyeyeballs` | PSF-2.0 | https://github.com/aio-libs/aiohappyeyeballs |
+| `aiosignal` | Apache-2.0 | https://github.com/aio-libs/aiosignal |
+| `attrs` | MIT | https://github.com/python-attrs/attrs |
+| `frozenlist` | Apache-2.0 | https://github.com/aio-libs/frozenlist |
+| `multidict` | Apache-2.0 | https://github.com/aio-libs/multidict |
+| `propcache` | Apache-2.0 | https://github.com/aio-libs/propcache |
+| `yarl` | Apache-2.0 | https://github.com/aio-libs/yarl |
 | `httpx` | BSD-3-Clause | https://github.com/encode/httpx |
 | `httpcore` | BSD-3-Clause | https://github.com/encode/httpcore |
 | `h11` | MIT | https://github.com/python-hyper/h11 |
@@ -140,6 +148,8 @@ written offer above covers it:
 | `typing-extensions` | PSF-2.0 | https://github.com/python/typing_extensions |
 | `six` | MIT | https://github.com/benjaminp/six |
 | `repath` | MIT | https://github.com/nickstenning/repath |
+| `oauthlib` (flet OAuth support) | BSD-3-Clause | https://github.com/oauthlib/oauthlib |
+| `tzdata` (flet-notifications) | Apache-2.0 | https://github.com/python/tzdata |
 
 ## License Texts
 

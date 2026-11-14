@@ -5,6 +5,7 @@ from __future__ import annotations
 import flet as ft
 
 from core import theme, tokens
+from core.constants import GUEST_HOME
 
 
 def ask_shell_options(page: ft.Page, methods, container: str) -> None:
@@ -22,7 +23,7 @@ def ask_shell_options(page: ft.Page, methods, container: str) -> None:
     )
     work_dir = ft.TextField(
         label="Work dir (-w)",
-        hint_text="/root",
+        hint_text=GUEST_HOME,
         text_size=tokens.FONT_SM,
         height=tokens.CONTROL_INPUT,
         border=ft.OutlineInputBorder(

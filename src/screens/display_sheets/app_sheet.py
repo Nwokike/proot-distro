@@ -8,6 +8,7 @@ import logging
 import flet as ft
 
 from core import theme, tokens
+from core.constants import APP_PRESETS
 from core.state import state
 from services import session_service
 
@@ -18,16 +19,6 @@ from .common import (
 
 logger = logging.getLogger(__name__)
 
-# Probed guest apps for the "Open an app" sheet: (label, command) pairs.
-_APP_PRESETS = (
-    ("Terminal", "xterm"),
-    ("Files", "thunar"),
-    ("Browser", "firefox"),
-    ("Text editor", "mousepad"),
-    ("Image editor", "gimp"),
-    ("Office", "libreoffice"),
-    ("VS Code", "code"),
-)
 
 _CUSTOM = "__custom__"
 
@@ -79,7 +70,7 @@ def _show_app_sheet(page: ft.Page, methods, container: str) -> None:
 
     async def _probe() -> None:
         # Probes run in PARALLEL — one slow probe must not serialize the sheet.
-        probed = await asyncio.gather(*(_probe_one(label, cmd) for label, cmd in _APP_PRESETS))
+        probed = await asyncio.gather(*(_probe_one(label, cmd) for label, cmd in APP_PRESETS))
         found = [item for item in probed if item is not None]
         # Named variable, never a literal list assignment.
         rows = [

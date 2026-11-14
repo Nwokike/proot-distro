@@ -132,6 +132,17 @@ def build_terminal_fab(
 ) -> ft.FloatingActionButton:
     """The terminal FAB: all session/terminal actions in one overflow menu."""
     mt = entry.mt
+
+    def _mt(fn):
+        """Run a widget action only when the terminal exists (flet-terminal can
+        be absent; the pane says so and the FAB must not raise)."""
+
+        def _go(_e):
+            if mt is not None:
+                fn()
+
+        return _go
+
     cur_theme = (
         (getattr(mt, "theme_name", None) or _theme_name()) if mt is not None else _theme_name()
     )
@@ -155,7 +166,7 @@ def build_terminal_fab(
             ft.Icons.COPY_ALL_ROUNDED,
             lambda _e: show_full_output_dialog(page, entry),
         ),
-        _item("Paste", ft.Icons.CONTENT_PASTE_ROUNDED, lambda _e: page.run_task(mt.paste_async)),
+        _item("Paste", ft.Icons.CONTENT_PASTE_ROUNDED, _mt(lambda: page.run_task(mt.paste_async))),
         _item(
             "Clear Terminal",
             ft.Icons.CLEAR_ALL_ROUNDED,
@@ -169,21 +180,21 @@ def build_terminal_fab(
         ],
         ft.PopupMenuItem(),
         _header("Font Size / Zoom"),
-        _item("Zoom In", ft.Icons.ADD_ROUNDED, on_click=lambda _e: mt.zoom_in()),
-        _item("Zoom Out", ft.Icons.REMOVE_ROUNDED, on_click=lambda _e: mt.zoom_out()),
-        _item("Reset Zoom", ft.Icons.FIT_SCREEN_ROUNDED, on_click=lambda _e: mt.reset_zoom()),
+        _item("Zoom In", ft.Icons.ADD_ROUNDED, on_click=_mt(lambda: mt.zoom_in())),
+        _item("Zoom Out", ft.Icons.REMOVE_ROUNDED, on_click=_mt(lambda: mt.zoom_out())),
+        _item("Reset Zoom", ft.Icons.FIT_SCREEN_ROUNDED, on_click=_mt(lambda: mt.reset_zoom())),
         ft.PopupMenuItem(),
         _header("Toggle Options"),
         _item(
             "Cursor Blink",
             ft.Icons.VISIBILITY_ROUNDED,
-            on_click=lambda _e: mt.toggle_cursor_blink(),
+            on_click=_mt(lambda: mt.toggle_cursor_blink()),
             checked=bool(getattr(getattr(mt, "_terminal", None), "cursor_blink", True)),
         ),
         _item(
             "Search Bar",
             ft.Icons.SEARCH_ROUNDED,
-            on_click=lambda _e: mt.toggle_search(),
+            on_click=_mt(lambda: mt.toggle_search()),
             checked=bool(getattr(mt, "show_search", False)),
         ),
         ft.PopupMenuItem(),

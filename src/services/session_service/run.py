@@ -71,7 +71,7 @@ def command_capture(
 ) -> dict:
     """Run a one-shot arbitrary guest command via `login -- <command>`.
 
-    Bounded by default (120s) because probes and installs must not hang the
+    Unbounded by default (None) because probes and installs must not hang the
     UI; pass `timeout=None` for unbounded runs like a desktop session.
     `on_start(session)` fires once the PTY session exists so callers can
     cancel a long run (an install Stop button) via `session.stop()`.

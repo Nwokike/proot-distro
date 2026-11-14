@@ -15,6 +15,7 @@ from components import card, containers_required_empty_state
 from components.banner_ad import page_tail
 from components.file_item import build_file_item
 from core import theme, tokens
+from core.constants import AD_SLOT_FILES, AD_SLOT_FILES_EMPTY, GUEST_HOME
 from core.state import state
 from screens.files.components import (
     build_breadcrumbs,
@@ -23,6 +24,7 @@ from screens.files.components import (
 )
 from screens.files.operations import (
     handle_download,
+    handle_paste_image,
     handle_upload,
     open_delete_dialog,
     open_new_folder_dialog,
@@ -37,7 +39,7 @@ logger = logging.getLogger(__name__)
 @ft.component
 def FilesView(
     default_container: str | None = None,
-    default_path: str = "/root",
+    default_path: str = GUEST_HOME,
 ) -> ft.Control:
     """Container filesystem explorer matching CollabShell's FilesScreen.
 
@@ -57,6 +59,7 @@ def FilesView(
     selection_mode, set_selection_mode = ft.use_state(False)
     is_loading, set_is_loading = ft.use_state(False)
     error_msg, set_error_msg = ft.use_state("")
+    filter_text, set_filter_text = ft.use_state("")
 
     def _load_dir(target_dir: str | None = None) -> None:
         target = target_dir or current_path
@@ -116,7 +119,7 @@ def FilesView(
     if not installed:
         # The one shared no-container empty state (banner included) — also
         # used by the Terminal tab; never hardcoded separately.
-        return containers_required_empty_state(page, ad_slot="files-empty")
+        return containers_required_empty_state(page, ad_slot=AD_SLOT_FILES_EMPTY)
 
     # No container open yet — the picker, mirroring the Terminal tab: each
     # installed container is a card you select to open its filesystem.
@@ -272,6 +275,14 @@ def FilesView(
                         ),
                     ),
                     ft.IconButton(
+                        icon=ft.Icons.IMAGE_ROUNDED,
+                        icon_size=tokens.ICON_MD,
+                        tooltip="Paste image from the clipboard",
+                        on_click=lambda _e: page.run_task(
+                            handle_paste_image, page, selected_container, current_path, _load_dir
+                        ),
+                    ),
+                    ft.IconButton(
                         icon=ft.Icons.CHECKLIST_ROUNDED,
                         icon_size=tokens.ICON_MD,
                         tooltip="Select Items",
@@ -320,7 +331,8 @@ def FilesView(
         )
     else:
         file_items = []
-        for item in listing:
+        visible = [item for item in listing if filter_text in str(item.get("name", "")).lower()]
+        for item in visible:
             item_path = item["path"]
             is_sel = item_path in selected_items
 
@@ -347,17 +359,28 @@ def FilesView(
             expand=True,
         )
 
+    filter_field = ft.TextField(
+        hint_text="Filter this folder",
+        prefix_icon=ft.Icons.SEARCH_ROUNDED,
+        value=filter_text,
+        text_size=tokens.FONT_SM,
+        dense=True,
+        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+        on_change=lambda e: set_filter_text((e.control.value or "").strip().lower()),
+    )
+
     return ft.Column(
         controls=[
             ft.Row(controls=container_chips, scroll=ft.ScrollMode.AUTO, spacing=tokens.SPACE_SM),
             nav_row,
             action_bar,
+            filter_field,
             ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
             ft.Container(
                 content=card(file_list_content, padding=tokens.SPACE_SM),
                 expand=True,
             ),
-            page_tail("files-1", page),
+            page_tail(AD_SLOT_FILES, page),
         ],
         spacing=tokens.SPACE_SM,
         expand=True,

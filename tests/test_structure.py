@@ -8,12 +8,16 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 
 MAX_LINES = 500
+# Any raw ft.Colors.<CONSTANT> in app code (function calls like
+# ft.Colors.with_opacity are token-driven and allowed).
+RAW_COLOR_RE = re.compile(r"ft\.Colors\.[A-Z][A-Z_]*\b")
 
 
 def _sources() -> list[Path]:
@@ -36,9 +40,7 @@ def test_raw_colors_live_in_the_theme_only():
             continue
         text = path.read_text(encoding="utf-8")
         offenders.extend(
-            f"{path.relative_to(ROOT)}: {token}"
-            for token in ("ft.Colors.WHITE", "ft.Colors.BLACK", "ft.Colors.RED", "ft.Colors.BLUE")
-            if token in text
+            f"{path.relative_to(ROOT)}: {match}" for match in RAW_COLOR_RE.findall(text)
         )
     assert not offenders, "use theme.* aliases:\n" + "\n".join(offenders)
 
@@ -50,6 +52,22 @@ def test_no_stale_architecture_names():
         text = path.read_text(encoding="utf-8")
         hits.extend(f"{path.relative_to(ROOT)}: {name}" for name in stale if name in text)
     assert not hits, "\n".join(hits)
+
+
+def test_split_packages_keep_public_facades():
+    """The modules that were split must still re-export their entry points."""
+    checks = {
+        "screens/display_launcher.py": ("show_display_sheet", "show_new_display_sheet"),
+        "screens/container_actions.py": ("ask_shell_options", "container_menu_items"),
+        "controller_actions/display_actions.py": ("DisplayActions",),
+        "controller_actions/session_actions.py": ("SessionActions",),
+        "services/desk_service/manager.py": ("DeskManager", "shared_manager"),
+        "services/desk_service/xvnc_runtime.py": ("xvnc_command", "write_pulse_config"),
+    }
+    for rel, names in checks.items():
+        text = (SRC / rel).read_text(encoding="utf-8")
+        for name in names:
+            assert name in text, f"{rel} no longer exports {name}"
 
 
 def test_dead_scaffolding_stays_deleted():
@@ -79,3 +97,17 @@ def test_shared_helpers_have_real_consumers():
     assert "styles.pill_button_style()" in (SRC / "screens" / "build_view.py").read_text(
         encoding="utf-8"
     )
+
+
+def test_every_declared_dependency_is_in_the_third_party_notice():
+    """The generated notice must name every dependency the app declares."""
+    import re
+    import tomllib
+
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    doc = (ROOT / "THIRD-PARTY-SOURCES.md").read_text(encoding="utf-8")
+    declared = list(pyproject["project"]["dependencies"])
+    declared += list(pyproject["tool"]["flet"]["android"]["dependencies"])
+    for dep in declared:
+        name = re.split(r"[<>=!~ ]", dep)[0].strip()
+        assert name in doc, f"{name} is missing from THIRD-PARTY-SOURCES.md"

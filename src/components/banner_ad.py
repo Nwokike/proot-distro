@@ -14,6 +14,7 @@ import flet as ft
 from flet import Control
 
 from core import theme, tokens
+from core.constants import AD_EVERY_ROWS
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ def build_banner_ad(page: ft.Page | None = None) -> Control:
         return ft.Container(width=tokens.HIDDEN, height=tokens.HIDDEN)
 
     # Consent gate: the banner must never request an ad before (or without)
-    # a UMP verdict — this is the same gate the interstitial path uses.
+    # a UMP verdict (interstitials never gate on consent — owner ruling).
     from core.state import state
 
     if not state.can_request_ads:
@@ -130,7 +131,11 @@ def page_tail(slot: str, page: ft.Page | None = None) -> ft.Control:
 
 
 def insert_periodic(
-    rows: list[Control], slot_prefix: str, *, every: int = 5, page: ft.Page | None = None
+    rows: list[Control],
+    slot_prefix: str,
+    *,
+    every: int = AD_EVERY_ROWS,
+    page: ft.Page | None = None,
 ) -> list[Control]:
     """Insert a banner after every `every`-th row, never after the last."""
     out = list(rows)

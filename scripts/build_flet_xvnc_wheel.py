@@ -34,6 +34,7 @@ import argparse
 import base64
 import hashlib
 import io
+import re
 import tarfile
 import urllib.request
 import zipfile
@@ -415,6 +416,21 @@ _X11_PACKAGES = {
 }
 
 
+# Bitmap fonts the APP ships (owner ruling 2026-11-14: Latin-only bundle).
+# Xvnc renders xterm/UI text from these with no guest packages; a desktop
+# container also brings its own fonts through -fp. The full xorg-fonts-misc set
+# is 12.3 MB uncompressed / ~7.4 MB in the APK; the core Latin families
+# (base + ISO8859-1, clR/clB, fixed) are all a terminal needs.
+_FONT_ALLOWLIST_RE = re.compile(
+    r"^(?:[0-9]+x[0-9]+(?:[BO]|rk)?|cl[RB][0-9]+x[0-9]+|fixed)"
+    r"(?:-ISO8859-1)?\.pcf\.gz$"
+)
+
+
+def _font_allowed(name: str) -> bool:
+    return bool(_FONT_ALLOWLIST_RE.match(name.rsplit("/", 1)[-1]))
+
+
 def _pcf_font_name(raw: bytes) -> str | None:
     """The FONT property of an uncompressed PCF file, or None.
 
@@ -665,6 +681,8 @@ def main() -> int:
         # ── xkb data → package assets ─────────────────────────────────────────
         for pkg, src_prefix, dest_prefix in _DATA_PAYLOADS:
             members = {k: v for k, v in extracted[pkg].items() if k.startswith(src_prefix)}
+            if "data/fonts/misc" in dest_prefix:
+                members = {k: v for k, v in members.items() if _font_allowed(k)}
             if not members:
                 raise SystemExit(f"{pkg}: no files under {src_prefix}")
             for name, blob in sorted(members.items()):

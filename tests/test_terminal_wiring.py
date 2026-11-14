@@ -121,3 +121,25 @@ def test_terminal_view_wires_bell_and_shortcut():
     source = "\n".join(f.read_text(encoding="utf-8") for f in sorted(pkg.glob("*.py")))
     assert "mt.on_bell = _on_bell" in source
     assert "mt.on_shortcut = _on_shortcut" in source
+
+
+def test_terminal_fab_is_safe_when_the_widget_is_absent():
+    """`flet-terminal` can be missing (or the widget not yet mounted): building
+    the FAB must not dereference entry.mt (that raised AttributeError on every
+    build without the extension)."""
+    from types import SimpleNamespace
+
+    from screens.terminal.menu import build_terminal_fab
+
+    entry = SimpleNamespace(mt=None, key="debian", title="debian", container="debian")
+    fab = build_terminal_fab(
+        SimpleNamespace(),
+        methods=SimpleNamespace(),
+        entry=entry,
+        manager=None,
+        fullscreen=False,
+        on_toggle_fullscreen=lambda _e: None,
+        on_browse_files=lambda: None,
+        on_new_terminal=lambda: None,
+    )
+    assert fab is not None

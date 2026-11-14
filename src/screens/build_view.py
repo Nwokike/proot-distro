@@ -23,25 +23,14 @@ import flet as ft
 from components import card, pill_dropdown, section_header
 from components.banner_ad import pooled_banner_ad
 from core import layout, styles, theme, tokens
+from core.constants import AD_SLOT_BUILD, UPSTREAM_ARCH_CHOICES
 from core.state import state
 from screens.settings_components import _setting_row, _settings_card
 from state.controller_ctx import ControllerMethodsCtx
 
 # Upstream accepts both plain proot-distro archs AND Docker platform strings
 # (build's -a passthrough) — expose only the ones its arch map knows.
-_ARCH_CHOICES = (
-    "host",
-    "aarch64",
-    "arm",
-    "i686",
-    "riscv64",
-    "x86_64",
-    "linux/arm64",
-    "linux/arm/v7",
-    "linux/amd64",
-    "linux/386",
-    "linux/riscv64",
-)
+_ARCH_CHOICES = UPSTREAM_ARCH_CHOICES
 
 
 def _field(
@@ -165,7 +154,7 @@ def BuildView() -> ft.Control:
                 ft.Icons.FOLDER_OPEN_ROUNDED,
                 "Build context path",
                 "Directory with the Dockerfile; default '.'",
-                _field("path", path_f, set_path, width=220),
+                _field("path", path_f, set_path, width=tokens.FIELD_PATH_WIDTH),
                 stacked=is_narrow,
             ),
             _divider(),
@@ -173,7 +162,7 @@ def BuildView() -> ft.Control:
                 ft.Icons.DESCRIPTION_ROUNDED,
                 "Dockerfile (-f)",
                 "'-' = stdin; blank = <path>/Dockerfile",
-                _field("-f", dockerfile_f, set_dockerfile, width=220),
+                _field("-f", dockerfile_f, set_dockerfile, width=tokens.FIELD_PATH_WIDTH),
                 stacked=is_narrow,
             ),
             _divider(),
@@ -181,7 +170,7 @@ def BuildView() -> ft.Control:
                 ft.Icons.LABEL_ROUNDED,
                 "Tags (-t)",
                 "Comma/space separated, repeatable",
-                _field("tags", tags_f, set_tags, width=220),
+                _field("tags", tags_f, set_tags, width=tokens.FIELD_PATH_WIDTH),
                 stacked=is_narrow,
             ),
             _divider(),
@@ -205,7 +194,7 @@ def BuildView() -> ft.Control:
                 ft.Icons.UPLOAD_FILE_ROUNDED,
                 "Outputs (-o)",
                 "One output FILE per line",
-                _field("-o", outputs_f, set_outputs, width=220),
+                _field("-o", outputs_f, set_outputs, width=tokens.FIELD_PATH_WIDTH),
                 stacked=is_narrow,
             ),
             _divider(),
@@ -234,7 +223,9 @@ def BuildView() -> ft.Control:
                 ft.Icons.SETTINGS_APPLICATIONS_ROUNDED,
                 "Build args (--build-arg)",
                 "K=V, one per line",
-                _field("--build-arg", buildargs_f, set_buildargs, width=260),
+                _field(
+                    "--build-arg", buildargs_f, set_buildargs, width=tokens.FIELD_BUILD_ARGS_WIDTH
+                ),
                 stacked=is_narrow,
             ),
             _divider(),
@@ -365,7 +356,7 @@ def BuildView() -> ft.Control:
                 ft.Icons.LABEL_ROUNDED,
                 "Image ref to push",
                 "Defaults to the first build tag",
-                _field("ref", push_ref_f, set_push_ref, width=240),
+                _field("ref", push_ref_f, set_push_ref, width=tokens.FIELD_BUILD_ARGS_WIDTH),
                 stacked=is_narrow,
             ),
             _divider(),
@@ -421,7 +412,7 @@ def BuildView() -> ft.Control:
         controls.append(result_card)
     controls.extend(
         [
-            pooled_banner_ad("build-1", page),
+            pooled_banner_ad(AD_SLOT_BUILD, page),
             section_header("Push image"),
             push_card,
             ft.Container(height=tokens.NAV_BAR_CLEARANCE),

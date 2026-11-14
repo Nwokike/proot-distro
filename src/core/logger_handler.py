@@ -9,11 +9,13 @@ import collections
 import logging
 from typing import ClassVar
 
+from core import tokens
+
 
 class MemoryLogHandler(logging.Handler):
     """Ring buffer log handler capturing recent logs for in-app terminal display."""
 
-    _logs: ClassVar[collections.deque[str]] = collections.deque(maxlen=5000)
+    _logs: ClassVar[collections.deque[str]] = collections.deque(maxlen=tokens.LOG_RING_MAX_LINES)
 
     def __init__(self, level: int = logging.INFO):
         super().__init__(level=level)

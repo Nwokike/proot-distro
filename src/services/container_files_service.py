@@ -16,11 +16,11 @@ import shutil
 import zipfile
 from pathlib import Path
 
-from core import storage_paths
+from core import storage_paths, tokens
 
 logger = logging.getLogger(__name__)
 
-_MAX_TEXT_BYTES = 10 * 1024 * 1024  # 10 MB text preview bound (memory guard only)
+_MAX_TEXT_BYTES = tokens.FILE_PREVIEW_MAX_BYTES  # 10 MB text preview bound (memory guard only)
 
 
 def resolve_guest_path(container: str, guest_path: str = "/") -> tuple[Path, Path]:
@@ -95,7 +95,7 @@ def read_file_preview(container: str, guest_path: str) -> dict:
 
     if mime.startswith("image/"):
         with open(host_path, "rb") as f:
-            raw = f.read(10 * 1024 * 1024)
+            raw = f.read(tokens.FILE_PREVIEW_MAX_BYTES)
         return {
             "type": "image",
             "mime": mime,

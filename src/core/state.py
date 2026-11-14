@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import flet as ft
 
+from core import tokens
+
 # The ONE source of display-start defaults (used by state.__init__ and by
 # DisplayActions._display_settings — never duplicated). Every key has a real
 # consumer, in one of three layers: Xvnc argv (fps → -FrameRate, depth →
@@ -62,6 +64,14 @@ def _is_online(types) -> bool:
     return any(getattr(item, "value", item) not in ("none", "None") for item in types)
 
 
+# Terminal defaults (Settings -> Terminal): applied to every NEW shell.
+DEFAULT_TERMINAL_SETTINGS: dict = {
+    "theme": "JetBrains Dark",
+    "font_size": 0.0,  # 0 = the widget default
+    "cursor_blink": True,
+}
+
+
 @ft.observable
 class AppState:
     # Probe / environment
@@ -89,6 +99,8 @@ class AppState:
     storage_detail: dict | None = None  # per-area sizes under the Flet storage roots
     cache_busy: bool = False
     online: bool = True  # Connectivity service's last known state
+    settings_section: str = ""  # "" | "build" (developer tools under Settings)
+    terminal_settings: dict = None  # DEFAULT_TERMINAL_SETTINGS + saved values
     device_orientation: str = "portrait"  # PageMediaData.orientation
     keyboard_inset: float = 0.0  # PageMediaData.view_insets.bottom (px)
     docker_token: str = ""
@@ -150,7 +162,7 @@ class AppState:
     # Launcher-set options for the NEXT start — the display wrap surface:
     # quality/compression (noVNC knobs; fps kept for the persisted surface),
     # geometry (Xvnc screen, "auto" = device aspect), orientation (fullscreen
-    # lock), lan (host 0.0.0.0), tunnel (upstream localhost.run publish).
+    # lock), lan (host 0.0.0.0), tunnel (our guest ssh reverse forward).
     display_settings: dict | None = None
 
     def __init__(self):
@@ -184,7 +196,7 @@ class DisplayProgress:
         clean = line.rstrip()
         if not clean:
             return
-        self.logs = [*self.logs[-400:], clean]
+        self.logs = [*self.logs[-tokens.DISPLAY_PROGRESS_LOG_MAX :], clean]
         self.rev += 1
 
     def clear(self, container: str | None = None) -> None:

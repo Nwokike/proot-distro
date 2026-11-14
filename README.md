@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://play.google.com/store/apps/details?id=ng.kiri.prootdistro"><img src="https://img.shields.io/badge/Google_Play-Android-3DDC84?style=for-the-badge&logo=google-play&logoColor=white" alt="Google Play Store" /></a>
   <a href="https://github.com/Nwokike/proot-distro/releases/latest"><img src="https://img.shields.io/badge/Download-APK-orange?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" /></a>
-  <img src="https://img.shields.io/badge/Built_with-Flet_1.1.0-00B0FF?style=for-the-badge&logo=flutter&logoColor=white" alt="Flet" />
+  <img src="https://img.shields.io/badge/Built_with-Flet_1.1.2-00B0FF?style=for-the-badge&logo=flutter&logoColor=white" alt="Flet" />
   <img src="https://img.shields.io/badge/Python-3.14-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
 </p>
 
@@ -36,7 +36,7 @@
 | **Interactive PTY Terminal** | Real-time POSIX pseudo-terminal sessions with custom virtual extra keys, sticky modifiers (CTRL/ALT), search, zoom, and live title tracking. |
 | **Tabbed Multi-Shell Workspace** | Seamlessly switch between concurrent container shells directly above the terminal canvas. |
 | **Container Filesystem Explorer** | Browse container directories, preview text and images, upload files, download files, and zip entire directories with rootfs-jailed safety. |
-| **Snapshot Backup & Restore** | Archive complete container filesystems to `.tar.gz` and restore them anywhere on your device via the native OS file picker. |
+| **Snapshot Backup & Restore** | Archive complete container filesystems to `.tar.gz`/`.tar.bz2`/`.tar.xz`/`.tar.zst` (or plain `.tar`) and restore them anywhere on your device via the native OS file picker. |
 | **Docker Hub & OCI Integration** | Search Docker Hub for public container images and install with one tap or specify custom OCI image references. |
 | **Directory Synchronization** | Fast host-to-container and container-to-container folder synchronization with optional checksum verification and destination pruning. |
 | **Private & Sandboxed** | Operates strictly in private application storage. No user accounts, no telemetry, and zero remote tracking. |

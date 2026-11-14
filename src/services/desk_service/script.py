@@ -13,7 +13,7 @@ the shared loopback, needing NOTHING installed for single apps:
   that link libpulse play through the phone; no guest audio packages).
 
 With the tunnel enabled, our own `ssh -R` forward runs in the guest (Android
-hosts have no ssh binary); its output lands in `/tmp/x11/tunnel-{N}.log`.
+hosts have no ssh binary); its output lands in `/tmp/x11/tunnel-N.log`.
 It needs the guest's ssh client, which desktop provisioning installs.
 
 No python, no pip, no vendoring in the guest. Every UI-supplied value is
@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import re
 import shlex
+
+from core.constants import GUEST_X11_DIR
 
 from .display_env import guest_display_env
 from .environments import BY_KEY
@@ -45,7 +47,7 @@ def is_valid_geometry(geometry: str) -> bool:
 
 def guest_tunnel_log(display: int) -> str:
 
-    return f"/tmp/x11/tunnel-{display}.log"  # noqa: S108 - guest rootfs path
+    return f"{GUEST_X11_DIR}/tunnel-{display}.log"
 
 
 def guest_script_name(display: int) -> str:
@@ -125,7 +127,7 @@ export GTK_A11Y=none
 export LC_ALL=C.UTF-8
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
-mkdir -p /tmp/x11
+mkdir -p {GUEST_X11_DIR}
 
 [ -f "$XAUTHORITY" ] || echo "warning: the display auth file is missing"
 

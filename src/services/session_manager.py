@@ -15,6 +15,7 @@ from typing import Any
 
 import flet as ft
 
+from core import tokens
 from services import session_service
 
 # No artificial concurrency cap: upstream proot-distro has none — the OS
@@ -22,12 +23,12 @@ from services import session_service
 # Scrollback is a replay-buffer memory bound only: a BYTE budget (2 MiB per
 # shell) instead of a chunk count — chunk counts depend on how the PTY
 # happened to split reads, so the old 10 000-chunk deque could hold ~40 MB.
-SCROLLBACK_BYTES = 2 * 1024 * 1024
+SCROLLBACK_BYTES = tokens.SCROLLBACK_BYTES
 # PTY bytes are coalesced into one widget write per flush: fewer bridge
 # messages and fewer (larger) scrollback chunks. 16 ms ≈ one frame.
-FLUSH_INTERVAL = 0.016
-FLUSH_BYTES = 64 * 1024
-REPLAY_FRAME = 256 * 1024
+FLUSH_INTERVAL = tokens.PTY_FLUSH_INTERVAL_SEC
+FLUSH_BYTES = tokens.PTY_FLUSH_BYTES
+REPLAY_FRAME = tokens.SCROLLBACK_REPLAY_FRAME_BYTES
 
 
 @ft.observable

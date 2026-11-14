@@ -14,6 +14,7 @@ import flet as ft
 
 from components.file_item import build_file_item
 from core import theme, tokens
+from core.constants import GUEST_HOME
 from screens.files.components import (
     build_breadcrumbs,
     build_empty_dir_view,
@@ -32,7 +33,7 @@ from services import container_files_service
 logger = logging.getLogger("ManageFilesModal")
 
 
-def show_manage_files_modal(page: ft.Page, container: str, initial_path: str = "/root") -> None:
+def show_manage_files_modal(page: ft.Page, container: str, initial_path: str = GUEST_HOME) -> None:
     """Opens a standalone modal dialog for container file management."""
     if not page or not container:
         return

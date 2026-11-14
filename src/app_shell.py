@@ -11,7 +11,6 @@ from components.app_header import AppHeader
 from core import theme, tokens
 from core.state import display_progress, state
 from screens import (
-    BuildView,
     DesktopView,
     DisplayView,
     DistroView,
@@ -26,15 +25,15 @@ TAB_DISTRO = 0
 TAB_TERMINAL = 1
 TAB_DISPLAY = 2
 TAB_FILES = 3
-TAB_BUILD = 4
-TAB_SETTINGS = 5
+TAB_SETTINGS = 4
 
+# Main features only: build/push lives under Settings -> Developer tools
+# (a Dockerfile tool is not one of the five things a phone user opens daily).
 _TABS = (
-    ("Distros", ft.Icons.APPS),
+    ("Home", ft.Icons.APPS),
     ("Terminal", ft.Icons.TERMINAL),
     ("Display", ft.Icons.DESKTOP_WINDOWS),
     ("Files", ft.Icons.FOLDER_OUTLINED),
-    ("Build", ft.Icons.BUILD_ROUNDED),
     ("Settings", ft.Icons.SETTINGS),
 )
 
@@ -85,7 +84,7 @@ def AppShell() -> ft.Control:
                     ft.ProgressRing(
                         width=tokens.PROGRESS_RING_XL,
                         height=tokens.PROGRESS_RING_XL,
-                        stroke_width=3,
+                        stroke_width=tokens.PROGRESS_RING_STROKE_THICK,
                         color=theme.primary(),
                     ),
                     ft.Container(height=tokens.SPACE_MD),
@@ -136,8 +135,6 @@ def AppShell() -> ft.Control:
         body = DisplayView()
     elif active_tab == TAB_FILES:
         body = FilesView()
-    elif active_tab == TAB_BUILD:
-        body = BuildView()
     else:
         body = SettingsView()
 
@@ -169,7 +166,7 @@ def AppShell() -> ft.Control:
                             size=tokens.FONT_SM,
                             color=theme.text(),
                             expand=True,
-                            max_lines=1,
+                            max_lines=tokens.MAX_LINES_ONE,
                             overflow=ft.TextOverflow.ELLIPSIS,
                         ),
                         ft.Icon(ft.Icons.ARROW_FORWARD_ROUNDED, size=tokens.ICON_SM),
@@ -203,7 +200,7 @@ def AppShell() -> ft.Control:
                             size=tokens.FONT_SM,
                             color=theme.text(),
                             expand=True,
-                            max_lines=1,
+                            max_lines=tokens.MAX_LINES_ONE,
                             overflow=ft.TextOverflow.ELLIPSIS,
                         ),
                         ft.Icon(ft.Icons.ARROW_FORWARD_ROUNDED, size=tokens.ICON_SM),

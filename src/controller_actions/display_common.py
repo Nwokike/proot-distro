@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 
+from core import tokens
 from core.state import state
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ def _tail_file_lines(path, max_bytes: int) -> list[str]:
 # Xvnc screen for "auto" geometry: long side 1280 keeps RFB updates sane on
 # phones; the viewer letterboxes any aspect anyway, and a preset/custom
 # resolution bypasses this.
-_AUTO_GEOMETRY_LONG_SIDE = 1280
+_AUTO_GEOMETRY_LONG_SIDE = tokens.AUTO_GEOMETRY_LONG_SIDE
 
 # In-flight probe dedup (error results are never cached — see probe_display).
 _probing: set[str] = set()

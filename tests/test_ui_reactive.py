@@ -180,11 +180,11 @@ def test_files_view_keeps_responsive_list_and_banner():
     pkg = ROOT / "src" / "screens" / "files"
     source = "\n".join(f.read_text(encoding="utf-8") for f in sorted(pkg.glob("*.py")))
 
-    assert 'page_tail("files-1", page)' in source
+    assert "page_tail(AD_SLOT_FILES, page)" in source
     # Picker banner lives INSIDE the list: always after the last container,
     # plus after every 5th when there are more than 5 containers.
     assert 'pooled_banner_ad(f"files-picker-{banner_count}", page)' in source
-    assert "idx == total or (total > 5 and idx % 5 == 0)" in source
+    assert "idx == total or (total > AD_EVERY_ROWS and idx % AD_EVERY_ROWS == 0)" in source
     init_src = (pkg / "__init__.py").read_text(encoding="utf-8")
     assert init_src.count("scroll=ft.ScrollMode.AUTO") == 1
     assert re.search(
@@ -378,7 +378,7 @@ def test_views_contain_no_app_header():
 
 def test_navigation_bar_hidden_during_session():
     """NavigationBar must step aside while a session is open, a display is
-    open, or either is in full screen (v1.1.0 added the display takeover)."""
+    open, or either is in full screen (the display takeover)."""
     source = (ROOT / "src" / "app_shell.py").read_text(encoding="utf-8")
     assert "if entry is None and desk_session is None and not fullscreen:" in source
 

@@ -94,7 +94,7 @@ def build_search_results(st, consent_install) -> list[ft.Control]:
                                         r_desc,
                                         size=tokens.FONT_XS,
                                         color=theme.text_dim(),
-                                        max_lines=2,
+                                        max_lines=tokens.MAX_LINES_TWO,
                                     ),
                                 ],
                                 spacing=tokens.SPACE_XXS,

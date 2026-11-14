@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from core import tokens
 from core.state import state
 
 logger = logging.getLogger(__name__)
@@ -30,8 +31,8 @@ class BuildActions:
             state.build_stage = clean or state.build_stage
             if clean:
                 state.build_logs.append(clean)
-                if len(state.build_logs) > 500:
-                    del state.build_logs[: len(state.build_logs) - 500]
+                if len(state.build_logs) > tokens.BUILD_LOG_MAX_LINES:
+                    del state.build_logs[: len(state.build_logs) - tokens.BUILD_LOG_MAX_LINES]
 
         def _on_line(line: str) -> None:
             loop.call_soon_threadsafe(_apply_line, line)
@@ -45,7 +46,7 @@ class BuildActions:
                 # The tags/layers summary is the last stage lines; keep them visible.
                 state.build_result = {
                     "tags": opts.get("tags") or [],
-                    "output": outcome.output[-2000:],
+                    "output": outcome.output[-tokens.BUILD_OUTPUT_TAIL_CHARS :],
                 }
             self.show_snack(state.build_stage)
         except Exception as exc:

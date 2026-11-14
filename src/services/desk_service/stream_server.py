@@ -19,15 +19,17 @@ from urllib.parse import quote
 
 from aiohttp import web
 
+from core import tokens
+
 logger = logging.getLogger(__name__)
 
 _NOVNC_DIR = Path(__file__).parent / "novnc"
 # vnc.html must revalidate; app/ only changes with an APK build, so it caches.
 _NO_CACHE_HEADERS = {"Cache-Control": "no-cache"}
 _APP_CACHE_HEADERS = {"Cache-Control": "public, max-age=86400"}
-_WS_MAX_MSG = 64 * 1024  # inbound RFB messages (pointer/key/clipboard) are tiny
-_WS_HEARTBEAT = 25.0  # dead viewers are dropped instead of lingering
-_WRITE_HIGH_WATER = 512 * 1024  # drain only when the buffer passes this
+_WS_MAX_MSG = tokens.WS_MAX_MSG_BYTES  # inbound RFB messages (pointer/key/clipboard) are tiny
+_WS_HEARTBEAT = tokens.WS_HEARTBEAT_SEC  # dead viewers are dropped instead of lingering
+_WRITE_HIGH_WATER = tokens.WS_WRITE_HIGH_WATER_BYTES  # drain only when the buffer passes this
 
 
 class DisplayStreamServer:
@@ -59,8 +61,8 @@ class DisplayStreamServer:
             logging_level if logging_level in ("error", "warn", "info", "debug") else "warn"
         )
         self.view_only = view_only
-        self.quality = max(0, min(9, int(quality)))
-        self.compression = max(0, min(9, int(compression)))
+        self.quality = max(0, min(tokens.NOVNC_LEVEL_MAX, int(quality)))
+        self.compression = max(0, min(tokens.NOVNC_LEVEL_MAX, int(compression)))
         # noVNC's own `resize` setting: remote (server follows the viewport),
         # scale (local letterbox), off (pan/scroll the framebuffer).
         self.resize_mode = resize_mode if resize_mode in ("remote", "scale", "off") else "remote"

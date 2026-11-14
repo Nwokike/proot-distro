@@ -8,6 +8,13 @@ from components import card, empty_state, pill_dropdown, probe_banner, section_h
 from components.banner_ad import pooled_banner_ad
 from components.brand_hero import build_brand_hero
 from core import layout, theme, tokens
+from core.constants import (
+    AD_EVERY_ROWS,
+    AD_SLOT_CONTAINERS,
+    AD_SLOT_SEARCH_EMPTY,
+    SEARCH_LIMIT_DEFAULT,
+    UPSTREAM_ARCH_CHOICES,
+)
 from core.state import state
 from screens.container_card import build_container_card
 from state.controller_ctx import ControllerMethodsCtx
@@ -32,19 +39,7 @@ def DistroView() -> ft.Control:
     # strings (install's --architecture passthrough) — expose only the ones
     # upstream's arch map actually knows (linux/arm64/v8 and linux/arm/v6 are
     # NOT in it → "unknown architecture").
-    _ARCH_CHOICES = (
-        "host",
-        "aarch64",
-        "arm",
-        "i686",
-        "riscv64",
-        "x86_64",
-        "linux/arm64",
-        "linux/arm/v7",
-        "linux/amd64",
-        "linux/386",
-        "linux/riscv64",
-    )
+    _ARCH_CHOICES = UPSTREAM_ARCH_CHOICES
 
     is_narrow = layout.is_mobile_layout(page)
 
@@ -104,9 +99,9 @@ def DistroView() -> ft.Control:
         try:
             # No ceiling — the limit is passed straight through to upstream,
             # which forwards it to the Docker Hub API.
-            limit = max(1, int(search_limit or "25"))
+            limit = max(1, int(search_limit or SEARCH_LIMIT_DEFAULT))
         except ValueError:
-            limit = 25
+            limit = SEARCH_LIMIT_DEFAULT
         if ":" in q:
             _consent_install(q)
         else:
@@ -174,7 +169,7 @@ def DistroView() -> ft.Control:
         "Limit",
         ft.Icons.FILTER_ALT_ROUNDED,
         [str(n) for n in (25, 50, 100)],
-        search_limit if search_limit in ("25", "50", "100") else "25",
+        search_limit if search_limit in ("25", "50", "100") else str(SEARCH_LIMIT_DEFAULT),
         set_search_limit,
         tooltip="Max results (limit) — Docker Hub pages of 100",
     )
@@ -362,19 +357,19 @@ def DistroView() -> ft.Control:
     if st.search_status:
         controls.append(ft.Text(st.search_status, size=tokens.FONT_XS, color=theme.text_dim()))
     result_cards = sections.build_search_results(st, _consent_install)
-    for i in range(4, len(result_cards), 5):
-        result_cards.insert(i + 1, pooled_banner_ad(f"search-{i // 5 + 1}", page))
+    for i in range(AD_EVERY_ROWS - 1, len(result_cards), AD_EVERY_ROWS):
+        result_cards.insert(i + 1, pooled_banner_ad(f"search-{i // AD_EVERY_ROWS + 1}", page))
     if result_cards:
         controls.extend(result_cards)
     elif mode == "search":
         # No results yet — including the fresh search screen before the first
         # query — keeps one sticky banner (owner ruling).
-        controls.append(pooled_banner_ad("search-empty", page))
+        controls.append(pooled_banner_ad(AD_SLOT_SEARCH_EMPTY, page))
 
     if mode == "install":
         # One banner between the install area and the Containers section
         # (owner ruling) — none inside the container list.
-        controls.append(pooled_banner_ad("containers-1", page))
+        controls.append(pooled_banner_ad(AD_SLOT_CONTAINERS, page))
         controls.append(section_header("Containers"))
         if st.containers:
             controls.extend(

@@ -97,7 +97,7 @@ def open_live_activity_terminal(page: ft.Page) -> None:
                         ),
                         border_radius=tokens.RADIUS_SM,
                         padding=tokens.SPACE_MD,
-                        height=260,
+                        height=tokens.DIALOG_LOG_HEIGHT,
                     ),
                 ],
                 spacing=0,
@@ -371,6 +371,28 @@ def confirm_remove_cached(page: ft.Page, identifier: str, on_yes) -> None:
                         bgcolor=theme.warn(),
                     ),
                 ),
+            ],
+        )
+    )
+
+
+from .defaults_dialogs import open_display_defaults, open_terminal_defaults  # noqa: E402,F401
+
+
+def confirm_simple(page: ft.Page, title: str, body: str, label: str, on_yes) -> None:
+    """A one-step destructive confirmation (sweep/build-cache parity)."""
+
+    def _yes(_e) -> None:
+        page.pop_dialog()
+        on_yes()
+
+    page.show_dialog(
+        ft.AlertDialog(
+            title=ft.Text(title, size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
+            content=ft.Text(body, size=tokens.FONT_SM),
+            actions=[
+                ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
+                ft.FilledButton("Clear" if label == "Clear" else label, on_click=_yes),
             ],
         )
     )

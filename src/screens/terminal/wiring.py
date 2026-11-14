@@ -9,6 +9,7 @@ import json
 
 import flet as ft
 
+from core import tokens
 from screens.terminal_controls import _confirm_close, _input
 from services.session_manager import SessionEntry
 
@@ -38,8 +39,8 @@ def wire_terminal(
 
     def _on_resize(e) -> None:
         data = json.loads(e.data)
-        cols = int(data.get("cols", 80))
-        rows = int(data.get("rows", 24))
+        cols = int(data.get("cols", tokens.TERM_COLS_DEFAULT))
+        rows = int(data.get("rows", tokens.TERM_ROWS_DEFAULT))
         if entry.session is not None:
             entry.session.resize(cols, rows)
 

@@ -11,6 +11,8 @@ import subprocess
 import threading
 from collections.abc import Callable
 
+from core import tokens
+
 from .argv import Argv, Env
 
 logger = logging.getLogger(__name__)
@@ -124,7 +126,7 @@ class ProotSession:
                     if process is None:
                         break
                     try:
-                        data = os.read(master_fd, 65536)
+                        data = os.read(master_fd, tokens.PTY_READ_CHUNK_BYTES)
                     except OSError as exc:
                         if exc.errno == errno.EIO or (
                             exc.errno == errno.EBADF and self._master_fd is None

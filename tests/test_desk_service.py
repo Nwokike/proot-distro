@@ -1,6 +1,6 @@
 """desk_service — the Option-D wrap contract (Xvnc + PulseAudio in-app, noVNC
 viewer): guest script, runtime, stream server, manager, provision — plus the
-v1.1.0 UI-structure pins (card 3-item, grouped menu, files banner).
+UI-structure pins (card 3-item, grouped menu, files banner).
 """
 
 from __future__ import annotations
@@ -808,7 +808,7 @@ def test_container_menu_groups_destructive_actions_last():
 def test_files_banner_sits_at_the_bottom():
     """The bottom banner is the shared page_tail (banner + nav-bar clearance)."""
     src = (ROOT / "src" / "screens" / "files" / "__init__.py").read_text(encoding="utf-8")
-    assert src.index("card(file_list_content") < src.index('page_tail("files-1"')
+    assert src.index("card(file_list_content") < src.index("page_tail(AD_SLOT_FILES")
 
 
 def test_controller_ctx_exposes_the_v11_surface():
@@ -1008,7 +1008,7 @@ def test_install_chunk_path_uses_run_task_not_raw_threadsafe():
     src = module_text("controller_actions/display_actions.py", "controller_actions")
     assert "self.page.run_task(_apply)" in src
     assert "call_soon_threadsafe(_apply)" not in src
-    assert "_notify_install" in src and "notifications.show(id=2100" in src
+    assert "_notify_install" in src and "id=NOTIFICATION_ID_INSTALL" in src
     state_src = (ROOT / "src" / "core" / "state.py").read_text(encoding="utf-8")
     assert "def append(" in state_src.split("class DisplayProgress")[1]
     assert "except RuntimeError:" not in state_src
@@ -1069,11 +1069,11 @@ def test_distro_banner_between_install_and_containers():
     """One banner between the install area and the Containers header; none
     inside the container list; search keeps its empty-state banner."""
     src = (ROOT / "src" / "screens" / "distro" / "__init__.py").read_text(encoding="utf-8")
-    banner = src.index('pooled_banner_ad("containers-1", page)')
+    banner = src.index("pooled_banner_ad(AD_SLOT_CONTAINERS, page)")
     header = src.index('section_header("Containers")')
     assert banner < header
     assert '"containers-empty"' not in src
-    assert '"search-empty"' in src
+    assert "AD_SLOT_SEARCH_EMPTY" in src
     # Search bar: no leading icon; the trailing action is the mode icon.
     assert "bar_leading=" not in src
     assert "ft.Icons.SEARCH_ROUNDED," in src

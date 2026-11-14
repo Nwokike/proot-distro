@@ -8,6 +8,7 @@ import logging
 import flet as ft
 
 from core import storage_paths, theme
+from core.constants import ARCHIVE_SUFFIXES
 
 from ._common import _COMPRESS_EXT
 
@@ -51,7 +52,7 @@ class ContainerActions:
         stem = (name or "").strip() or container
         # Strip ANY archive suffix the user typed, not just the matching one:
         # otherwise `foo.tar.gz` + xz became `foo.tar.gz.tar.xz`.
-        for known in (".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tar"):
+        for known in ARCHIVE_SUFFIXES:
             if stem.endswith(known):
                 stem = stem[: -len(known)]
                 break

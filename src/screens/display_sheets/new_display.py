@@ -23,16 +23,6 @@ from .common import (
 
 logger = logging.getLogger(__name__)
 
-# Probed guest apps for the "Open an app" sheet: (label, command) pairs.
-_APP_PRESETS = (
-    ("Terminal", "xterm"),
-    ("Files", "thunar"),
-    ("Browser", "firefox"),
-    ("Text editor", "mousepad"),
-    ("Image editor", "gimp"),
-    ("Office", "libreoffice"),
-    ("VS Code", "code"),
-)
 
 _CUSTOM = "__custom__"
 
@@ -221,13 +211,17 @@ def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None
     adv_emulator_path = _field(
         "emulator", "Emulator (--emulator PATH)", "qemu-user path (foreign-arch images)"
     )
-    adv_shared_tmp = ft.Switch(label="Shared tmp", label_position=ft.LabelPosition.LEFT, scale=0.9)
-    adv_shared_home = ft.Switch(
-        label="Shared home", label_position=ft.LabelPosition.LEFT, scale=0.9
+    adv_shared_tmp = ft.Switch(
+        label="Shared tmp", label_position=ft.LabelPosition.LEFT, scale=tokens.SWITCH_SCALE
     )
-    adv_isolated = ft.Switch(label="Isolated", label_position=ft.LabelPosition.LEFT, scale=0.9)
+    adv_shared_home = ft.Switch(
+        label="Shared home", label_position=ft.LabelPosition.LEFT, scale=tokens.SWITCH_SCALE
+    )
+    adv_isolated = ft.Switch(
+        label="Isolated", label_position=ft.LabelPosition.LEFT, scale=tokens.SWITCH_SCALE
+    )
     adv_fix_ports = ft.Switch(
-        label="Fix low ports", label_position=ft.LabelPosition.LEFT, scale=0.9
+        label="Fix low ports", label_position=ft.LabelPosition.LEFT, scale=tokens.SWITCH_SCALE
     )
     fields.update(
         {
@@ -301,7 +295,7 @@ def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None
             ft.dropdown.Option(str(n), f":{n}") for n in range(desk_manager.MAX_DISPLAY_NUMBER + 1)
         ],
         on_select=lambda e: display_no.__setitem__("value", int(e.control.value or 0)),
-        width=140,
+        width=tokens.FIELD_DISPLAY_WIDTH,
         border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
         text_size=tokens.FONT_XS,
     )

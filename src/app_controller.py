@@ -22,7 +22,15 @@ from controller_actions import (
 )
 from controller_actions.app_misc import AppMiscMixin
 from core import proot_probe, shared_services, theme
-from core.constants import STORAGE_ONBOARDING_DONE
+from core.constants import (
+    NOTIFICATION_ICON,
+    PREF_DISPLAY_SETTINGS,
+    PREF_DOCKER_TOKEN,
+    PREF_TERMINAL_SETTINGS,
+    PREF_THEME_MODE,
+    STORAGE_ONBOARDING_DONE,
+    UPDATE_CHECK_INTERVAL_SEC,
+)
 from core.state import state
 from services import ad_service, desk_service, proot_service, session_manager
 from state.controller_ctx import ControllerMethods, ControllerMethodsCtx
@@ -60,9 +68,7 @@ class AppController(
         self.ad_service = ad_service.AdService(page)
         # android_default_icon: our app-icon silhouette (bundled via
         # tool.flet.android.res_dir), not the plugin's default Flet logo.
-        self.notifications = ft_notifications.Notifications(
-            android_default_icon="ic_stat_prootdistro"
-        )
+        self.notifications = ft_notifications.Notifications(android_default_icon=NOTIFICATION_ICON)
         self.notifications.on_action = self._on_notification_action
         self.notifications.on_tap = self._on_notification_tap
         self.session_manager.notifications = self.notifications
@@ -148,6 +154,11 @@ class AppController(
             reset_container=self.reset_container,
             search_distro=self.search_distro,
             open_notification_settings=self.open_notification_settings,
+            open_developer_tools=self.open_developer_tools,
+            save_display_settings=self.save_display_settings,
+            save_terminal_settings=self.save_terminal_settings,
+            check_updates_now=self.check_updates_now,
+            replay_onboarding=self.replay_onboarding,
             run_container=self.run_container,
             clear_cache=self.clear_cache,
             clear_orphan_layers=self.clear_orphan_layers,
@@ -292,9 +303,9 @@ class AppController(
             return
         # One bridge round-trip instead of three sequential ones on the splash path.
         mode, token, saved_settings = await asyncio.gather(
-            self.prefs.get("theme_mode"),
-            self.prefs.get("docker_token"),
-            self.prefs.get("display_settings"),
+            self.prefs.get(PREF_THEME_MODE),
+            self.prefs.get(PREF_DOCKER_TOKEN),
+            self.prefs.get(PREF_DISPLAY_SETTINGS),
         )
         if isinstance(mode, str) and mode in _THEME_MODES:
             state.theme_mode = mode
@@ -311,6 +322,18 @@ class AppController(
                     os.environ["PD_DOCKER_AUTH"] = token
         if not (isinstance(saved_settings, str) and saved_settings):
             await self._apply_battery_defaults()
+        saved_terminal = await self.prefs.get(PREF_TERMINAL_SETTINGS)
+        from core.state import DEFAULT_TERMINAL_SETTINGS
+
+        state.terminal_settings = dict(DEFAULT_TERMINAL_SETTINGS)
+        if isinstance(saved_terminal, str) and saved_terminal:
+            try:
+                loaded_terminal = json.loads(saved_terminal)
+                if isinstance(loaded_terminal, dict):
+                    state.terminal_settings.update(loaded_terminal)
+            except TypeError, ValueError:
+                logger.debug("saved terminal_settings unparseable — keeping defaults")
+
         if isinstance(saved_settings, str) and saved_settings:
             try:
                 loaded = json.loads(saved_settings)
@@ -394,4 +417,4 @@ class AppController(
         if self.prefs is not None:
             await self.prefs.set(STORAGE_ONBOARDING_DONE, "true")
 
-    _UPDATE_CHECK_INTERVAL = 6 * 3600.0  # seconds between background checks
+    _UPDATE_CHECK_INTERVAL = UPDATE_CHECK_INTERVAL_SEC  # seconds between background checks

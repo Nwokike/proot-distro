@@ -53,7 +53,13 @@ def DisplayProgressCard(
         ],
         spacing=tokens.SPACE_XXS,
         auto_scroll=True,
-        height=min(max(len(lines) * 18 + 8, 36), 220),
+        height=min(
+            max(
+                len(lines) * tokens.OUTPUT_LINE_HEIGHT + tokens.OUTPUT_VERTICAL_PAD,
+                tokens.OUTPUT_MIN_HEIGHT,
+            ),
+            tokens.OUTPUT_MAX_HEIGHT,
+        ),
         expand=False,
     )
 

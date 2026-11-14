@@ -27,12 +27,11 @@ except ImportError:
 from components.app_header import theme_button
 from components.banner_ad import pooled_banner_ad
 from core import theme, tokens
+from core.constants import AD_SLOT_TERMINAL
 from core.state import state
 from core.styles import status_dot
 from screens.terminal_controls import (
-    _compact_btn_style,
     _confirm_close,
-    _cycle_terminal_theme,
     _theme_name,
 )
 from services.session_manager import SessionEntry
@@ -40,7 +39,14 @@ from state.controller_ctx import ControllerMethodsCtx
 
 from . import menu, wiring
 
-TERMINAL_SCROLLBACK_LINES = 10000
+
+def _show_help(page: ft.Page, methods) -> None:
+    from screens.help import show_help_sheet
+
+    show_help_sheet(page, methods)
+
+
+TERMINAL_SCROLLBACK_LINES = tokens.TERMINAL_SCROLLBACK_LINES
 
 
 @ft.component
@@ -79,6 +85,7 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
     # Constructed during render, exactly like the flet-terminal example /
     # CollabShell (extra keys, search and settings panes are the terminal's own).
     if entry.mt is None and _HAS_TERMINAL:
+        _term_defaults = getattr(state, "terminal_settings", None) or {}
         entry.mt = MobileTerminal(
             show_extra_keys=True,
             show_search=False,
@@ -86,9 +93,10 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
             # Widget-side LINE cap; the entry bounds its replay buffer by BYTES.
             scrollback=TERMINAL_SCROLLBACK_LINES,
             font_family=tokens.MONO_FONT,
+            font_size=float(_term_defaults.get("font_size") or 0) or 11.0,
             cursor_style="block",
-            cursor_blink=True,
-            theme=BUILTIN_THEMES.get(_theme_name()),
+            cursor_blink=bool(_term_defaults.get("cursor_blink", True)),
+            theme=BUILTIN_THEMES.get(str(_term_defaults.get("theme") or "") or _theme_name()),
             auto_focus=False,
             expand=True,
         )
@@ -278,49 +286,20 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
                 overflow=ft.TextOverflow.ELLIPSIS,
                 tooltip=entry.title,
             ),
-            ft.IconButton(
-                icon=ft.Icons.REFRESH_ROUNDED,
-                icon_size=tokens.ICON_SM,
-                tooltip="Refresh Terminal (replay scrollback)",
-                style=_compact_btn_style(),
-                on_click=_refresh_terminal,
-            ),
-            ft.IconButton(
-                icon=ft.Icons.PALETTE_ROUNDED,
-                icon_size=tokens.ICON_SM,
-                tooltip="Cycle Terminal Theme",
-                style=_compact_btn_style(),
-                on_click=lambda _e: _cycle_terminal_theme(mt),
-            ),
-            ft.IconButton(
-                icon=ft.Icons.FULLSCREEN_EXIT_ROUNDED
-                if fullscreen
-                else ft.Icons.FULLSCREEN_ROUNDED,
-                icon_size=tokens.ICON_SM,
-                tooltip="Exit full screen" if fullscreen else "Full screen",
-                style=_compact_btn_style(),
-                on_click=_toggle_fullscreen,
-            ),
-            ft.IconButton(
-                icon=ft.Icons.ZOOM_OUT,
-                icon_size=tokens.ICON_SM,
-                tooltip="Zoom Out",
-                style=_compact_btn_style(),
-                on_click=lambda _e: mt.zoom_out(),
-            ),
-            ft.IconButton(
-                icon=ft.Icons.ZOOM_IN,
-                icon_size=tokens.ICON_SM,
-                tooltip="Zoom In",
-                style=_compact_btn_style(),
-                on_click=lambda _e: mt.zoom_in(),
-            ),
-            ft.IconButton(
-                icon=ft.Icons.SEARCH_ROUNDED,
-                icon_size=tokens.ICON_SM,
-                tooltip="Search Buffer",
-                style=_compact_btn_style(),
-                on_click=lambda _e: mt.toggle_search(),
+            ft.PopupMenuButton(
+                icon=ft.Icons.MORE_VERT_ROUNDED,
+                icon_size=tokens.ICON_MD,
+                tooltip="Terminal actions (theme and zoom are in the menu button)",
+                items=[
+                    ft.PopupMenuItem(
+                        content=ft.Text("Refresh (replay scrollback)"),
+                        on_click=_refresh_terminal,
+                    ),
+                    ft.PopupMenuItem(
+                        content=ft.Text("Help & shortcuts"),
+                        on_click=lambda _e: _show_help(page, methods),
+                    ),
+                ],
             ),
         ],
         scroll=ft.ScrollMode.AUTO,
@@ -350,7 +329,7 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
     # mutated (frozen-control crash). The terminal widget is never unmounted,
     # so its state (extra-keys ink, scrollback) survives the toggle.
     banner = ft.Container(
-        content=pooled_banner_ad("terminal-1", page),
+        content=pooled_banner_ad(AD_SLOT_TERMINAL, page),
         visible=not fullscreen,
     )
 

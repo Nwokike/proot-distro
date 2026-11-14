@@ -325,3 +325,24 @@ def test_make_fonts_dir_writes_filename_then_xlfd_and_skips_non_text_fonts():
 
     with pytest.raises(SystemExit):
         xv_builder._make_fonts_dir({"cursor.pcf.gz": blobs["cursor.pcf.gz"]})
+
+
+def test_the_font_bundle_is_latin_only():
+    """Owner ruling: the APK ships the core Latin X fonts only (xterm/UI).
+    CJK, Syriac and the non-Latin ISO8859/KOI8 charsets stay out; a desktop
+    container brings its own fonts through -fp."""
+    import build_flet_xvnc_wheel as xv
+
+    for kept in ("10x20.pcf.gz", "6x13B-ISO8859-1.pcf.gz", "clR6x12.pcf.gz", "fixed.pcf.gz"):
+        assert xv._font_allowed(kept), kept
+    for dropped in (
+        "12x13ja.pcf.gz",
+        "18x18ko.pcf.gz",
+        "gb24st.pcf.gz",
+        "jiskan24.pcf.gz",
+        "10x20-ISO8859-2.pcf.gz",
+        "10x20-KOI8-R.pcf.gz",
+        "SyrCOMEdessa.otf",
+        "cursor.pcf.gz",
+    ):
+        assert not xv._font_allowed(dropped), dropped

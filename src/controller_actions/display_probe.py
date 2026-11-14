@@ -49,7 +49,7 @@ class DisplayProbeMixin:
                 session_service.command_capture,
                 container,
                 ["/bin/sh", "-lc", "command -v ssh"],
-                15.0,
+                timeout=15.0,
             )
             return bool(result.get("ok"))
         except Exception:

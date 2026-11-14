@@ -30,6 +30,11 @@ class ControllerMethods:
     reset_container: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     search_distro: Callable[[str, int], Awaitable[None]] = field(default=_noop_async)
     open_notification_settings: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    open_developer_tools: Callable[..., Awaitable[None]] = field(default=_noop_async)
+    save_display_settings: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    save_terminal_settings: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    check_updates_now: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    replay_onboarding: Callable[[], Awaitable[None]] = field(default=_noop_async)
     # One-shot command inside a container (Entrypoint/Cmd + args), PTY-captured
     run_container: Callable[[str, str], Awaitable[None]] = field(default=_noop_async)
 

@@ -16,6 +16,7 @@ import flet as ft
 from components import card, containers_required_empty_state, section_header
 from components.banner_ad import pooled_banner_ad
 from core import styles, theme, tokens
+from core.constants import AD_SLOT_DISPLAY
 from core.state import display_progress as progress
 from core.state import state
 from screens.display_progress_card import DisplayProgressCard
@@ -126,17 +127,35 @@ def DisplayView() -> ft.Control:
                             shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
                         ),
                     ),
-                    ft.IconButton(
-                        icon=ft.Icons.STOP_CIRCLE_ROUNDED,
-                        icon_color=theme.warn(),
-                        tooltip="Stop display",
-                        on_click=_stop,
+                    ft.PopupMenuButton(
+                        icon=ft.Icons.MORE_VERT_ROUNDED,
+                        icon_size=tokens.ICON_MD,
+                        tooltip="More",
+                        items=[
+                            ft.PopupMenuItem(
+                                content=ft.Text("Share"),
+                                on_click=lambda _e, k=session.key: page.run_task(
+                                    methods.share_display, k
+                                ),
+                            ),
+                            ft.PopupMenuItem(
+                                content=ft.Text("Logs"),
+                                on_click=lambda _e, k=session.key: page.run_task(
+                                    methods.show_display_logs, k
+                                ),
+                            ),
+                            ft.PopupMenuItem(
+                                content=ft.Text("Stop"),
+                                on_click=_stop,
+                            ),
+                        ],
                     ),
                 ]
             rows.append(
                 card(
                     ft.Container(
                         content=ft.Row(
+                            wrap=True,
                             controls=row_controls,
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
                             spacing=tokens.SPACE_SM,
@@ -169,6 +188,7 @@ def DisplayView() -> ft.Control:
                 card(
                     ft.Container(
                         content=ft.Row(
+                            wrap=True,
                             controls=[
                                 ft.Icon(
                                     ft.Icons.ERROR_OUTLINE,
@@ -187,7 +207,7 @@ def DisplayView() -> ft.Control:
                                             session.error or "the display failed",
                                             size=tokens.FONT_XS,
                                             color=theme.text_dim(),
-                                            max_lines=2,
+                                            max_lines=tokens.MAX_LINES_TWO,
                                             overflow=ft.TextOverflow.ELLIPSIS,
                                         ),
                                     ],
@@ -224,7 +244,7 @@ def DisplayView() -> ft.Control:
         )
 
     if running:
-        sections.append(_section("Running", _plus_button(), _session_rows(running)))
+        sections.append(_section("Running", None, _session_rows(running)))
 
     failed = manager.failed() if manager else []
     if failed:
@@ -291,7 +311,7 @@ def DisplayView() -> ft.Control:
     sections.append(
         _section(
             "GUI application",
-            None,
+            _plus_button(),
             [
                 card(
                     ft.Container(
@@ -311,8 +331,8 @@ def DisplayView() -> ft.Control:
                                             color=theme.text(),
                                         ),
                                         ft.Text(
-                                            "A browser, an editor, a pywebview app — streamed "
-                                            "alone, no desktop around it.",
+                                            "One app — browser, editor, pywebview — alone on "
+                                            "its own display.",
                                             size=tokens.FONT_XS,
                                             color=theme.text_dim(),
                                         ),
@@ -320,12 +340,10 @@ def DisplayView() -> ft.Control:
                                     spacing=tokens.SPACE_XXS,
                                     expand=True,
                                 ),
-                                ft.IconButton(
-                                    icon=ft.Icons.ADD_CIRCLE_ROUNDED,
-                                    icon_size=tokens.ICON_LG,
-                                    icon_color=theme.primary(),
-                                    tooltip="New GUI application display",
-                                    on_click=_single_app,
+                                ft.Icon(
+                                    ft.Icons.CHEVRON_RIGHT_ROUNDED,
+                                    size=tokens.ICON_MD,
+                                    color=theme.text_dim(),
                                 ),
                             ],
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -398,10 +416,10 @@ def DisplayView() -> ft.Control:
                 )
             )
 
-        sections.append(_section("Desktop", _plus_button(), rows))
+        sections.append(_section("Desktop", None, rows))
 
     # Banner at the very bottom — same position as the Terminal tab.
-    sections.append(pooled_banner_ad("display-1", page))
+    sections.append(pooled_banner_ad(AD_SLOT_DISPLAY, page))
     sections.append(ft.Container(height=tokens.NAV_BAR_CLEARANCE))
     return ft.Column(
         controls=sections,

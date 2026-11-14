@@ -5,12 +5,7 @@ import flet as ft
 from components import section_header
 from components.banner_ad import pooled_banner_ad
 from core import layout, theme, tokens
-from core.constants import (
-    APP_BUILD_NUMBER,
-    APP_NAME,
-    APP_VERSION,
-    PRIVACY_POLICY_URL,
-)
+from core.constants import AD_SLOT_SETTINGS_1, AD_SLOT_SETTINGS_2, PRIVACY_POLICY_URL
 from core.shared_services import launch_url
 from core.state import state
 from screens.formatting import format_size as _fmt_size
@@ -18,6 +13,7 @@ from screens.settings_components import _setting_row, _settings_card
 from state.controller_ctx import ControllerMethodsCtx
 
 from . import dialogs
+from .sections import build_about_card
 
 
 @ft.component
@@ -28,6 +24,31 @@ def SettingsView() -> ft.Control:
     token, set_token = ft.use_state(st.docker_token)
 
     is_narrow = layout.is_narrow(page)
+
+    if st.settings_section == "build":
+        from screens.build_view import BuildView
+
+        def _back(_e=None) -> None:
+            page.run_task(methods.open_developer_tools, False)
+
+        return ft.Column(
+            controls=[
+                ft.Row(
+                    controls=[
+                        ft.IconButton(
+                            ft.Icons.ARROW_BACK_ROUNDED,
+                            tooltip="Back to Settings",
+                            on_click=_back,
+                        ),
+                        ft.Text("Build & push", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                ft.Container(content=BuildView(), expand=True),
+            ],
+            spacing=tokens.SPACE_SM,
+            expand=True,
+        )
 
     def _theme_card(mode: str, label: str, icon: ft.IconData) -> ft.Container:
         """Compact icon+label selector card — CollabShell's preferences pattern:
@@ -72,6 +93,24 @@ def SettingsView() -> ft.Control:
 
     def _clear_cache() -> None:
         dialogs.confirm_clear_cache(page, lambda: page.run_task(methods.clear_cache))
+
+    def _sweep_orphans() -> None:
+        dialogs.confirm_simple(
+            page,
+            "Sweep orphan layers?",
+            "Deletes cached image layers no container references. Containers are not touched.",
+            "Sweep",
+            lambda: page.run_task(methods.clear_orphan_layers),
+        )
+
+    def _clear_build_cache() -> None:
+        dialogs.confirm_simple(
+            page,
+            "Clear the build cache?",
+            "Dockerfile layer cache is removed; the next build starts from scratch.",
+            "Clear",
+            lambda: page.run_task(methods.clear_build_cache),
+        )
 
     def _confirm_remove_cached(identifier: str) -> None:
         dialogs.confirm_remove_cached(
@@ -169,9 +208,7 @@ def SettingsView() -> ft.Control:
                 ft.Icons.CLEANING_SERVICES_ROUNDED,
                 "Sweep Orphan Layers",
                 "Reclaim storage from interrupted pulls or untagged OCI blobs",
-                ft.TextButton(
-                    "Sweep", on_click=lambda _e: page.run_task(methods.clear_orphan_layers)
-                ),
+                ft.TextButton("Sweep", on_click=lambda _e: _sweep_orphans()),
                 stacked=is_narrow,
             ),
             ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
@@ -179,9 +216,7 @@ def SettingsView() -> ft.Control:
                 ft.Icons.BUILD_ROUNDED,
                 "Clear Build Cache",
                 "Drop build_cache_index.json and the layer blobs only it pins (clear-cache --build-cache)",
-                ft.TextButton(
-                    "Clear", on_click=lambda _e: page.run_task(methods.clear_build_cache)
-                ),
+                ft.TextButton("Clear", on_click=lambda _e: _clear_build_cache()),
                 stacked=is_narrow,
             ),
             ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
@@ -280,74 +315,85 @@ def SettingsView() -> ft.Control:
         ]
     )
 
-    # 4. About & System Status Card (CollabShell pattern: brand icon + tagline
-    # at the top, version info, terms links, and system environment probe).
-    from components.brand_hero import app_icon_svg
+    def _open_display_defaults(_e=None) -> None:
+        dialogs.open_display_defaults(page, methods)
 
-    about_card = _settings_card(
+    def _open_terminal_defaults(_e=None) -> None:
+        dialogs.open_terminal_defaults(page, methods)
+
+    def _open_running(_e=None) -> None:
+        page.run_task(methods.list_sessions)
+
+    def _open_privacy_ads(_e=None) -> None:
+        page.run_task(methods.show_privacy_options)
+
+    def _open_notifications(_e=None) -> None:
+        page.run_task(methods.open_notification_settings)
+
+    def _check_updates(_e=None) -> None:
+        page.run_task(methods.check_updates_now)
+
+    def _replay_intro(_e=None) -> None:
+        page.run_task(methods.replay_onboarding)
+
+    def _open_build(_e=None) -> None:
+        page.run_task(methods.open_developer_tools, True)
+
+    experience_card = _settings_card(
         [
-            ft.Container(
-                content=ft.Column(
-                    controls=[
-                        ft.Container(
-                            content=ft.Image(
-                                src=app_icon_svg(),
-                                width=tokens.HERO_ICON_SIZE,
-                                height=tokens.HERO_ICON_SIZE,
-                                fit=ft.BoxFit.CONTAIN,
-                                color=None if theme.is_light_theme() else theme.WHITE,
-                                color_blend_mode=ft.BlendMode.SRC_IN,
-                            ),
-                            alignment=ft.Alignment.CENTER,
-                            margin=ft.Margin(0, tokens.SPACE_SM, 0, tokens.SPACE_XS),
-                        ),
-                        ft.Text(
-                            "Linux on Android — no root",
-                            size=tokens.FONT_SM,
-                            color=theme.text_dim(),
-                            text_align=ft.TextAlign.CENTER,
-                        ),
-                    ],
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=tokens.SPACE_XXS,
-                ),
-                padding=tokens.SPACE_MD,
-                alignment=ft.Alignment.CENTER,
-            ),
-            ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
             _setting_row(
-                ft.Icons.HELP_OUTLINE_ROUNDED,
-                "Help & Shortcuts",
-                "Getting started, terminal keys, display gestures, diagnostics",
-                ft.TextButton("Open Help", on_click=_open_help),
+                ft.Icons.DESKTOP_WINDOWS_ROUNDED,
+                "Display defaults",
+                "Every Xvnc, audio and viewer option used by new displays",
+                ft.TextButton("Open", on_click=_open_display_defaults),
                 stacked=is_narrow,
             ),
             ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
             _setting_row(
-                ft.Icons.INFO_OUTLINE_ROUNDED,
-                f"{APP_NAME} v{APP_VERSION} ({APP_BUILD_NUMBER})",
-                "Release notes and change details",
-                ft.TextButton("Changelog", on_click=_open_changelog),
+                ft.Icons.TERMINAL_ROUNDED,
+                "Terminal defaults",
+                "Theme, font size and cursor for new shells",
+                ft.TextButton("Open", on_click=_open_terminal_defaults),
+                stacked=is_narrow,
+            ),
+        ]
+    )
+
+    system_card = _settings_card(
+        [
+            _setting_row(
+                ft.Icons.NOTIFICATIONS_ROUNDED,
+                "Notifications",
+                "Permission state and Android notification settings",
+                ft.TextButton("Open", on_click=_open_notifications),
                 stacked=is_narrow,
             ),
             ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
             _setting_row(
-                ft.Icons.GAVEL_ROUNDED,
-                "Open-Source Licenses",
-                "Complete license texts for PRoot, talloc, and Python dependencies",
-                ft.TextButton("View Licenses", on_click=_licenses),
+                ft.Icons.PRIVACY_TIP_ROUNDED,
+                "Privacy & Ads",
+                "Ad consent and privacy options (when required in your region)",
+                ft.TextButton("Open", on_click=_open_privacy_ads),
                 stacked=is_narrow,
             ),
             ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
             _setting_row(
-                ft.Icons.POLICY_ROUNDED,
-                "Privacy Policy",
-                "Container data stays on this device; see the full policy",
-                ft.OutlinedButton(
-                    "View Policy",
-                    on_click=lambda _e: page.run_task(launch_url, PRIVACY_POLICY_URL, page),
-                    height=tokens.CONTROL_MD,
-                ),
+                ft.Icons.MEMORY_ROUNDED,
+                "Running processes",
+                "Every live guest session: stop one, choose the signal, or stop all",
+                ft.TextButton("Open", on_click=_open_running),
+                stacked=is_narrow,
+            ),
+        ]
+    )
+
+    developer_card = _settings_card(
+        [
+            _setting_row(
+                ft.Icons.BUILD_ROUNDED,
+                "Build & push",
+                "Dockerfile images: build stages, tags, outputs and registry push",
+                ft.TextButton("Open", on_click=_open_build),
                 stacked=is_narrow,
             ),
             ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
@@ -376,21 +422,18 @@ def SettingsView() -> ft.Control:
                 ft.TextButton("Open Terminal", on_click=_open_live_terminal),
                 stacked=is_narrow,
             ),
-            ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
-            _setting_row(
-                ft.Icons.POWER_SETTINGS_NEW_ROUNDED,
-                "Exit App",
-                "Kill all running sessions and close the app",
-                ft.TextButton(
-                    "Exit",
-                    on_click=lambda _e: dialogs.confirm_exit(
-                        page, lambda: page.run_task(methods.exit_app)
-                    ),
-                    style=ft.ButtonStyle(color=theme.danger()),
-                ),
-                stacked=is_narrow,
-            ),
         ]
+    )
+
+    about_card = build_about_card(
+        is_narrow=is_narrow,
+        on_help=_open_help,
+        on_changelog=_open_changelog,
+        on_licenses=_licenses,
+        on_privacy=lambda _e: page.run_task(launch_url, PRIVACY_POLICY_URL, page),
+        on_update=_check_updates,
+        on_intro=_replay_intro,
+        on_exit=lambda _e: dialogs.confirm_exit(page, lambda: page.run_task(methods.exit_app)),
     )
 
     return ft.Column(
@@ -398,13 +441,19 @@ def SettingsView() -> ft.Control:
             section_header("Appearance & Theme"),
             appearance_card,
             # Banner 1: after Appearance & Theme.
-            pooled_banner_ad("settings-1", page),
+            pooled_banner_ad(AD_SLOT_SETTINGS_1, page),
+            section_header("Display & Terminal"),
+            experience_card,
+            section_header("System"),
+            system_card,
+            section_header("Developer tools"),
+            developer_card,
             section_header("Storage & Cache"),
             storage_card,
             section_header("Registry Authentication"),
             auth_card,
             # Banner 2: after Registry Authentication.
-            pooled_banner_ad("settings-2", page),
+            pooled_banner_ad(AD_SLOT_SETTINGS_2, page),
             section_header("About & System Status"),
             about_card,
             # Banners live BETWEEN sections only — never as the last element.

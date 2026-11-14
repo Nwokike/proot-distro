@@ -79,7 +79,7 @@ def build_file_item(
                     size=tokens.FONT_MD,
                     weight=ft.FontWeight.W_500 if is_dir else ft.FontWeight.W_400,
                     color=theme.text(),
-                    max_lines=1,
+                    max_lines=tokens.MAX_LINES_ONE,
                     overflow=ft.TextOverflow.ELLIPSIS,
                 ),
                 ft.Text(

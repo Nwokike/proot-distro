@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import logging
 
-from core.constants import APP_NAME
+from core.constants import (
+    APP_NAME,
+    NOTIFICATION_ACTION_EXIT,
+    NOTIFICATION_CHANNEL_SESSIONS,
+    NOTIFICATION_CHANNEL_SESSIONS_NAME,
+    NOTIFICATION_ID_FGS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +53,14 @@ class SessionFgsMixin:
 
             await self._ensure_notification_permission()
             await notifications.start_foreground_service(
-                id=1,
+                id=NOTIFICATION_ID_FGS,
                 title=APP_NAME,
                 body=label,
                 start_type=AndroidServiceStartType.STICKY,
                 service_types=[AndroidForegroundServiceType.SPECIAL_USE],
                 # Termux-style: the persistent notification carries an Exit
                 # action that tears down sessions + FGS and closes the app.
-                actions=[NotificationAction(id="exit", title="Exit")],
+                actions=[NotificationAction(id=NOTIFICATION_ACTION_EXIT, title="Exit")],
                 options=self._session_notification_options(),
             )
             self._fgs_active = True
@@ -72,8 +78,8 @@ class SessionFgsMixin:
 
             return ftn.AndroidOptions(
                 channel=ftn.NotificationChannel(
-                    id="sessions",
-                    name="Sessions",
+                    id=NOTIFICATION_CHANNEL_SESSIONS,
+                    name=NOTIFICATION_CHANNEL_SESSIONS_NAME,
                     importance=ftn.AndroidImportance.LOW,
                 ),
                 silent=True,

@@ -12,16 +12,6 @@ from core.state import state
 
 logger = logging.getLogger(__name__)
 
-# Probed guest apps for the "Open an app" sheet: (label, command) pairs.
-_APP_PRESETS = (
-    ("Terminal", "xterm"),
-    ("Files", "thunar"),
-    ("Browser", "firefox"),
-    ("Text editor", "mousepad"),
-    ("Image editor", "gimp"),
-    ("Office", "libreoffice"),
-    ("VS Code", "code"),
-)
 
 _CUSTOM = "__custom__"
 

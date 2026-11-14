@@ -57,7 +57,9 @@ def DesktopView(session) -> ft.Control:
     if session.status is DeskStatus.STARTING or session.status is DeskStatus.STOPPING:
         return ft.Column(
             controls=[
-                ft.ProgressRing(width=36, height=36, stroke_width=3),
+                ft.ProgressRing(
+                    width=36, height=36, stroke_width=tokens.PROGRESS_RING_STROKE_THICK
+                ),
                 ft.Text(st.display_status_text or "Starting display…", size=tokens.FONT_MD),
                 ft.Row(
                     controls=[
@@ -172,7 +174,7 @@ def DesktopView(session) -> ft.Control:
                 weight=ft.FontWeight.BOLD,
                 color=theme.text(),
                 expand=True,
-                max_lines=1,
+                max_lines=tokens.MAX_LINES_ONE,
                 overflow=ft.TextOverflow.ELLIPSIS,
             ),
             ft.IconButton(
@@ -286,7 +288,7 @@ def DesktopView(session) -> ft.Control:
                             last_line,
                             size=tokens.FONT_XS,
                             color=theme.text_dim(),
-                            max_lines=1,
+                            max_lines=tokens.MAX_LINES_ONE,
                             overflow=ft.TextOverflow.ELLIPSIS,
                             expand=True,
                         ),

@@ -10,7 +10,17 @@ import time
 
 import flet as ft
 
-from core import theme
+from core import theme, tokens
+from core.constants import (
+    BATTERY_SAVER_DISPLAY,
+    LOW_BATTERY_PCT,
+    PREF_DISPLAY_SETTINGS,
+    PREF_DOCKER_TOKEN,
+    PREF_TERMINAL_SETTINGS,
+    PREF_THEME_MODE,
+    PREF_UPDATE_CHECKED_AT,
+    STORAGE_ONBOARDING_DONE,
+)
 from core.state import state
 
 logger = logging.getLogger(__name__)
@@ -46,7 +56,7 @@ class AppMiscMixin:
         if prefs is None:
             return
         try:
-            await prefs.set("display_settings", json.dumps(self._display_settings()))
+            await prefs.set(PREF_DISPLAY_SETTINGS, json.dumps(self._display_settings()))
         except Exception as exc:
             logger.debug("display settings persist failed: %s", exc)
 
@@ -82,7 +92,7 @@ class AppMiscMixin:
         """Unhandled page errors are logged and shown, never silent."""
         detail = str(getattr(e, "data", "") or e)
         logger.error("page error: %s", detail)
-        self.show_snack(f"internal error: {detail[:120]}")
+        self.show_snack(f"internal error: {detail[: tokens.SNACK_DETAIL_MAX_CHARS]}")
 
     def _on_connectivity(self, e) -> None:
         from core.state import _is_online
@@ -105,7 +115,7 @@ class AppMiscMixin:
             return
         from core.state import DEFAULT_DISPLAY_SETTINGS
 
-        for key, tuned in (("fps", 15), ("quality", 60), ("compression", 4)):
+        for key, tuned in BATTERY_SAVER_DISPLAY.items():
             if state.display_settings.get(key) == DEFAULT_DISPLAY_SETTINGS[key]:
                 state.display_settings[key] = tuned
         logger.info("battery saver detected — display defaults lowered")
@@ -121,7 +131,7 @@ class AppMiscMixin:
         except Exception as exc:
             logger.debug("battery level probe failed: %s", exc)
             return
-        if isinstance(level, int) and level < 20:
+        if isinstance(level, int) and level < LOW_BATTERY_PCT:
             self.show_snack(f"battery at {level}% — keep the app open during the install")
 
     async def set_docker_token(self, token: str) -> None:
@@ -140,7 +150,7 @@ class AppMiscMixin:
         else:
             os.environ.pop("PD_DOCKER_AUTH", None)
         if self.prefs is not None:
-            await self.prefs.set("docker_token", token)
+            await self.prefs.set(PREF_DOCKER_TOKEN, token)
         self.show_snack(
             "Docker Hub credentials saved" if token else "Docker Hub credentials cleared"
         )
@@ -152,7 +162,7 @@ class AppMiscMixin:
         state.theme_revision += 1
         theme.apply_theme_mode(self.page, mode)
         if self.prefs is not None:
-            await self.prefs.set("theme_mode", mode)
+            await self.prefs.set(PREF_THEME_MODE, mode)
 
     async def cycle_theme_mode(self) -> None:
         current = state.theme_mode if state.theme_mode in _THEME_ORDER else "system"
@@ -168,7 +178,7 @@ class AppMiscMixin:
 
         if self.prefs is not None:
             try:
-                last = await self.prefs.get("update_checked_at")
+                last = await self.prefs.get(PREF_UPDATE_CHECKED_AT)
                 if last is not None and time.time() - float(last) < self._UPDATE_CHECK_INTERVAL:
                     return
             except TypeError, ValueError:
@@ -180,13 +190,70 @@ class AppMiscMixin:
             raise
         if self.prefs is not None:
             try:
-                await self.prefs.set("update_checked_at", str(time.time()))
+                await self.prefs.set(PREF_UPDATE_CHECKED_AT, str(time.time()))
             except Exception as exc:
                 logger.debug("update throttle write failed: %s", exc)
         if not data:
             return
         state.update_available = True
         state.update_data = data
+
+    async def open_developer_tools(self, open_: bool = True) -> None:
+        """Settings shows the Build & push screen in place (a component can only
+        be constructed during render, so it lives inside SettingsView)."""
+        state.settings_section = "build" if open_ else ""
+
+    async def save_display_settings(self) -> None:
+        """Settings -> Display saves immediately (a sheet edit used to be lost)."""
+        prefs = getattr(self, "prefs", None)
+        if prefs is None:
+            return
+        try:
+            import json
+
+            await prefs.set(PREF_DISPLAY_SETTINGS, json.dumps(self._display_settings()))
+        except Exception as exc:
+            logger.debug("display settings persist failed: %s", exc)
+
+    async def save_terminal_settings(self) -> None:
+        prefs = getattr(self, "prefs", None)
+        if prefs is None:
+            return
+        try:
+            import json
+
+            from core.state import DEFAULT_TERMINAL_SETTINGS
+
+            merged = {**DEFAULT_TERMINAL_SETTINGS, **(state.terminal_settings or {})}
+            await prefs.set(PREF_TERMINAL_SETTINGS, json.dumps(merged))
+        except Exception as exc:
+            logger.debug("terminal settings persist failed: %s", exc)
+
+    async def check_updates_now(self) -> None:
+        """Manual check from Settings -> About (the startup check is throttled)."""
+        from services.update_service import check_for_update
+
+        self.show_snack("checking for updates…")
+        try:
+            data = await check_for_update()
+        except Exception as exc:
+            self.show_snack(f"update check failed: {exc}")
+            return
+        if data:
+            from components.update_dialog import show_update_dialog
+
+            show_update_dialog(self.page, data)
+        else:
+            self.show_snack("this build is up to date")
+
+    async def replay_onboarding(self) -> None:
+        prefs = getattr(self, "prefs", None)
+        if prefs is not None:
+            try:
+                await prefs.set(STORAGE_ONBOARDING_DONE, "false")
+            except Exception as exc:
+                logger.debug("onboarding reset failed: %s", exc)
+        state.onboarding_done = False
 
     async def show_privacy_options(self) -> None:
         outcome = await self.ad_service.show_privacy_options()

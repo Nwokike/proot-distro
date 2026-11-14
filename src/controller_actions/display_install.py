@@ -5,6 +5,11 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from core.constants import (
+    NOTIFICATION_CHANNEL_INSTALLS,
+    NOTIFICATION_CHANNEL_INSTALLS_NAME,
+    NOTIFICATION_ID_INSTALL,
+)
 from core.state import state
 from services import desk_service, proot_service
 
@@ -31,7 +36,9 @@ class DisplayInstallMixin:
                 auto_cancel=not ongoing,
             )
             await self._ensure_notification_permission()
-            await notifications.show(id=2100, title=title, body=body, options=options)
+            await notifications.show(
+                id=NOTIFICATION_ID_INSTALL, title=title, body=body, options=options
+            )
         except Exception as exc:
             logger.debug("install notification failed: %s", exc)
 
@@ -75,8 +82,6 @@ class DisplayInstallMixin:
                 # Runs inside page.run_task: run_task sets ft.context's page
                 # var in the calling thread and the loop task inherits that
                 # context, so the observable notify schedules the card update.
-                logs = [*state.display_install_logs, t]
-                state.display_install_logs = logs[-2000:]
                 display_progress.append(t)
                 if cell is not None:
                     cell.append_output(t)
@@ -113,7 +118,6 @@ class DisplayInstallMixin:
             logger.exception("display install failed for %s", container)
             return
         self._install_session = None
-        state.display_installing = None
         display_progress.finish(bool(result.get("ok")))
         if cell is not None:
             cell.set_running(False)
@@ -146,12 +150,16 @@ class DisplayInstallMixin:
 
     # ── diagnostics ───────────────────────────────────────────────────────────
 
+    @staticmethod
     def _install_channel():
         """Its own channel: users can silence installs without touching the
         session-alive notification (Android groups them independently)."""
         try:
             import flet_notifications as ftn
 
-            return ftn.NotificationChannel(id="installs", name="Installs")
+            return ftn.NotificationChannel(
+                id=NOTIFICATION_CHANNEL_INSTALLS,
+                name=NOTIFICATION_CHANNEL_INSTALLS_NAME,
+            )
         except Exception:
             return None

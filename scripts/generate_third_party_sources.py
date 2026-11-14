@@ -39,6 +39,8 @@ OUTPUT_FILE = REPO_ROOT / "THIRD-PARTY-SOURCES.md"
 # License + upstream per package (the repackages are verbatim Termux binaries —
 # each carries its upstream license; unknowns fail loud here, not on a lawyer's desk).
 XVNC_LICENSES = {
+    "libc++": "Apache-2.0 (LLVM exception)",
+    "xorg-fonts-misc": "X11 / MIT",
     "tigervnc": "GPL-2.0-or-later",
     "xorg-xkbcomp": "MIT",
     "openssl": "Apache-2.0",
@@ -88,6 +90,8 @@ PA_LICENSES = {
     "libmp3lame": "LGPL-2.0-or-later",
 }
 XVNC_UPSTREAMS = {
+    "libc++": "https://libcxx.llvm.org/",
+    "xorg-fonts-misc": "https://gitlab.freedesktop.org/xorg/font/misc-misc",
     "tigervnc": "https://tigervnc.org",
     "xorg-xkbcomp": "https://gitlab.freedesktop.org/xorg/app/xkbcomp",
     "xkeyboard-config": "https://gitlab.freedesktop.org/xkeyboard-config/xkeyboard-config",
@@ -306,7 +310,15 @@ def generate_markdown() -> str:
             "| `flet-terminal` | MIT | https://github.com/Nwokike/flet-terminal |",
             "| `flet-notifications` | Apache-2.0 | https://github.com/flet-dev/flet |",
             "| `flet-webview` | Apache-2.0 | https://github.com/flet-dev/flet |",
+            "| `flet-audio-recorder` | Apache-2.0 | https://github.com/flet-dev/flet |",
             "| `aiohttp` (display stream server) | Apache-2.0 | https://github.com/aio-libs/aiohttp |",
+            "| `aiohappyeyeballs` | PSF-2.0 | https://github.com/aio-libs/aiohappyeyeballs |",
+            "| `aiosignal` | Apache-2.0 | https://github.com/aio-libs/aiosignal |",
+            "| `attrs` | MIT | https://github.com/python-attrs/attrs |",
+            "| `frozenlist` | Apache-2.0 | https://github.com/aio-libs/frozenlist |",
+            "| `multidict` | Apache-2.0 | https://github.com/aio-libs/multidict |",
+            "| `propcache` | Apache-2.0 | https://github.com/aio-libs/propcache |",
+            "| `yarl` | Apache-2.0 | https://github.com/aio-libs/yarl |",
             "| `httpx` | BSD-3-Clause | https://github.com/encode/httpx |",
             "| `httpcore` | BSD-3-Clause | https://github.com/encode/httpcore |",
             "| `h11` | MIT | https://github.com/python-hyper/h11 |",
@@ -317,6 +329,8 @@ def generate_markdown() -> str:
             "| `typing-extensions` | PSF-2.0 | https://github.com/python/typing_extensions |",
             "| `six` | MIT | https://github.com/benjaminp/six |",
             "| `repath` | MIT | https://github.com/nickstenning/repath |",
+            "| `oauthlib` (flet OAuth support) | BSD-3-Clause | https://github.com/oauthlib/oauthlib |",
+            "| `tzdata` (flet-notifications) | Apache-2.0 | https://github.com/python/tzdata |",
             "",
             "## License Texts",
             "",

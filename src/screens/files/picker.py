@@ -7,6 +7,7 @@ import flet as ft
 from components import card, section_header
 from components.banner_ad import pooled_banner_ad
 from core import theme, tokens
+from core.constants import AD_EVERY_ROWS
 
 
 def build_container_picker(installed, containers_state, default_path, page, on_open) -> ft.Control:
@@ -64,7 +65,7 @@ def build_container_picker(installed, containers_state, default_path, page, on_o
         )
         # Banner rule (owner): always immediately after the LAST container
         # card; when there are more than 5 containers, also after every 5th.
-        if idx == total or (total > 5 and idx % 5 == 0):
+        if idx == total or (total > AD_EVERY_ROWS and idx % AD_EVERY_ROWS == 0):
             banner_count += 1
             picker_rows.append(pooled_banner_ad(f"files-picker-{banner_count}", page))
     return ft.Column(

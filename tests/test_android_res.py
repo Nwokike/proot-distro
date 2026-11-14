@@ -3,6 +3,8 @@ exist on disk — a silently dropped android_res/ breaks the FGS small icon."""
 
 from pathlib import Path
 
+from core.constants import NOTIFICATION_ICON
+
 ROOT = Path(__file__).resolve().parents[1]
 DENSITIES = ("mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi")
 
@@ -21,4 +23,5 @@ def test_pyproject_points_res_dir_at_android_res():
 
 def test_controller_uses_the_bundled_icon_name():
     src = (ROOT / "src" / "app_controller.py").read_text(encoding="utf-8")
-    assert 'android_default_icon="ic_stat_prootdistro"' in src
+    assert "android_default_icon=NOTIFICATION_ICON" in src
+    assert NOTIFICATION_ICON == "ic_stat_prootdistro"

@@ -7,7 +7,8 @@ import logging
 
 import flet as ft
 
-from core import theme
+from core import theme, tokens
+from core.constants import SEARCH_LIMIT_DEFAULT
 from core.state import state
 
 from ._common import _reason
@@ -58,7 +59,7 @@ class DistroActions:
             # progress dialog/banner.
             state.install_stage = clean
             if clean:
-                state.install_logs = [*state.install_logs[-500:], clean]
+                state.install_logs = [*state.install_logs[-tokens.INSTALL_LOG_MAX_LINES :], clean]
             # Live-update the modal controls if the dialog is still open.
             stage_ctrl = getattr(self.page, "_install_stage_text", None)
             logs_ctrl = getattr(self.page, "_install_logs_column", None)
@@ -213,7 +214,7 @@ class DistroActions:
         if outcome.ok:
             await self.ad_service.show_interstitial()
 
-    async def search_distro(self, query: str, limit: int = 25) -> None:
+    async def search_distro(self, query: str, limit: int = SEARCH_LIMIT_DEFAULT) -> None:
         state.search_status = f"searching “{query}”…"
         try:
             results = await asyncio.to_thread(self.proot.search_images, query, limit)

@@ -108,7 +108,7 @@ def _diagnostics_text() -> str:
         f"orientation: {state.device_orientation} · keyboard inset: {state.keyboard_inset:.0f} px",
         "— recent logs —",
     ]
-    lines.extend(MemoryLogHandler.get_logs()[-50:])
+    lines.extend(MemoryLogHandler.get_logs()[-tokens.DIAGNOSTIC_LOG_TAIL :])
     return "\n".join(lines)
 
 

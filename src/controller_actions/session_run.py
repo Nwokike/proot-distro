@@ -7,7 +7,7 @@ import logging
 
 import flet as ft
 
-from core import theme
+from core import theme, tokens
 from core.state import state
 
 from ._common import _reason
@@ -48,7 +48,7 @@ class SessionRunMixin:
             if col is not None:
                 col.controls = [
                     ft.Text(
-                        state.run_output[-4000:],
+                        state.run_output[-tokens.RUN_OUTPUT_TAIL_CHARS :],
                         font_family=_t.MONO_FONT,
                         size=_t.FONT_XXS,
                         color=theme.text_dim(),

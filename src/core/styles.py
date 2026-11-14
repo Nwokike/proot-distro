@@ -1,7 +1,7 @@
 """House design pieces — the shapes every screen composes from.
 
 Glass cards, uppercase section headers, chips, status dots, icon empty states
-and loading states — the house language from `docs/reference/house-ui-design.md`.
+and loading states — the house language.
 """
 
 from __future__ import annotations

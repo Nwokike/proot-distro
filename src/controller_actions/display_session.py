@@ -7,6 +7,7 @@ import logging
 import flet as ft
 
 from core import theme, tokens
+from core.constants import PREF_DISPLAY_SETTINGS
 from core.state import DEFAULT_DISPLAY_SETTINGS, state
 from services import desk_service
 from services.desk_service import script as desk_script
@@ -19,9 +20,8 @@ logger = logging.getLogger(__name__)
 
 class DisplaySessionMixin:
     async def open_display(self, container: str) -> None:
-        """Card/tab entry point: probe, then resume a running display — or start
-        the installed desktop — or open the launcher sheet (app-first, with the
-        desktop install below it) when no desktop is installed yet."""
+        """Card/tab entry point: resume a running display, else open the launch
+        sheet (Start / app / desktop / options). Never auto-starts."""
         state.display_error = ""
         await self.probe_display(container)
         caps = self._display_caps(container)
@@ -35,12 +35,12 @@ class DisplaySessionMixin:
             state.active_display = (desktop or running[0]).key
             self._wakelock(True)
             return
-        if any((caps.get("desktops") or {}).values()):
-            await self.start_display(container)
-        else:
-            from screens.display_launcher import show_display_sheet
+        # Always the launch sheet: "Open display" must not silently start a
+        # session (and a provisioned container needs a way to reach its
+        # options). The sheet's primary action is Start.
+        from screens.display_launcher import show_display_sheet
 
-            show_display_sheet(self.page, self.methods, container, caps)
+        show_display_sheet(self.page, self.methods, container, caps)
 
     async def start_display(
         self,
@@ -178,7 +178,7 @@ class DisplaySessionMixin:
             try:
                 import json
 
-                await prefs.set("display_settings", json.dumps(self._display_settings()))
+                await prefs.set(PREF_DISPLAY_SETTINGS, json.dumps(self._display_settings()))
             except Exception as exc:
                 logger.debug("display_settings persist failed: %s", exc)
         self._wakelock(True)
@@ -360,7 +360,6 @@ class DisplaySessionMixin:
 
     # ── provisioning ──────────────────────────────────────────────────────────
 
-    @staticmethod
     async def cancel_install_display(self) -> None:
         """Stop the running desktop-install capture (the card/cell Stop)."""
         session = getattr(self, "_install_session", None)
