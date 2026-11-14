@@ -124,7 +124,7 @@ class ProotSession:
                     if process is None:
                         break
                     try:
-                        data = os.read(master_fd, 4096)
+                        data = os.read(master_fd, 65536)
                     except OSError as exc:
                         if exc.errno == errno.EIO or (
                             exc.errno == errno.EBADF and self._master_fd is None

@@ -29,6 +29,10 @@ class DistroActions:
     ) -> None:
         if state.installing:
             return
+        if not state.online:
+            self.show_snack("you're offline — connect to a network to install")
+            return
+        await self._warn_low_battery()
         if await asyncio.to_thread(self.proot.busy_locks):
             state.busy_note = "another install is already running"
             return
@@ -64,15 +68,18 @@ class DistroActions:
             from core import tokens as _t
 
             if logs_ctrl is not None:
-                logs_ctrl.controls = [
+                # Incremental append: rebuilding 60 Text controls per line was
+                # O(n) control churn on every install chunk.
+                logs_ctrl.controls.append(
                     ft.Text(
-                        ln,
+                        clean,
                         font_family=_t.MONO_FONT,
                         size=_t.FONT_XXS,
                         color=theme.text_dim(),
                     )
-                    for ln in state.install_logs[-60:]
-                ]
+                )
+                if len(logs_ctrl.controls) > 60:
+                    del logs_ctrl.controls[: len(logs_ctrl.controls) - 60]
                 logs_ctrl.update()
             dialog = getattr(self.page, "_install_dialog", None)
             if dialog is not None and getattr(dialog, "open", False):
@@ -125,7 +132,12 @@ class DistroActions:
                 self.page._install_stage_text = None
                 self.page._install_logs_column = None
             if installed_now and outcome is not None and outcome.ok:
+                from core import shared_services
+
                 state.install_completed = True
+                self.page.run_task(
+                    shared_services.announce, f"{name or image} installed", self.page
+                )
                 state.last_installed = installed_now
                 await self.ad_service.show_interstitial()
 
@@ -220,6 +232,7 @@ class DistroActions:
     async def clear_cache(self) -> None:
         if state.cache_busy:
             return
+        await self.ad_service.show_interstitial()
         state.cache_busy = True
         try:
             outcome = await asyncio.to_thread(self.proot.clear_cache)
@@ -237,6 +250,7 @@ class DistroActions:
     async def clear_orphan_layers(self) -> None:
         if state.cache_busy:
             return
+        await self.ad_service.show_interstitial()
         state.cache_busy = True
         try:
             outcome = await asyncio.to_thread(self.proot.clear_cache, orphan=True)
@@ -254,6 +268,7 @@ class DistroActions:
     async def remove_cached_image(self, identifier: str) -> None:
         if state.cache_busy:
             return
+        await self.ad_service.show_interstitial()
         state.cache_busy = True
         try:
             outcome = await asyncio.to_thread(self.proot.remove_cached_image, identifier)

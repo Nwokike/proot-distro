@@ -62,12 +62,32 @@ class SessionActions:
                 # Termux-style: the persistent notification carries an Exit
                 # action that tears down sessions + FGS and closes the app.
                 actions=[NotificationAction(id="exit", title="Exit")],
+                options=self._session_notification_options(),
             )
             self._fgs_active = True
             self._fgs_label = label
             logger.info("FGS started (%s)", label)
         except Exception as exc:
             logger.warning("FGS start failed: %s", exc)
+
+    @staticmethod
+    def _session_notification_options():
+        """The session-alive notification belongs to a LOW-importance channel:
+        it must never make a sound when the label changes."""
+        try:
+            import flet_notifications as ftn
+
+            return ftn.AndroidOptions(
+                channel=ftn.NotificationChannel(
+                    id="sessions",
+                    name="Sessions",
+                    importance=ftn.AndroidImportance.LOW,
+                ),
+                silent=True,
+                only_alert_once=True,
+            )
+        except Exception:
+            return None
 
     async def _update_fgs(self) -> None:
         """Ref-count the foreground service: it runs while ANY shell or
@@ -217,12 +237,14 @@ class SessionActions:
         )
 
     async def kill_all_sessions(self, signal: str | None = None) -> None:
+        await self.ad_service.show_interstitial()
         outcome = await asyncio.to_thread(self.proot.kill_session, None, True, signal)
         self.show_snack(
             "stopped all sessions" if outcome.ok else self.proot.friendly_job_error(outcome)
         )
 
     async def kill_session(self, pid: str, signal: str | None = None) -> None:
+        await self.ad_service.show_interstitial()
         outcome = await asyncio.to_thread(self.proot.kill_session, str(pid), False, signal)
         self.show_snack(
             f"stopped session {pid}" if outcome.ok else self.proot.friendly_job_error(outcome)
@@ -243,6 +265,7 @@ class SessionActions:
         manager = getattr(self, "desk_manager", None)
         if manager is None:
             return
+        await self.ad_service.show_interstitial()
         container = entry.container
         settings = self._display_settings()
         try:
@@ -387,6 +410,20 @@ class SessionActions:
         await self._update_fgs()  # stops only when no shells AND no displays remain
         await self.ad_service.show_interstitial()
 
+    async def open_notification_settings(self) -> None:
+        """Honest settings entry: opens the system screen when notifications are
+        off, otherwise reports that they are enabled."""
+        notifications = getattr(self, "notifications", None)
+        if notifications is None:
+            return
+        try:
+            if await notifications.are_notifications_enabled():
+                self.show_snack("notifications are enabled")
+            else:
+                await notifications.open_settings()
+        except Exception as exc:
+            logger.debug("notification settings unavailable: %s", exc)
+
     async def exit_app(self) -> None:
         """Kill all sessions and displays, stop the foreground service, exit."""
         manager = getattr(self, "desk_manager", None)
@@ -394,6 +431,12 @@ class SessionActions:
             await manager.stop_all()
         await asyncio.to_thread(self.session_manager.close_all)
         await self._stop_fgs()
+        notifications = getattr(self, "notifications", None)
+        if notifications is not None:
+            try:
+                await notifications.cancel_all()  # leave no stale shade entries
+            except Exception as exc:
+                logger.debug("notification cleanup failed: %s", exc)
         # Android: finish the activity directly.
         try:
             from jnius import autoclass
@@ -404,7 +447,9 @@ class SessionActions:
 
             os._exit(0)
 
-    async def run_container(self, container: str, args_text: str) -> None:
+    async def run_container(
+        self, container: str, args_text: str, options: dict | None = None
+    ) -> None:
         """`proot-distro run` — Entrypoint/Cmd plus the args, on a PTY, captured live."""
         import shlex
 
@@ -420,10 +465,13 @@ class SessionActions:
             state.run_busy = None
             self.show_snack(f"bad args syntax: {exc}")
             return
+        # Visible "starting" state BEFORE the ad, so the action never looks
+        # dead while the interstitial loads.
         state.run_busy = container
         state.run_status = "starting…"
         state.run_output = ""
         state.run_returncode = None
+        await self.ad_service.show_interstitial()
         loop = self.page.loop
 
         def _apply(chunk: str) -> None:
@@ -454,7 +502,12 @@ class SessionActions:
 
         try:
             result = await asyncio.to_thread(
-                session_service.run_capture, container, run_args, None, on_chunk=_on_chunk
+                session_service.run_capture,
+                container,
+                run_args,
+                None,
+                on_chunk=_on_chunk,
+                options=options,
             )
         except Exception as exc:
             state.run_status = f"run failed: {_reason(exc)}"

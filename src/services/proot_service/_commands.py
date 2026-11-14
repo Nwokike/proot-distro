@@ -72,14 +72,16 @@ def get_proot_cmd(container: str, _retry: bool = True) -> str:
     )
 
 
-def run_command_argv(container: str, run_args: list[str], work_dir: str | None = None) -> str:
+def run_command_argv(
+    container: str, run_args: list[str], work_dir: str | None = None, **options
+) -> str:
     """The printed command line for `pd run <c> -- args` (Entrypoint/Cmd + args).
 
     Safe by construction: the namespace carries get_proot_cmd=True, so upstream
     prints and exits instead of os.execvpe-ing the app process. The caller
     parses the line and spawns it on a PTY (session_service.run_argv).
     """
-    ns = _ns_run(container, list(run_args), work_dir, get_proot_cmd=True)
+    ns = _ns_run(container, list(run_args), work_dir, get_proot_cmd=True, **options)
     return _call_get_proot_cmd("proot_distro.commands.run", "command_run", ns)
 
 

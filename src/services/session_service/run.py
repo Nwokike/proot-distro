@@ -51,12 +51,13 @@ def run_capture(
     work_dir: str | None = None,
     timeout: float | None = None,
     on_chunk=None,
+    options: dict | None = None,
 ) -> dict:
     """Run a one-shot command via `proot-distro run` (Entrypoint/Cmd + args).
 
     `timeout=None` waits forever, exactly like upstream `proot-distro run`.
     """
-    env, argv = run_argv(container, run_args, work_dir)
+    env, argv = run_argv(container, run_args, work_dir, options)
     return _capture(argv, env, timeout, on_chunk)
 
 

@@ -1194,6 +1194,10 @@ def test_bare_display_spawns_xvnc_without_a_guest_tree(monkeypatch, tmp_path):
     assert "export DISPLAY=127.0.0.1:0" in env_file.read_text(encoding="utf-8")
 
 
+async def _async_noop(*_args, **_kwargs) -> None:
+    return None
+
+
 async def test_start_x_display_injects_the_env_into_the_live_shell():
     """One tap from the terminal: a bare display starts and the exports are
     written INTO the running shell's PTY (no tab switch, no new shell)."""
@@ -1232,6 +1236,7 @@ async def test_start_x_display_injects_the_env_into_the_live_shell():
     controller.page = type("P", (), {"width": 800, "height": 600})()
     controller.session_manager = type("M", (), {"entries": {"debian": entry}})()
     controller.desk_manager = _Manager()
+    controller.ad_service = type("A", (), {"show_interstitial": staticmethod(_async_noop)})()
     snacks = []
     controller.show_snack = snacks.append
 

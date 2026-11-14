@@ -367,18 +367,30 @@ def xvnc_command(
     disconnect_timeout: int = 0,
     desktop_name: str = "",
     font_paths: list[str] | None = None,
+    localhost_only: bool = False,
+    compare_fb: int = 2,
+    dpi: int = 0,
+    idle_timeout: int = 0,
+    max_connection_time: int = 0,
+    view_only: bool = False,
+    max_cut_text: int = 0,
+    disconnect_clients: bool = False,
 ) -> tuple[list[str], dict[str, str]]:
-    """The Xvnc argv + env. RFB stays loopback-only (TigerVNC defaults -localhost
-    to yes since 1.11 — our stream server is the only client, also local). The
-    X port 6000+N serves the guest apps and is gated by the cookie file.
+    """The Xvnc argv + env.
+
+    Defaults keep the historical behaviour: `-SecurityTypes None`, and
+    TigerVNC 1.16.2's own default `-localhost false` / interface "all" — so the
+    RFB port is reachable from other interfaces unless the user opts into
+    `localhost_only` (`-localhost=1`). The stream server's access code gates the
+    viewer page and WebSocket; this flag gates the raw RFB port itself.
+    TigerVNC's `-Password`/`-rfbauth` need an OBFUSCATED 8-byte secret (its
+    BinaryParameter hex-decodes, then the server deobfuscates), which needs
+    vncpasswd's DES — we ship neither, so no half-working password control.
 
     Every option here maps 1:1 to a real Xvnc 1.16.2 parameter: depth → -depth,
     frame_rate → -FrameRate, shared_policy → -AlwaysShared/-NeverShared,
     clipboard → -AcceptCutText/-SendCutText, disconnect_timeout →
-    -MaxDisconnectionTime, desktop_name → -desktop. `-SecurityTypes None` is
-    kept deliberately: RFB is loopback-only, and LAN/tunnel clients reach the
-    viewer through the stream server's access-code gate — a VNC password would
-    gate a port the user can never reach."""
+    -MaxDisconnectionTime, desktop_name → -desktop."""
     ensure_lock_dir()  # the rewritten prefix's <app>/tmp must exist before start
     ensure_prefix_bin()  # <app>/bin/sh + <app>/bin/xkbcomp, the paths Xvnc execs
     binary = xvnc_binary()
@@ -399,6 +411,9 @@ def xvnc_command(
         str(xkb_dir),
         # FrameRate default in Xvnc is 60; the app default is 30 (phone CPU).
         f"-FrameRate={int(frame_rate)}",
+        # 2 = compare the framebuffer before sending (Xvnc default), 1 = region
+        # compare, 0 = always send the update.
+        f"-CompareFB={max(0, min(2, int(compare_fb)))}",
         # The unix socket lives under /tmp/.X11-unix, which does not exist on
         # Android; the guest apps connect over TCP anyway (shared loopback).
         # -listen tcp sets PartialNetwork, so the missing unix socket is
@@ -409,6 +424,24 @@ def xvnc_command(
         "unix",
         "-noreset",
     ]
+    if localhost_only:
+        argv.append("-localhost=1")
+    if int(dpi) > 0:
+        # X server DPI: font/UI scaling inside the guest.
+        argv.extend(["-dpi", str(int(dpi))])
+    if int(idle_timeout) > 0:
+        # Drop an idle VIEWER; the session keeps running.
+        argv.append(f"-IdleTimeout={int(idle_timeout)}")
+    if int(max_connection_time) > 0:
+        # Hard cap on a viewer connection's lifetime.
+        argv.append(f"-MaxConnectionTime={int(max_connection_time)}")
+    if view_only:
+        # Server-side view-only: the screenshot is live, input is refused.
+        argv.extend(["-AcceptKeyEvents=0", "-AcceptPointerEvents=0"])
+    if int(max_cut_text) > 0:
+        argv.append(f"-MaxCutText={int(max_cut_text)}")
+    if disconnect_clients:
+        argv.append("-DisconnectClients=1")
     if shared_policy == "always":
         argv.append("-AlwaysShared=1")
     elif shared_policy == "never":
@@ -432,7 +465,16 @@ def xvnc_command(
 
 
 def write_pulse_config(
-    runtime: Path, *, mic: bool = True, latency_ms: int = 0, pm: int = 2
+    runtime: Path,
+    *,
+    mic: bool = True,
+    latency_ms: int = 0,
+    pm: int = 2,
+    rate: int = 0,
+    no_close_hack: bool = False,
+    mic_rate: int = 0,
+    mic_format: str = "",
+    mic_channels: int = 0,
 ) -> Path:
     """The daemon script: load OUR modules by absolute path (the compiled module
     dir is the Termux prefix, which does not exist in the app) and serve guests
@@ -447,6 +489,10 @@ def write_pulse_config(
     if int(latency_ms) > 0:
         sink_args += f" latency={int(latency_ms)}"
     sink_args += f" pm={int(pm)}"
+    if int(rate) > 0:
+        sink_args += f" rate={int(rate)}"
+    if no_close_hack:
+        sink_args += " no_close_hack=1"
     lines = [
         # speakers (AAudio — the OpenSL ES sink broke on Android 16)
         f"load-module {module_path('module-aaudio-sink.so')}{sink_args}",
@@ -455,7 +501,16 @@ def write_pulse_config(
     ]
     if mic:
         # microphone (guest apps record through PULSE_SERVER)
-        lines.append(f"load-module {module_path('module-sles-source.so')} source_name=mic")
+        mic_args = " source_name=mic"
+        for key, value in (
+            ("rate", int(mic_rate)),
+            ("channels", int(mic_channels)),
+        ):
+            if value > 0:
+                mic_args += f" {key}={value}"
+        if mic_format:
+            mic_args += f" format={mic_format}"
+        lines.append(f"load-module {module_path('module-sles-source.so')}{mic_args}")
     lines.append(
         # serve guest apps over loopback TCP
         f"load-module {module_path('module-native-protocol-tcp.so')}"
@@ -535,7 +590,16 @@ def request_mic_permission() -> None:
 
 
 def pulseaudio_command(
-    *, mic: bool = True, latency_ms: int = 0, pm: int = 2
+    *,
+    mic: bool = True,
+    latency_ms: int = 0,
+    pm: int = 2,
+    rate: int = 0,
+    no_close_hack: bool = False,
+    mic_rate: int = 0,
+    mic_format: str = "",
+    mic_channels: int = 0,
+    resample_method: str = "",
 ) -> tuple[list[str], dict[str, str]]:
     """The PulseAudio daemon argv + env (one app-wide daemon; the manager starts
     it with the first display and stops it with the last). -n skips the missing
@@ -546,13 +610,24 @@ def pulseaudio_command(
         request_mic_permission()
     binary = pulseaudio_binary()
     runtime = storage_paths.support_root() / "runtime"
-    script = write_pulse_config(runtime, mic=mic, latency_ms=latency_ms, pm=pm)
+    script = write_pulse_config(
+        runtime,
+        mic=mic,
+        latency_ms=latency_ms,
+        pm=pm,
+        rate=rate,
+        no_close_hack=no_close_hack,
+        mic_rate=mic_rate,
+        mic_format=mic_format,
+        mic_channels=mic_channels,
+    )
     env = _payload_env(binary.parent)
     pa_libs = ensure_pa_libs()
     # libcrypto-free linker path (see ensure_pa_libs)
     env["LD_LIBRARY_PATH"] = str(pa_libs)
     argv = [
         str(binary),
+        *([f"--resample-method={resample_method}"] if resample_method else []),
         "--daemonize=no",
         "--exit-idle-time=-1",
         "--disallow-exit=1",

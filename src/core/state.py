@@ -22,11 +22,42 @@ DEFAULT_DISPLAY_SETTINGS: dict = {
     "shared_policy": "always",  # always | never ("auto" == always for our viewer)
     "resize": "remote",  # remote | scale | off — how the viewer fits the framebuffer
     "clipboard": True,
+    # Raw RFB port gates — OFF by default (the stream server's access code is
+    # the viewer gate); the user opts in.
+    "restrict_local": False,  # Xvnc -localhost=1 (loopback-only RFB)
+    # Remaining real Xvnc 1.16.2 parameters.
+    "compare_fb": 2,  # 2 framebuffer compare, 1 region, 0 always send
+    "dpi": 0,  # 0 = Xvnc default (96)
+    "idle_timeout": 0,  # drop an idle viewer after N s (session stays up)
+    "max_connection_time": 0,  # hard cap per viewer connection (s)
+    "view_only": False,  # refuse remote input (screenshot-only viewer)
+    "max_cut_text": 0,  # clipboard cap in bytes (0 = Xvnc default)
+    "disconnect_clients": False,  # a new viewer kicks the others
+    # PulseAudio module/daemon options.
+    "audio_rate": 0,  # AAudio sink rate (0 = device default)
+    "audio_no_close_hack": False,
+    "mic_rate": 0,
+    "mic_format": "",  # e.g. s16le
+    "mic_channels": 0,
+    "resample_method": "",  # e.g. speex-float-1 / soxr-hq
+    # noVNC client settings.
+    "viewer_bell": True,
+    "show_dot": False,
+    "viewer_logging": "warn",
     "disconnect_timeout": 0,  # seconds after the last viewer exits; 0 = keep running
     "mic": True,
     "audio_latency_ms": 0,  # 0 = AAudio's own buffer-derived latency
     "audio_pm": 2,  # AAudio performance-mode offset (2 = LOW_LATENCY)
 }
+
+
+def _is_online(types) -> bool:
+    """True when at least one reported connectivity type is a real network.
+    An empty/unknown report counts as online — a missing probe must never block
+    an install."""
+    if not types:
+        return True
+    return any(getattr(item, "value", item) not in ("none", "None") for item in types)
 
 
 @ft.observable
@@ -57,6 +88,9 @@ class AppState:
     busy_locks: list = None  # list[str] — locks held by active operations
     storage_detail: dict | None = None  # per-area sizes under the Flet storage roots
     cache_busy: bool = False
+    online: bool = True  # Connectivity service's last known state
+    device_orientation: str = "portrait"  # PageMediaData.orientation
+    keyboard_inset: float = 0.0  # PageMediaData.view_insets.bottom (px)
     docker_token: str = ""
     theme_mode: str = "system"  # "system" | "light" | "dark"
     theme_revision: int = 0  # bumped on every theme flip (re-render signal)

@@ -16,6 +16,8 @@ _ATTR_NAMES = {
     "url_launcher": "url_launcher",
     "prefs": "shared_preferences",
     "wakelock": "wakelock",
+    "battery": "battery",
+    "semantics": "semantics",
 }
 
 
@@ -28,6 +30,8 @@ def mount_shared_services(page: ft.Page) -> dict[str, Any]:
         ("url_launcher", ft.UrlLauncher),
         ("prefs", ft.SharedPreferences),
         ("wakelock", ft.Wakelock),
+        ("battery", ft.Battery),
+        ("semantics", ft.SemanticsService),
     )
     mounted: dict[str, Any] = {}
     for key, factory in specs:
@@ -55,6 +59,18 @@ def mount_shared_services(page: ft.Page) -> dict[str, Any]:
 def shared_url_launcher(page: ft.Page | None = None) -> ft.UrlLauncher | None:
     p = page or _current_page()
     return getattr(p, "url_launcher", None) if p else None
+
+
+async def announce(message: str, page: ft.Page | None = None) -> None:
+    """Screen-reader announcement (SemanticsService) — silent no-op elsewhere."""
+    p = page or _current_page()
+    service = getattr(p, "semantics", None) if p else None
+    if service is None:
+        return
+    try:
+        await service.announce_message(message)
+    except Exception as exc:
+        logger.debug("announce failed: %s", exc)
 
 
 async def launch_url(url: str, page: ft.Page | None = None) -> bool:

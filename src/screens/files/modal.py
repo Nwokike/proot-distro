@@ -21,6 +21,7 @@ from screens.files.components import (
 )
 from screens.files.operations import (
     handle_download,
+    handle_paste_image,
     handle_upload,
     open_delete_dialog,
     open_new_folder_dialog,
@@ -38,6 +39,7 @@ def show_manage_files_modal(page: ft.Page, container: str, initial_path: str = "
 
     current_path = initial_path
     listing: list[dict] = []
+    filter_text = ""
     selected_files: set[str] = set()
     is_loading = False
     selection_mode = False
@@ -48,6 +50,20 @@ def show_manage_files_modal(page: ft.Page, container: str, initial_path: str = "
         content=ft.ProgressRing(),
         alignment=ft.Alignment.CENTER,
         expand=True,
+    )
+
+    def _on_filter(e) -> None:
+        nonlocal filter_text
+        filter_text = (e.control.value or "").strip().lower()
+        _render()
+
+    filter_field = ft.TextField(
+        hint_text="Filter this folder",
+        prefix_icon=ft.Icons.SEARCH_ROUNDED,
+        text_size=tokens.FONT_SM,
+        dense=True,
+        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+        on_change=_on_filter,
     )
 
     dlg = ft.AlertDialog(
@@ -80,6 +96,7 @@ def show_manage_files_modal(page: ft.Page, container: str, initial_path: str = "
                         ),
                     ),
                     ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
+                    filter_field,
                     list_container,
                 ],
                 spacing=tokens.SPACE_XS,
@@ -218,6 +235,18 @@ def show_manage_files_modal(page: ft.Page, container: str, initial_path: str = "
                         ),
                     ),
                     ft.IconButton(
+                        icon=ft.Icons.IMAGE_ROUNDED,
+                        tooltip="Paste image from the clipboard",
+                        icon_size=tokens.ICON_SM,
+                        on_click=lambda _: page.run_task(
+                            handle_paste_image,
+                            page,
+                            container,
+                            current_path,
+                            lambda: _fetch_listing(current_path),
+                        ),
+                    ),
+                    ft.IconButton(
                         icon=ft.Icons.CREATE_NEW_FOLDER_ROUNDED,
                         tooltip="New folder",
                         icon_size=tokens.ICON_SM,
@@ -257,6 +286,22 @@ def show_manage_files_modal(page: ft.Page, container: str, initial_path: str = "
                 )
             )
         else:
+            visible = [item for item in listing if filter_text in str(item.get("name", "")).lower()]
+            if filter_text and not visible:
+                list_container.content = build_empty_dir_view(
+                    lambda _: page.run_task(
+                        handle_upload,
+                        page,
+                        container,
+                        current_path,
+                        lambda: _fetch_listing(current_path),
+                    )
+                )
+                try:
+                    dlg.update()
+                except Exception:
+                    logger.debug("Modal render dialog update suppressed")
+                return
             list_container.content = ft.ListView(
                 controls=[
                     build_file_item(
@@ -266,7 +311,7 @@ def show_manage_files_modal(page: ft.Page, container: str, initial_path: str = "
                         on_click=lambda _e, i=item: _on_item_click(i),
                         on_long_press=lambda _e, p=item["path"]: _toggle_select(p),
                     )
-                    for item in listing
+                    for item in visible
                 ],
                 expand=True,
                 spacing=tokens.SPACE_XXS,

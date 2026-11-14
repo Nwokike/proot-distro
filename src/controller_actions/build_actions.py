@@ -16,10 +16,12 @@ class BuildActions:
     async def run_build(self, opts: dict) -> None:
         if state.build_busy:
             return
+        # Busy/preparing FIRST: the in-app feedback must not wait for the ad.
         state.build_busy = True
         state.build_stage = "preparing"
         state.build_logs = []
         state.build_result = None
+        await self.ad_service.show_interstitial()
 
         loop = self.page.loop
 
@@ -29,7 +31,7 @@ class BuildActions:
             if clean:
                 state.build_logs.append(clean)
                 if len(state.build_logs) > 500:
-                    state.build_logs.pop(0)
+                    del state.build_logs[: len(state.build_logs) - 500]
 
         def _on_line(line: str) -> None:
             loop.call_soon_threadsafe(_apply_line, line)
@@ -58,6 +60,7 @@ class BuildActions:
     async def push_image(self, image_ref: str, arch: str = "", insecure: bool = False) -> None:
         if state.push_busy:
             return
+        await self.ad_service.show_interstitial()
         state.push_busy = True
         state.push_status = f"pushing {image_ref}…"
         loop = self.page.loop
@@ -86,6 +89,7 @@ class BuildActions:
             state.push_busy = False
 
     async def clear_build_cache(self) -> None:
+        await self.ad_service.show_interstitial()
         outcome = await asyncio.to_thread(self.proot.clear_cache, build_cache=True)
         self.show_snack(
             "build cache cleared" if outcome.ok else self.proot.friendly_job_error(outcome)

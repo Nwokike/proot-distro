@@ -13,6 +13,7 @@ import flet as ft
 
 from core import theme, tokens
 from core.state import state
+from screens.terminal.wiring import copy_selection
 from screens.terminal_controls import _THEME_PRESETS, _confirm_close, _theme_name
 
 # Terminal escape sequences: CSI (\x1b[…m], cursor moves, [6n replies, [J
@@ -43,7 +44,7 @@ def show_full_output_dialog(page: ft.Page, entry) -> None:
     flet-terminal's native select_all only reaches the rendered viewport on
     device, and the package exposes no buffer-dump API — but we own every
     byte: SessionEntry.scrollback holds the complete PTY stream (capped at
-    SCROLLBACK_CHUNKS). Decode it, strip the escape-sequence noise ([6n
+    SCROLLBACK_BYTES). Decode it, strip the escape-sequence noise ([6n
     cursor queries, [J clears, SGR colors), then hand the clean text to the
     clipboard."""
     raw = b"".join(entry.scrollback)
@@ -147,7 +148,7 @@ def build_terminal_fab(
         _item(
             "Copy Selection",
             ft.Icons.COPY_ALL_ROUNDED,
-            lambda _e: page.run_task(mt.copy_selection_async),
+            lambda _e: page.run_task(copy_selection, page, mt),
         ),
         _item(
             "Copy Full Output",

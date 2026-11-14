@@ -15,6 +15,38 @@ from core import theme, tokens
 from services import container_files_service
 
 
+async def handle_paste_image(page: ft.Page, container: str, guest_dir: str, refresh) -> None:
+    """Paste a clipboard IMAGE into the container as a PNG file.
+
+    `Clipboard.get_image()` is Flet's Android/iOS/web API; bytes go straight to
+    the files service (no base64 round-trip)."""
+    import time
+
+    from components.snack import show_snack
+
+    clipboard = getattr(page, "clipboard", None)
+    if clipboard is None:
+        return
+    try:
+        data = await clipboard.get_image()
+    except Exception as exc:
+        show_snack(page, f"clipboard image unavailable: {exc}")
+        return
+    if not data:
+        show_snack(page, "the clipboard has no image")
+        return
+    name = f"clipboard-{int(time.time())}.png"
+    try:
+        await asyncio.to_thread(
+            container_files_service.write_file_bytes, container, guest_dir, name, data
+        )
+    except Exception as exc:
+        show_snack(page, f"could not save the image: {exc}")
+        return
+    show_snack(page, f"pasted {name}")
+    refresh()
+
+
 def preview_file(page: ft.Page, container: str, file_path: str) -> None:
     async def _read() -> None:
         try:
@@ -222,10 +254,13 @@ async def handle_download(
     set_selected_items: Callable[[set[str]], None],
     set_selection_mode: Callable[[bool], None],
 ) -> None:
-    """Download selected files/folders — CollabShell's same-device approach:
-    on mobile write straight to the Download dir with a unique name (no bytes
-    round-trip, no picker); folders are zipped to a local path. A progress
-    dialog (ProgressBar + status) shows while it runs."""
+    """Download selected files/folders to a staged path, then hand them over.
+
+    Writing to /storage/emulated/0/Download needs a storage permission this app
+    does not request (the write just failed), so on mobile the export is staged
+    in app storage and offered through the system share sheet — no permission,
+    and the user picks the real destination. Folders are zipped first. A
+    progress dialog (ProgressBar + status) shows while it runs."""
     if not selected_items:
         return
     from components.snack import show_snack
@@ -233,8 +268,11 @@ async def handle_download(
     mobile = bool(getattr(page, "platform", None) and page.platform.is_mobile() and not page.web)
 
     def _unique_local_path(default_name: str) -> Path:
-        dl_dir = Path("/storage/emulated/0/Download")
-        if not dl_dir.is_dir():
+        if mobile:
+            from core import storage_paths
+
+            dl_dir = storage_paths.exports_root()
+        else:
             dl_dir = Path.home() / "Downloads"
         dl_dir.mkdir(parents=True, exist_ok=True)
         name_part, ext_part = os.path.splitext(default_name)
@@ -289,7 +327,21 @@ async def handle_download(
             else:
                 _, host_file = container_files_service.resolve_guest_path(container, item_path)
                 await asyncio.to_thread(shutil.copyfile, host_file, local_path)
-            show_snack(page, f"Saved to {local_path}")
+            if mobile:
+                share = getattr(page, "share", None)
+                if share is not None:
+                    try:
+                        await share.share_files(
+                            [ft.ShareFile.from_path(str(local_path))],
+                            title=f"{container}: {default_name}",
+                        )
+                        show_snack(page, "ready — choose where to save it")
+                    except Exception as exc:
+                        show_snack(page, f"export staged at {local_path} ({exc})")
+                else:
+                    show_snack(page, f"export staged at {local_path}")
+            else:
+                show_snack(page, f"Saved to {local_path}")
         except Exception as exc:
             show_snack(page, f"Download failed for {base}: {exc}")
         finally:

@@ -36,6 +36,11 @@ def test_interstitial_is_skipped_on_desktop():
     assert asyncio.run(service.show_interstitial()) is False
 
 
+def test_the_global_cooldown_is_sixty_seconds():
+    """One cooldown for every major action (owner ruling 2026-11-14)."""
+    assert ad_service.AdService.INTERSTITIAL_MIN_INTERVAL_SEC == 60.0
+
+
 def test_interval_guard_blocks_a_back_to_back_show():
     import asyncio
 

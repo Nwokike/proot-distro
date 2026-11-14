@@ -105,6 +105,7 @@ def _diagnostics_text() -> str:
     lines = [
         f"{APP_NAME} {APP_VERSION} (build {APP_BUILD_NUMBER})",
         f"probe: passed={state.probe_passed} — {state.probe_summary or 'n/a'}",
+        f"orientation: {state.device_orientation} · keyboard inset: {state.keyboard_inset:.0f} px",
         "— recent logs —",
     ]
     lines.extend(MemoryLogHandler.get_logs()[-50:])
@@ -128,6 +129,22 @@ def show_help_sheet(page: ft.Page, methods=None) -> None:
             _open_dialog(getattr(dialogs, name))
 
         return _handler
+
+    def _notification_settings(_e=None) -> None:
+        from core import shared_services
+
+        if methods is not None:
+            ft.context.page.run_task(methods.open_notification_settings)
+        else:  # keep the sheet honest when the context is unavailable
+            shared_services.logger.debug("notification settings unavailable")
+
+    def _share_diagnostics(_e=None) -> None:
+        share = getattr(ft.context.page, "share", None)
+        if share is None:
+            return
+        ft.context.page.run_task(
+            share.share_text, _diagnostics_text(), title=f"{APP_NAME} diagnostics"
+        )
 
     def _copy_diagnostics(_e=None) -> None:
         clipboard = getattr(page, "clipboard", None)
@@ -187,6 +204,15 @@ def show_help_sheet(page: ft.Page, methods=None) -> None:
                     ),
                 ),
                 (
+                    "cross architecture qemu speed tb size",
+                    _row(
+                        ft.Icons.MEMORY_ROUNDED,
+                        "Foreign-architecture containers",
+                        "QEMU user-mode emulators ship with the app. For a speed boost, "
+                        "add QEMU_TB_SIZE=64M to the shell's Environment lines.",
+                    ),
+                ),
+                (
                     "long press select copy",
                     _row(
                         ft.Icons.CONTENT_COPY_ROUNDED,
@@ -223,6 +249,38 @@ def show_help_sheet(page: ft.Page, methods=None) -> None:
                         "The viewer's own toolbar",
                         "Keyboard (soft-keyboard typing), clipboard panel, extra keys, "
                         "clip/scale/remote-resize settings, and auto-reconnect on drops.",
+                    ),
+                ),
+            ],
+        ),
+        (
+            "Files & backups",
+            [
+                (
+                    "backup share save folder archive",
+                    _row(
+                        ft.Icons.ARCHIVE_ROUNDED,
+                        "Backups never go through memory",
+                        "After the archive is staged you pick a folder to save it into, "
+                        "or send it to another app with the share sheet.",
+                    ),
+                ),
+                (
+                    "restore overwrite container archive",
+                    _row(
+                        ft.Icons.UNARCHIVE_ROUNDED,
+                        "Restore replaces the container",
+                        "A restore wipes the container's filesystem and extracts the "
+                        "archive over it — it asks for confirmation first.",
+                    ),
+                ),
+                (
+                    "paste image clipboard png files",
+                    _row(
+                        ft.Icons.IMAGE_ROUNDED,
+                        "Paste an image into the container",
+                        "In Files, the image button saves the clipboard image as a PNG "
+                        "in the folder you are browsing.",
                     ),
                 ),
             ],
@@ -303,6 +361,22 @@ def show_help_sheet(page: ft.Page, methods=None) -> None:
                         "Copy diagnostics",
                         icon=ft.Icons.CONTENT_COPY_ROUNDED,
                         on_click=_copy_diagnostics,
+                    ),
+                ),
+                (
+                    "share diagnostics support send",
+                    ft.TextButton(
+                        "Share diagnostics",
+                        icon=ft.Icons.SHARE_ROUNDED,
+                        on_click=_share_diagnostics,
+                    ),
+                ),
+                (
+                    "notifications permission settings alerts",
+                    ft.TextButton(
+                        "Notification settings",
+                        icon=ft.Icons.NOTIFICATIONS_ROUNDED,
+                        on_click=_notification_settings,
                     ),
                 ),
             ],

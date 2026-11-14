@@ -30,6 +30,7 @@ class ControllerMethods:
     remove_container: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     reset_container: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     search_distro: Callable[[str, int], Awaitable[None]] = field(default=_noop_async)
+    open_notification_settings: Callable[[], Awaitable[None]] = field(default=_noop_async)
     # One-shot command inside a container (Entrypoint/Cmd + args), PTY-captured
     run_container: Callable[[str, str], Awaitable[None]] = field(default=_noop_async)
 

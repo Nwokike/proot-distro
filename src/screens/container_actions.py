@@ -30,7 +30,7 @@ def container_menu_items(page: ft.Page, methods, cname: str) -> list[ft.PopupMen
         ft.PopupMenuItem(
             icon=ft.Icons.UNARCHIVE_ROUNDED,
             content=ft.Text("Restore from backup…", size=tokens.FONT_SM),
-            on_click=lambda _e: page.run_task(methods.restore_container),
+            on_click=lambda _e: _confirm_restore(page, methods),
         ),
         ft.PopupMenuItem(
             icon=ft.Icons.FOLDER_COPY_ROUNDED,
@@ -345,6 +345,32 @@ def ask_rename(page: ft.Page, methods, container: str) -> None:
     )
 
 
+def _confirm_restore(page: ft.Page, methods) -> None:
+    """A restore REPLACES the container's filesystem with the archive's.
+
+    Upstream's restore destroys the target rootfs before extracting, so this
+    is a destructive action that needs an explicit confirmation."""
+
+    def _choose(_e) -> None:
+        page.pop_dialog()
+        page.run_task(methods.restore_container)
+
+    page.show_dialog(
+        ft.AlertDialog(
+            title=ft.Text("Restore a backup?", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
+            content=ft.Text(
+                "Restoring replaces the container's filesystem with the archive's. "
+                "Everything currently in the container is lost.",
+                size=tokens.FONT_SM,
+            ),
+            actions=[
+                ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
+                ft.FilledButton("Choose archive…", on_click=_choose),
+            ],
+        )
+    )
+
+
 def ask_backup(page: ft.Page, methods, container: str) -> None:
     dest = ft.TextField(
         label="Archive name",
@@ -411,9 +437,35 @@ def ask_run(page: ft.Page, methods, container: str) -> None:
         ),
     )
 
+    user_field = ft.TextField(
+        label="User (empty = image default)",
+        text_size=tokens.FONT_SM,
+        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+    )
+    workdir_field = ft.TextField(
+        label="Working directory (empty = image default)",
+        text_size=tokens.FONT_SM,
+        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+    )
+    env_field = ft.TextField(
+        label="Environment (one KEY=VALUE per line)",
+        text_size=tokens.FONT_SM,
+        multiline=True,
+        min_lines=2,
+        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+    )
+
     def _save(_e) -> None:
         page.pop_dialog()
-        page.run_task(methods.run_container, container, args_field.value or "")
+        options: dict = {}
+        if user_field.value and user_field.value.strip():
+            options["user"] = user_field.value.strip()
+        if workdir_field.value and workdir_field.value.strip():
+            options["work_dir"] = workdir_field.value.strip()
+        env_lines = [ln.strip() for ln in (env_field.value or "").splitlines() if ln.strip()]
+        if env_lines:
+            options["env"] = env_lines
+        page.run_task(methods.run_container, container, args_field.value or "", options or None)
         from components.install_progress_modal import show_run_dialog
 
         show_run_dialog(page, container, args_field.value or "")
@@ -421,7 +473,19 @@ def ask_run(page: ft.Page, methods, container: str) -> None:
     page.show_dialog(
         ft.AlertDialog(
             title=ft.Text(f"Run in {container}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
-            content=args_field,
+            content=ft.Column(
+                controls=[
+                    args_field,
+                    ft.ExpansionTile(
+                        title=ft.Text("Advanced run options", size=tokens.FONT_SM),
+                        expanded=False,
+                        controls=[user_field, workdir_field, env_field],
+                    ),
+                ],
+                spacing=tokens.SPACE_XS,
+                tight=True,
+                scroll=ft.ScrollMode.AUTO,
+            ),
             actions=[
                 ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
                 ft.FilledButton(

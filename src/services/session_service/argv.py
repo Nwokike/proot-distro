@@ -293,10 +293,22 @@ def session_argv_with_options(container: str, options: dict | None = None) -> tu
     )
 
 
-def run_argv(container: str, run_args: list[str], work_dir: str | None = None) -> tuple[Env, Argv]:
+def run_argv(
+    container: str,
+    run_args: list[str],
+    work_dir: str | None = None,
+    options: dict | None = None,
+) -> tuple[Env, Argv]:
     """(env, argv) for `proot-distro run <c> -- args` — upstream prints it
-    (get_proot_cmd=True, so it never execs in-process), then we harden it."""
-    env, argv = _parse_proot_cmd_line(proot_service.run_command_argv(container, run_args, work_dir))
+    (get_proot_cmd=True, so it never execs in-process), then we harden it.
+    `options` are upstream's run flags (user/env/…). `work_dir` may arrive in
+    either place but not both: upstream takes it as a named argument."""
+    opts = dict(options or {})
+    if "work_dir" in opts:
+        work_dir = str(opts.pop("work_dir") or work_dir or "")
+    env, argv = _parse_proot_cmd_line(
+        proot_service.run_command_argv(container, run_args, work_dir or None, **opts)
+    )
     return _harden_session(env, argv, container)
 
 

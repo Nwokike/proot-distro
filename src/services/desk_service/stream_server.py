@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import socket
 from pathlib import Path
 from urllib.parse import quote
 
@@ -23,7 +24,13 @@ logger = logging.getLogger(__name__)
 _NOVNC_DIR = Path(__file__).parent / "novnc"
 # Upstream requires revalidation so a bumped vnc.html never pairs with stale
 # cached JS (docs/EMBEDDING.md — "the confusingly named Cache-Control: no-cache").
+# The app/ tree only changes with a new APK build, so it may be cached: it is
+# re-fetched and re-parsed on every display open otherwise.
 _NO_CACHE_HEADERS = {"Cache-Control": "no-cache"}
+_APP_CACHE_HEADERS = {"Cache-Control": "public, max-age=86400"}
+_WS_MAX_MSG = 64 * 1024  # inbound RFB messages (pointer/key/clipboard) are tiny
+_WS_HEARTBEAT = 25.0  # dead viewers are dropped instead of lingering
+_WRITE_HIGH_WATER = 512 * 1024  # drain only when the buffer passes this
 
 
 class DisplayStreamServer:
@@ -39,11 +46,22 @@ class DisplayStreamServer:
         quality: int = 6,
         compression: int = 2,
         resize_mode: str = "remote",
+        bell: bool = True,
+        show_dot: bool = False,
+        logging_level: str = "warn",
+        view_only: bool = False,
     ):
         self.host = host
         self.port = port
         self.rfb_port = rfb_port
         self.code = code
+        # noVNC's own client settings (upstream reads ?key=value verbatim).
+        self.bell = bell
+        self.show_dot = show_dot
+        self.logging_level = (
+            logging_level if logging_level in ("error", "warn", "info", "debug") else "warn"
+        )
+        self.view_only = view_only
         self.quality = max(0, min(9, int(quality)))
         self.compression = max(0, min(9, int(compression)))
         # noVNC's own `resize` setting: remote (server follows the viewport),
@@ -51,17 +69,25 @@ class DisplayStreamServer:
         self.resize_mode = resize_mode if resize_mode in ("remote", "scale", "off") else "remote"
         self._runner: web.AppRunner | None = None
 
-    def local_url(self) -> str:
-        """Upstream's viewer URL: autoconnect + the access code riding inside
-        the `path` setting (upstream builds the WebSocket URL from `path`
-        verbatim, query string included — verified in app/ui.js `UI.connect`).
-        `quality`/`compression`/`resize` are upstream's own setting names."""
+    def viewer_query(self) -> str:
+        """The viewer settings shared by the local URL and the `/` redirect —
+        one builder, so a LAN/tunnel open never drops a setting."""
         return (
-            f"http://127.0.0.1:{self.port}{self.viewer_path()}?"
             f"autoconnect=1&path={quote(f'/websockify?code={self.code}', safe='')}"
             f"&quality={self.quality}&compression={self.compression}"
             f"&resize={self.resize_mode}"
+            f"&bell={'on' if self.bell else 'off'}"
+            f"&show_dot={'true' if self.show_dot else 'false'}"
+            f"&logging={self.logging_level}"
+            f"&view_only={'true' if self.view_only else 'false'}"
         )
+
+    def local_url(self) -> str:
+        """Upstream's viewer URL. `quality`/`compression`/`resize`/`bell`/
+        `show_dot`/`logging`/`view_only` are upstream's own setting names; the
+        access code rides inside `path` (noVNC builds the WebSocket URL from it
+        verbatim — verified in app/ui.js `UI.connect`)."""
+        return f"http://127.0.0.1:{self.port}{self.viewer_path()}?{self.viewer_query()}"
 
     def viewer_path(self) -> str:
         """The upstream page's URL path (served verbatim under /novnc/)."""
@@ -103,25 +129,31 @@ class DisplayStreamServer:
                 text="missing or invalid access code — open the full URL from "
                 "the app's Share dialog"
             )
-        target = (
-            f"{self.viewer_path()}?autoconnect=1"
-            f"&path={quote(f'/websockify?code={code}', safe='')}"
-            f"&quality={self.quality}&compression={self.compression}"
-            f"&resize={self.resize_mode}"
-        )
-        raise web.HTTPFound(target)
+        raise web.HTTPFound(f"{self.viewer_path()}?{self.viewer_query()}")
 
     async def _static(self, request: web.Request) -> web.FileResponse:
         root = _NOVNC_DIR.resolve()
         path = (root / request.match_info["tail"]).resolve()
         if not str(path).startswith(str(root)) or not path.is_file():
             raise web.HTTPNotFound
-        # Upstream's deployment requirement: revalidate, or a bumped vnc.html
-        # can pair with stale cached JS (docs/EMBEDDING.md).
-        return web.FileResponse(path, headers=_NO_CACHE_HEADERS)
+        # Upstream's deployment requirement: revalidate the entry page, or a
+        # bumped vnc.html can pair with stale cached JS (docs/EMBEDDING.md).
+        # The app/ JS itself ships with the APK and only changes on update.
+        cacheable = path.suffix in (".js", ".css", ".woff2", ".png", ".svg")
+        return web.FileResponse(
+            path, headers=_APP_CACHE_HEADERS if cacheable else _NO_CACHE_HEADERS
+        )
 
     async def _websockify(self, request: web.Request) -> web.WebSocketResponse:
-        ws = web.WebSocketResponse()
+        # RFB payloads are already compressed by the server's encodings;
+        # permessage-deflate (aiohttp's default) re-compresses every frame and
+        # costs CPU on both sides. Bounded inbound messages keep pointer/key
+        # traffic from being able to balloon memory.
+        ws = web.WebSocketResponse(
+            compress=False,
+            max_msg_size=_WS_MAX_MSG,
+            heartbeat=_WS_HEARTBEAT,
+        )
         await ws.prepare(request)
         if request.query.get("code", "") != self.code:
             await ws.close(code=4401, message=b"bad access code")
@@ -133,11 +165,24 @@ class DisplayStreamServer:
             await ws.close(code=1011, message=b"the display server is not reachable")
             return ws
 
+        # Loopback Nagle delays small RFB messages (pointer/key) by up to ~40 ms.
+        sock = writer.get_extra_info("socket")
+        if sock is not None:
+            try:
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            except OSError as exc:
+                logger.debug("TCP_NODELAY failed: %r", exc)
+
         async def ws_to_tcp() -> None:
             async for msg in ws:
                 if msg.type == web.WSMsgType.BINARY:
                     writer.write(msg.data)
-                    await writer.drain()
+                    transport = writer.transport
+                    if (
+                        transport is not None
+                        and transport.get_write_buffer_size() > _WRITE_HIGH_WATER
+                    ):
+                        await writer.drain()
                 elif msg.type in (
                     web.WSMsgType.CLOSE,
                     web.WSMsgType.CLOSING,

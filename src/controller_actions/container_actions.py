@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import flet as ft
 
 from core import storage_paths, theme
 
 from ._common import _COMPRESS_EXT
+
+logger = logging.getLogger(__name__)
 
 
 class ContainerActions:
@@ -46,8 +49,12 @@ class ContainerActions:
         # `name` is the user-chosen archive name — honored, not discarded.
         suffix = _COMPRESS_EXT.get(compression or "", ".tar.gz") if compression else ".tar.gz"
         stem = (name or "").strip() or container
-        if stem.endswith(".tar") or stem.endswith(".tar.gz") or stem.endswith(suffix):
-            stem = stem[: -len(suffix)] if stem.endswith(suffix) else stem.removesuffix(".tar")
+        # Strip ANY archive suffix the user typed, not just the matching one:
+        # otherwise `foo.tar.gz` + xz became `foo.tar.gz.tar.xz`.
+        for known in (".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tar"):
+            if stem.endswith(known):
+                stem = stem[: -len(known)]
+                break
         safe_stem = "".join(c for c in stem if c.isalnum() or c in "-_.").strip(".") or container
         staging = storage_paths.exports_root() / f"{safe_stem}{suffix}"
 
@@ -62,16 +69,53 @@ class ContainerActions:
         if not outcome.ok:
             self.show_snack(self.proot.friendly_job_error(outcome))
             return
-        target = await self.file_picker.save_file(
-            dialog_title=f"Backup {container}",
-            file_name=f"{safe_stem}{suffix}",
-            src_bytes=staging.read_bytes(),
-        )
-        if not target:
-            self.show_snack(f"backup staged at {staging}")
-            return
-        self.show_snack(f"backup written to {target}")
+        await self._deliver_archive(container, staging)
         await self.ad_service.show_interstitial()
+
+    async def _deliver_archive(self, container: str, staging) -> None:
+        """Hand a staged archive to the user WITHOUT reading it into RAM.
+
+        `save_file` on Android requires `src_bytes` (the whole archive through
+        the Flet bridge — an OOM for a multi-GB rootfs), so the archive is
+        either copied into a folder the user picks (`get_directory_path`, a
+        streamed `shutil.copyfile`) or handed to the system share sheet by
+        path (`ShareFile.from_path`, zero-copy)."""
+        import shutil
+        from pathlib import Path
+
+        folder = None
+        if self.file_picker is not None:
+            try:
+                folder = await self.file_picker.get_directory_path(
+                    dialog_title="Save the backup to a folder"
+                )
+            except Exception as exc:
+                logger.debug("folder picker unavailable: %s", exc)
+        if folder:
+            dest = Path(folder) / staging.name
+            try:
+                await asyncio.to_thread(shutil.copyfile, staging, dest)
+            except OSError as exc:
+                self.show_snack(f"could not copy the archive: {exc}")
+                return
+            self.show_snack(f"backup saved to {dest}")
+            staging.unlink(missing_ok=True)
+            return
+        share = getattr(self.page, "share", None)
+        if share is not None:
+            try:
+                result = await share.share_files(
+                    [ft.ShareFile.from_path(str(staging))],
+                    title=f"Backup {container}",
+                )
+                status = getattr(getattr(result, "status", None), "value", "shared")
+                self.show_snack(f"backup shared ({status})")
+                staging.unlink(missing_ok=True)
+                return
+            except Exception as exc:
+                logger.debug("share archive failed: %s", exc)
+        # Nothing could take it: keep the file and say where it is.
+        self.show_snack(f"backup staged at {staging}")
 
     async def restore_container(self) -> None:
         if self.file_picker is None:
@@ -83,6 +127,9 @@ class ContainerActions:
         if not picked:
             return
         path = picked[0].path
+        if not path:
+            self.show_snack("that file's location is unavailable — pick it again")
+            return
         outcome = await asyncio.to_thread(self.proot.restore_container, path)
         self.show_snack(
             "container restored" if outcome.ok else self.proot.friendly_job_error(outcome)
@@ -99,6 +146,7 @@ class ContainerActions:
         if not source or not destination:
             self.show_snack("copy needs a source and a destination")
             return
+        await self.ad_service.show_interstitial()
         outcome = await asyncio.to_thread(
             self.proot.copy_path, source, destination, move, recursive=recursive
         )
@@ -116,6 +164,7 @@ class ContainerActions:
         if not source or not destination:
             self.show_snack("sync needs a source and a destination")
             return
+        await self.ad_service.show_interstitial()
         outcome = await asyncio.to_thread(
             self.proot.sync_path, source, destination, checksum, delete
         )

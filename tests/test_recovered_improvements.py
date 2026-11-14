@@ -139,7 +139,10 @@ async def test_open_session_logs_and_reraises_the_original_error(caplog):
     ],
 )
 @pytest.mark.asyncio
-async def test_maintenance_actions_do_not_trigger_interstitials(method_name, args):
+async def test_major_actions_trigger_interstitial(method_name, args):
+    """Owner ruling 2026-11-14: EVERY major action shows an interstitial; the
+    service owns the one global 60 s cooldown that keeps it from being spam."""
+
     class ProotStub:
         def clear_cache(self, orphan=False):
             return SimpleNamespace(ok=True)
@@ -169,7 +172,7 @@ async def test_maintenance_actions_do_not_trigger_interstitials(method_name, arg
 
     await getattr(controller, method_name)(*args)
 
-    controller.ad_service.show_interstitial.assert_not_awaited()
+    controller.ad_service.show_interstitial.assert_awaited()
 
     state.cache_busy = False
 
@@ -214,3 +217,66 @@ async def test_container_rename_shows_interstitial_only_after_success(succeeded)
         controller.ad_service.show_interstitial.assert_awaited_once()
     else:
         controller.ad_service.show_interstitial.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_install_is_refused_offline_with_an_honest_reason():
+    controller = object.__new__(AppController)
+    snacks: list[str] = []
+    controller.show_snack = snacks.append
+    state.installing = None
+    previous = state.online
+    state.online = False
+    try:
+        await controller.install_distro("alpine:latest", "alpine")
+    finally:
+        state.online = previous
+    assert snacks and "offline" in snacks[0]
+    assert state.installing is None
+
+
+def test_backups_are_delivered_by_path_not_through_memory():
+    """`save_file(src_bytes=…)` loads the whole archive into RAM and pushes it
+    through the Flet bridge — a multi-GB rootfs OOMs. The archive must be
+    copied into a picked folder or shared by path."""
+    from pathlib import Path
+
+    src = (
+        Path(__file__).resolve().parents[1] / "src/controller_actions/container_actions.py"
+    ).read_text()
+    assert "staging.read_bytes()" not in src  # the OOM path
+    assert "src_bytes=" not in src
+    assert "ShareFile.from_path" in src
+    assert "get_directory_path" in src
+
+
+def test_restore_asks_for_confirmation_first():
+    """Upstream's restore destroys the target rootfs; the trigger must confirm."""
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1] / "src/screens/container_actions.py").read_text()
+    assert "_confirm_restore" in src
+    assert "Everything currently in the container is lost." in src
+
+
+@pytest.mark.asyncio
+async def test_battery_saver_lowers_only_factory_display_defaults(monkeypatch):
+    from core.state import DEFAULT_DISPLAY_SETTINGS
+
+    class Battery:
+        @staticmethod
+        async def is_in_battery_save_mode():
+            return True
+
+    page = type("P", (), {"battery": Battery()})()
+    controller = object.__new__(AppController)
+    controller.page = page
+    state.display_settings = dict(DEFAULT_DISPLAY_SETTINGS)
+    await controller._apply_battery_defaults()
+    assert state.display_settings["fps"] == 15
+    assert state.display_settings["quality"] == 60
+
+    state.display_settings = {**DEFAULT_DISPLAY_SETTINGS, "fps": 45}
+    await controller._apply_battery_defaults()
+    assert state.display_settings["fps"] == 45  # a user choice is never overridden
+    state.display_settings = dict(DEFAULT_DISPLAY_SETTINGS)

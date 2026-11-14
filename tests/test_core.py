@@ -226,3 +226,26 @@ def test_qemu_emulators_are_linked_by_name_and_put_on_path(tmp_path, monkeypatch
     # idempotent
     proot_probe._link_qemu_emulators(native, res)
     assert link.is_symlink()
+
+
+def test_bootstrap_env_is_memoized_and_forcible(monkeypatch):
+    """A warm reopen must not repeat the probe; Settings' explicit check does."""
+    import core.proot_probe as probe
+
+    calls = []
+
+    def fake_uncached(runtime_root=None):
+        calls.append(runtime_root)
+        return probe.ProbeResult()
+
+    monkeypatch.setattr(probe, "_bootstrap_env_uncached", fake_uncached)
+    monkeypatch.setattr(probe, "_BOOTSTRAP_CACHE", None)
+
+    first = probe.bootstrap_env()
+    second = probe.bootstrap_env()
+    assert first is second
+    assert len(calls) == 1
+
+    forced = probe.bootstrap_env(force=True)
+    assert forced is not first
+    assert len(calls) == 2

@@ -149,3 +149,20 @@ def test_shared_tmp_does_not_need_the_fallback_import(monkeypatch, tmp_path):
     env, argv = argv_mod._parse_proot_cmd_line(f"env -i proot --rootfs={rootfs} --cwd=/ /bin/sh -l")
     _env, hard = argv_mod._harden_session(dict(env), list(argv), "debian", shared_tmp=True)
     assert any(a.endswith(":/tmp") and "shared-tmp" in a for a in hard)
+
+
+def test_run_options_carry_work_dir_without_colliding(monkeypatch):
+    """The Run dialog may pass work_dir in the options dict; upstream takes it
+    as a named argument, so it must be popped (the old shape raised TypeError)."""
+    from services.session_service import argv as argv_mod
+
+    captured: dict = {}
+
+    def fake(container, run_args, work_dir=None, **options):
+        captured.update(work_dir=work_dir, options=options)
+        return GOLDEN_CMD
+
+    monkeypatch.setattr(argv_mod.proot_service, "run_command_argv", fake)
+    argv_mod.run_argv("debian", ["echo"], None, {"work_dir": "/work dir", "user": "alice"})
+    assert captured["work_dir"] == "/work dir"
+    assert captured["options"] == {"user": "alice"}

@@ -475,3 +475,115 @@ def test_guest_font_dirs_only_lists_dirs_with_fonts_dir(tmp_path, monkeypatch):
     other = tmp_path / "containers" / "debian" / "rootfs" / "usr/share/fonts/TTF"
     other.mkdir(parents=True)
     assert xvnc_runtime.guest_font_dirs("debian") == [str(misc)]
+
+
+def test_rfb_gates_are_opt_in_and_off_by_default(fake_native, tmp_path):
+    """Default is unchanged (-SecurityTypes None, no -localhost). The loopback
+    bind is the only raw-port gate we can honestly ship: TigerVNC's
+    -Password/-rfbauth require an OBFUSCATED secret (vncpasswd's DES), which we
+    do not generate — a plaintext flag would lock every viewer out."""
+    default, _ = xvnc_runtime.xvnc_command(1, "1280x720", tmp_path / "x", tmp_path / "y")
+    assert default[default.index("-SecurityTypes") + 1] == "None"
+    assert "-localhost=1" not in default
+    assert "-Password" not in default
+
+    loopback, _ = xvnc_runtime.xvnc_command(
+        1, "1280x720", tmp_path / "x", tmp_path / "y", localhost_only=True
+    )
+    assert "-localhost=1" in loopback
+    assert loopback[loopback.index("-SecurityTypes") + 1] == "None"
+    assert "-Password" not in loopback
+
+
+def test_the_viewer_url_never_carries_a_password():
+    """No password setting exists — VncAuth would need obfuscated secrets."""
+    from services.desk_service import stream_server
+
+    url = stream_server.DisplayStreamServer("127.0.0.1", 6080, 5900, "ABC123").local_url()
+    assert "password=" not in url
+    assert "autoconnect=1" in url and "path=" in url
+
+
+def test_the_bridge_disables_websocket_deflate():
+    """RFB frames are already compressed: permessage-deflate re-compresses them.
+    The option lives on the handler, so this is the source-level guard the repo
+    uses for handler internals (no aiohttp test client is installed)."""
+    from pathlib import Path
+
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "services"
+        / "desk_service"
+        / "stream_server.py"
+    ).read_text()
+    assert "compress=False" in src
+    assert "TCP_NODELAY" in src
+    assert "max_msg_size=_WS_MAX_MSG" in src
+
+
+def test_the_remaining_xvnc_parameters_are_threaded(fake_native, tmp_path):
+    """Every extended control maps to a real 1.16.2 parameter."""
+    argv, _ = xvnc_runtime.xvnc_command(
+        1,
+        "1280x720",
+        tmp_path / "x",
+        tmp_path / "y",
+        compare_fb=0,
+        dpi=120,
+        idle_timeout=600,
+        max_connection_time=3600,
+        view_only=True,
+        max_cut_text=65536,
+        disconnect_clients=True,
+    )
+    assert "-CompareFB=0" in argv
+    assert argv[argv.index("-dpi") + 1] == "120"
+    assert "-IdleTimeout=600" in argv
+    assert "-MaxConnectionTime=3600" in argv
+    assert "-AcceptKeyEvents=0" in argv and "-AcceptPointerEvents=0" in argv
+    assert "-MaxCutText=65536" in argv
+    assert "-DisconnectClients=1" in argv
+
+    defaults, _ = xvnc_runtime.xvnc_command(1, "1280x720", tmp_path / "x", tmp_path / "y")
+    assert "-CompareFB=2" in defaults
+    assert "-dpi" not in defaults
+    assert "-IdleTimeout=600" not in defaults
+    assert "-AcceptKeyEvents=0" not in defaults
+
+
+def test_pulse_config_exposes_the_real_module_knobs(fake_native, tmp_path):
+    path = xvnc_runtime.write_pulse_config(
+        tmp_path,
+        mic=True,
+        latency_ms=40,
+        pm=2,
+        rate=48000,
+        no_close_hack=True,
+        mic_rate=16000,
+        mic_format="s16le",
+        mic_channels=1,
+    )
+    text = path.read_text()
+    assert "latency=40" in text and "pm=2" in text
+    assert "rate=48000" in text and "no_close_hack=1" in text
+    assert "rate=16000" in text and "format=s16le" in text and "channels=1" in text
+
+
+def test_the_viewer_url_carries_the_novnc_client_settings():
+    from services.desk_service import stream_server
+
+    url = stream_server.DisplayStreamServer(
+        "127.0.0.1",
+        6080,
+        5900,
+        "ABC123",
+        bell=False,
+        show_dot=True,
+        logging_level="info",
+        view_only=True,
+    ).local_url()
+    assert "bell=off" in url
+    assert "show_dot=true" in url
+    assert "logging=info" in url
+    assert "view_only=true" in url

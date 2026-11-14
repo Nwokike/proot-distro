@@ -209,8 +209,26 @@ def _f2fs_probe(base_dir: Path) -> str:
             logger.debug("f2fs probe dir %s not removed: %r", d, exc)
 
 
-def bootstrap_env(runtime_root: Path | None = None) -> ProbeResult:
-    """Stage payloads and return the probe. Call BEFORE any proot_distro import."""
+_BOOTSTRAP_CACHE: ProbeResult | None = None
+
+
+def bootstrap_env(runtime_root: Path | None = None, force: bool = False) -> ProbeResult:
+    """Stage payloads and return the probe. Call BEFORE any proot_distro import.
+
+    The result is memoized for the process: the payloads and the probe target do
+    not change while the app runs, so a warm reopen must not repeat the f2fs
+    probe, the lib copies and the `proot --version` spawn. Settings' explicit
+    "check" passes `force=True`."""
+    global _BOOTSTRAP_CACHE
+    if not force and runtime_root is None and _BOOTSTRAP_CACHE is not None:
+        return _BOOTSTRAP_CACHE
+    res = _bootstrap_env_uncached(runtime_root)
+    if runtime_root is None:
+        _BOOTSTRAP_CACHE = res
+    return res
+
+
+def _bootstrap_env_uncached(runtime_root: Path | None = None) -> ProbeResult:
     from . import storage_paths
 
     res = ProbeResult()

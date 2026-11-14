@@ -72,7 +72,8 @@ def test_session_entry_replay_sends_the_buffer_in_order():
     entry.feed(b"b")
     sent: list[bytes] = []
     entry.replay(sent.append)
-    assert sent == [b"a", b"b"]
+    # Coalesced into one frame — the bytes are preserved in order.
+    assert sent == [b"ab"]
 
 
 class _StubTerminal:
@@ -124,11 +125,12 @@ async def test_live_output_is_forwarded_to_the_terminal(monkeypatch):
     assert stub.sent == [b"prompt $ "]
 
     # Post-mount PTY output (the reader thread's callback): live delivery.
+    # Bytes are coalesced — one flush delivers everything buffered.
     entry.session._on_bytes(b"hello\n")
-    assert stub.sent == [b"prompt $ "]
-    await asyncio.sleep(0)
+    entry.flush()
+    await asyncio.sleep(0)  # deliver the loop-scheduled send_bytes
     assert stub.sent == [b"prompt $ ", b"hello\n"]
-    assert list(entry.scrollback) == [b"prompt $ ", b"hello\n"]
+    assert b"".join(entry.scrollback) == b"prompt $ hello\n"
 
 
 async def test_session_exit_updates_observable_entry_on_event_loop(monkeypatch):
@@ -167,7 +169,8 @@ async def test_live_output_without_a_terminal_only_feeds_scrollback(monkeypatch)
     manager = sm.SessionManager()
     entry = await manager.open("debian")
     entry.session._on_bytes(b"early\n")  # mt is None here
-    assert list(entry.scrollback) == [b"prompt $ ", b"early\n"]
+    entry.flush()
+    assert b"".join(entry.scrollback) == b"prompt $ early\n"
 
 
 async def test_session_manager_opens_second_shell_on_same_container(monkeypatch):

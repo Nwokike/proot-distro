@@ -14,15 +14,30 @@ from ._guard import ProotUnavailable
 logger = logging.getLogger(__name__)
 
 
+def _scan_tree(path: Path) -> tuple[int, int]:
+    """(bytes, file count) in ONE scandir walk — os.walk + rglob walked twice."""
+    total = count = 0
+    stack = [Path(path)]
+    while stack:
+        current = stack.pop()
+        try:
+            with os.scandir(current) as entries:
+                for entry in entries:
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            stack.append(Path(entry.path))
+                        elif entry.is_file(follow_symlinks=False):
+                            total += entry.stat(follow_symlinks=False).st_size
+                            count += 1
+                    except OSError as exc:
+                        logger.debug("size walk skipped %s: %r", entry.path, exc)
+        except OSError as exc:
+            logger.debug("size walk skipped %s: %r", current, exc)
+    return total, count
+
+
 def _tree_bytes(path: Path) -> int:
-    total = 0
-    for dirpath, _dirnames, filenames in os.walk(path):
-        for f in filenames:
-            try:
-                total += (Path(dirpath) / f).stat().st_size
-            except OSError as exc:
-                logger.debug("size walk skipped %s: %r", Path(dirpath) / f, exc)
-    return total
+    return _scan_tree(path)[0]
 
 
 def _container_rows() -> list[dict]:
@@ -111,11 +126,8 @@ def _area(path) -> dict:
     p = Path(path)
     if not p.exists():
         return {"path": str(p), "bytes": 0, "count": 0}
-    return {
-        "path": str(p),
-        "bytes": _tree_bytes(p),
-        "count": sum(1 for entry in p.rglob("*") if entry.is_file()),
-    }
+    total, count = _scan_tree(p)
+    return {"path": str(p), "bytes": total, "count": count}
 
 
 def storage_detail() -> dict:

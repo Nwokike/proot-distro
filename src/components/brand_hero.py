@@ -9,13 +9,17 @@ with the color mode.
 
 from __future__ import annotations
 
+import functools
+
 import flet as ft
 
 from core import theme, tokens
 
 
+@functools.lru_cache(maxsize=1)
 def app_icon_svg() -> bytes:
-    """The brand SVG as bytes (ffmpeg's load_asset_bytes pattern)."""
+    """The brand SVG as bytes (ffmpeg's load_asset_bytes pattern). Cached: the
+    splash/home/onboarding/settings all render it, and the file never changes."""
     from pathlib import Path
 
     src_root = Path(__file__).resolve().parents[1]

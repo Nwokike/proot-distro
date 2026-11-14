@@ -258,6 +258,10 @@ def open_env_dialog(page: ft.Page) -> None:
 
 
 def open_probe_dialog(page: ft.Page, probe_passed: bool, probe_summary: str, check_probe) -> None:
+    async def _force_check_probe() -> None:
+        # The explicit "check" always re-probes (bootstrap_env is memoized).
+        await check_probe(True)
+
     page.show_dialog(
         ft.AlertDialog(
             title=ft.Text(
@@ -283,7 +287,7 @@ def open_probe_dialog(page: ft.Page, probe_passed: bool, probe_summary: str, che
             actions=[
                 ft.TextButton(
                     "Re-check",
-                    on_click=lambda _e: (page.pop_dialog(), page.run_task(check_probe)),
+                    on_click=lambda _e: (page.pop_dialog(), page.run_task(_force_check_probe)),
                 ),
                 ft.TextButton("Close", on_click=lambda _e: page.pop_dialog()),
             ],

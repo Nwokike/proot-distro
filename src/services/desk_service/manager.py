@@ -84,12 +84,31 @@ class DeskSession:
     shared_policy: str = "always"  # always | never ("auto" == always for our viewer)
     resize_mode: str = "remote"  # remote | scale | off (noVNC's own `resize` setting)
     clipboard: bool = True
+    localhost_only: bool = False  # opt-in: bind the raw RFB port to loopback
+    # Remaining real Xvnc 1.16.2 parameters (all threaded to the argv).
+    compare_fb: int = 2  # 2 compare framebuffer, 1 region, 0 always send
+    dpi: int = 0  # 0 = Xvnc default
+    idle_timeout: int = 0  # seconds; drops an idle viewer, keeps the session
+    max_connection_time: int = 0  # seconds; hard cap per viewer connection
+    view_only: bool = False  # refuse key/pointer events server-side
+    max_cut_text: int = 0  # bytes; 0 = Xvnc default (256 KiB)
+    disconnect_clients: bool = False  # new viewer kicks the others
     disconnect_timeout: int = 0  # seconds after the last viewer; 0 = never
     desktop_name: str = ""  # "" → "<container>:<display>"
     # PulseAudio module options (app-wide daemon; set by the first display).
     mic: bool = True
     audio_latency_ms: int = 0  # 0 = AAudio's own buffer-derived latency
     audio_pm: int = 2  # AAudio performance-mode offset (2 = LOW_LATENCY)
+    audio_rate: int = 0  # AAudio sink sample rate (0 = device default)
+    audio_no_close_hack: bool = False  # AAudio close-path workaround
+    mic_rate: int = 0  # sles-source sample rate
+    mic_format: str = ""  # sles-source sample format (e.g. s16le)
+    mic_channels: int = 0  # sles-source channel count
+    resample_method: str = ""  # PulseAudio --resample-method
+    # noVNC viewer knobs (client-side, real settings).
+    viewer_bell: bool = True
+    show_dot: bool = False
+    viewer_logging: str = "warn"
     host: str = "127.0.0.1"  # 0.0.0.0 = LAN sharing is on
     tunnel: bool = False  # upstream localhost.run tunnel requested
     tunnel_url: str = ""  # filled asynchronously from the guest tunnel log
@@ -106,6 +125,7 @@ class DeskSession:
     _xvnc_process: subprocess.Popen | None = None  # the X server (own group)
     _log_file: object | None = None
     _reader: threading.Thread | None = None
+    _log_notify_at: float = 0.0  # 10 Hz coalescing of on_log_line
 
 
 def session_key(container: str, display: int) -> str:
@@ -242,6 +262,23 @@ class DeskManager:
         shared_policy: str = "always",
         resize_mode: str = "remote",
         clipboard: bool = True,
+        localhost_only: bool = False,
+        compare_fb: int = 2,
+        dpi: int = 0,
+        idle_timeout: int = 0,
+        max_connection_time: int = 0,
+        view_only: bool = False,
+        max_cut_text: int = 0,
+        disconnect_clients: bool = False,
+        audio_rate: int = 0,
+        audio_no_close_hack: bool = False,
+        mic_rate: int = 0,
+        mic_format: str = "",
+        mic_channels: int = 0,
+        resample_method: str = "",
+        viewer_bell: bool = True,
+        show_dot: bool = False,
+        viewer_logging: str = "warn",
         disconnect_timeout: int = 0,
         desktop_name: str = "",
         mic: bool = True,
@@ -301,6 +338,25 @@ class DeskManager:
             # spawn window is open.
             session.status = DeskStatus.STARTING
             session.login_options = dict(options or {})
+            # Opt-in raw-port gates (defaults unchanged: no password, all
+            # interfaces). The stream server's access code stays the viewer gate.
+            session.localhost_only = bool(localhost_only)
+            session.compare_fb = max(0, min(2, int(compare_fb)))
+            session.dpi = max(0, int(dpi))
+            session.idle_timeout = max(0, int(idle_timeout))
+            session.max_connection_time = max(0, int(max_connection_time))
+            session.view_only = bool(view_only)
+            session.max_cut_text = max(0, int(max_cut_text))
+            session.disconnect_clients = bool(disconnect_clients)
+            session.audio_rate = max(0, int(audio_rate))
+            session.audio_no_close_hack = bool(audio_no_close_hack)
+            session.mic_rate = max(0, int(mic_rate))
+            session.mic_format = str(mic_format or "")
+            session.mic_channels = max(0, int(mic_channels))
+            session.resample_method = str(resample_method or "")
+            session.viewer_bell = bool(viewer_bell)
+            session.show_dot = bool(show_dot)
+            session.viewer_logging = str(viewer_logging or "warn")
             self._sessions[key] = session
         self._notify_changed()
         session._loop = asyncio.get_running_loop()
@@ -334,6 +390,10 @@ class DeskManager:
                 quality=_quality_level(quality),
                 compression=compression,
                 resize_mode=session.resize_mode,
+                bell=session.viewer_bell,
+                show_dot=session.show_dot,
+                logging_level=session.viewer_logging,
+                view_only=session.view_only,
             )
             await server.start()
         except Exception as exc:
@@ -509,6 +569,14 @@ class DeskManager:
                 disconnect_timeout=session.disconnect_timeout,
                 desktop_name=session.desktop_name or session.key,
                 font_paths=font_paths,
+                localhost_only=session.localhost_only,
+                compare_fb=session.compare_fb,
+                dpi=session.dpi,
+                idle_timeout=session.idle_timeout,
+                max_connection_time=session.max_connection_time,
+                view_only=session.view_only,
+                max_cut_text=session.max_cut_text,
+                disconnect_clients=session.disconnect_clients,
             )
             session._xvnc_process = xvnc_runtime.spawn(xvnc_argv, xvnc_env)
             threading.Thread(
@@ -520,6 +588,12 @@ class DeskManager:
                 mic=session.mic,
                 latency_ms=session.audio_latency_ms,
                 pm=session.audio_pm,
+                rate=session.audio_rate,
+                no_close_hack=session.audio_no_close_hack,
+                mic_rate=session.mic_rate,
+                mic_format=session.mic_format,
+                mic_channels=session.mic_channels,
+                resample_method=session.resample_method,
             )
             # A file guests/scripts can `source` — the same values every new
             # shell inherits (display_env is the ONE source of truth).
@@ -611,12 +685,17 @@ class DeskManager:
             # ONLY place Xvnc/session errors appear, and a black screen is
             # unreadable without them.
             logger.info("display[%s][%s] %s", session.key, kind, text)
-            cb = self.on_log_line
-            if cb is not None:
-                try:
-                    cb()
-                except Exception:
-                    pass
+            # 10 Hz: every line used to bump the observable and re-render the
+            # whole desktop view; log_tail is read on render anyway.
+            now = time.monotonic()
+            if now - session._log_notify_at >= 0.1:
+                session._log_notify_at = now
+                cb = self.on_log_line
+                if cb is not None:
+                    try:
+                        cb()
+                    except Exception:
+                        pass
             if log_file is not None:
                 try:
                     if log_file.tell() < MAX_LOG_BYTES:
@@ -626,6 +705,12 @@ class DeskManager:
                         log_file.truncate()
                 except OSError:
                     pass
+        cb = self.on_log_line  # trailing notify so the last lines are painted
+        if cb is not None:
+            try:
+                cb()
+            except Exception:
+                pass
         # Crash watcher: EOF while RUNNING means that side died — the guest
         # session ended (single app closed) or the X server died. Both end the
         # session; shut the stream server down on the session loop.
@@ -671,7 +756,19 @@ class DeskManager:
                 except RuntimeError:
                     pass  # loop gone (app closed) — the process is dying anyway
 
-    def _ensure_pulseaudio(self, *, mic: bool = True, latency_ms: int = 0, pm: int = 2) -> None:
+    def _ensure_pulseaudio(
+        self,
+        *,
+        mic: bool = True,
+        latency_ms: int = 0,
+        pm: int = 2,
+        rate: int = 0,
+        no_close_hack: bool = False,
+        mic_rate: int = 0,
+        mic_format: str = "",
+        mic_channels: int = 0,
+        resample_method: str = "",
+    ) -> None:
         """One app-wide daemon; audio degrades gracefully if it cannot start.
 
         The first display configures it; a LATER display that asks for a
@@ -679,7 +776,17 @@ class DeskManager:
         the daemon restart with the new configuration — otherwise those
         controls would be silently inert until every display stopped (device
         audit 2026-11-14: first-display-wins)."""
-        config = (bool(mic), int(latency_ms), int(pm))
+        config = (
+            bool(mic),
+            int(latency_ms),
+            int(pm),
+            int(rate),
+            bool(no_close_hack),
+            int(mic_rate),
+            str(mic_format),
+            int(mic_channels),
+            str(resample_method),
+        )
         alive = self._pulse_process is not None and self._pulse_process.poll() is None
         if alive:
             if getattr(self, "_pulse_config", None) == config:
@@ -687,7 +794,17 @@ class DeskManager:
             logger.info("display: pulseaudio reconfiguring for %s", config)
             self._stop_pulseaudio()
         try:
-            pa_argv, pa_env = xvnc_runtime.pulseaudio_command(mic=mic, latency_ms=latency_ms, pm=pm)
+            pa_argv, pa_env = xvnc_runtime.pulseaudio_command(
+                mic=mic,
+                latency_ms=latency_ms,
+                pm=pm,
+                rate=rate,
+                no_close_hack=no_close_hack,
+                mic_rate=mic_rate,
+                mic_format=mic_format,
+                mic_channels=mic_channels,
+                resample_method=resample_method,
+            )
             self._pulse_process = xvnc_runtime.spawn(pa_argv, pa_env)
             self._pulse_config = config
         except Exception as exc:

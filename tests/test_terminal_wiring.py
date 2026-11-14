@@ -39,7 +39,7 @@ def test_both_input_paths_are_wired(entry):
     assert callable(handlers["on_data"])
 
 
-def test_replay_clears_pending_then_sends_scrollback_in_order(entry):
+def test_replay_batches_the_scrollback_in_order(entry):
     entry.feed(b"first")
     entry.feed(b"second")
     sent: list[bytes] = []
@@ -49,7 +49,8 @@ def test_replay_clears_pending_then_sends_scrollback_in_order(entry):
     entry.replay(entry.mt.send_bytes)
 
     entry.mt.clear_pending.assert_called_once()
-    assert sent == [b"first", b"second"]
+    # One frame for a small buffer (batched, never one message per chunk).
+    assert sent == [b"firstsecond"]
 
 
 def test_resize_payload_carries_cols_and_rows():

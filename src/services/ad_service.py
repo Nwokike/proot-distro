@@ -28,7 +28,8 @@ class AdService:
     # the CI quality gate fails the build if Google's test IDs appear anywhere.
     INTERSTITIAL_ID_ANDROID = "ca-app-pub-5679949845754640/6520707042"
 
-    INTERSTITIAL_MIN_INTERVAL_SEC = 30.0
+    # One global cooldown for EVERY major action (owner ruling 2026-11-14).
+    INTERSTITIAL_MIN_INTERVAL_SEC = 60.0
 
     def __init__(self, page: ft.Page):
         self.page = page
@@ -165,7 +166,7 @@ class AdService:
 
     async def show_interstitial(self) -> bool:
         if not _HAS_ADS or not self._is_mobile():
-            logger.debug("AdService: interstitial skipped — ads unavailable or consent gate closed")
+            logger.debug("AdService: interstitial skipped — ads unavailable or non-mobile")
             return False
         if self._last_interstitial_at is not None:
             elapsed = time.monotonic() - self._last_interstitial_at
@@ -200,6 +201,9 @@ class AdService:
 
             async def _show(e):
                 await e.control.show()
+                # The global cooldown must cover this path too, or a burst of
+                # actions could show an ad per action.
+                self._last_interstitial_at = time.monotonic()
                 logger.debug("InterstitialAd shown (fresh instance)")
 
             def _on_error(e):

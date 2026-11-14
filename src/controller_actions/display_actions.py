@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
 import flet as ft
 
@@ -25,6 +26,21 @@ from services.desk_service import script as desk_script
 from ._common import _reason
 
 logger = logging.getLogger(__name__)
+
+
+def _tail_file_lines(path, max_bytes: int) -> list[str]:
+    """The last `max_bytes` of a log as lines — a cold reopen must not read a
+    whole multi-MB log just to show 200 lines."""
+    try:
+        with path.open("rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            fh.seek(max(0, size - max_bytes))
+            data = fh.read()
+    except OSError:
+        return []
+    return data.decode("utf-8", "replace").splitlines()
+
 
 # Xvnc screen for "auto" geometry: long side 1280 keeps RFB updates sane on
 # phones; the viewer letterboxes any aspect anyway, and a preset/custom
@@ -126,7 +142,7 @@ class DisplayActions:
         except Exception as exc:
             logger.debug("wakelock toggle failed: %s", exc)
 
-    async def _ensure_mic_permission(self) -> None:
+    async def _ensure_mic_permission(self) -> bool:
         """Obtain the RECORD_AUDIO runtime grant through Flet's official
         AudioRecorder service (`has_permission()` requests it when needed)
         BEFORE the display's PulseAudio daemon starts — the mic module cannot
@@ -134,11 +150,12 @@ class DisplayActions:
         error 9'). A denied/absent service degrades audio only."""
         recorder = getattr(self, "mic_recorder", None)
         if recorder is None:
-            return
+            return False
         try:
-            await recorder.has_permission()
+            return bool(await recorder.has_permission())
         except Exception as exc:
             logger.debug("mic permission check failed: %s", exc)
+            return False
 
     # ── routing ───────────────────────────────────────────────────────────────
 
@@ -188,6 +205,7 @@ class DisplayActions:
         ):
             self.show_snack("a display is already starting — wait a moment")
             return
+        await self.ad_service.show_interstitial()
         caps = self._display_caps(container)
         installed_desktops = caps.get("desktops") or {}
         env = desktop_env or next(
@@ -206,8 +224,13 @@ class DisplayActions:
         # before the PulseAudio daemon (which loads the mic module) starts —
         # AFTER the starting feedback, so the dialog never appears out of
         # nowhere. A denial degrades audio only.
+        mic_allowed = True
         if settings.get("mic", True):
-            await self._ensure_mic_permission()
+            mic_allowed = await self._ensure_mic_permission()
+            if not mic_allowed:
+                self.show_snack(
+                    "microphone permission not granted — display audio is playback-only"
+                )
         # Every value below is clamped/validated here, then threads straight
         # into the Xvnc argv / PulseAudio module lines (no dead knobs).
         depth = str(settings.get("depth", "24"))
@@ -238,8 +261,29 @@ class DisplayActions:
                 shared_policy=shared_policy,
                 resize_mode=resize_mode,
                 clipboard=bool(settings.get("clipboard", True)),
+                localhost_only=bool(settings.get("restrict_local", False)),
+                compare_fb=max(0, min(2, int(settings.get("compare_fb", 2) or 2))),
+                dpi=max(0, min(480, int(settings.get("dpi", 0) or 0))),
+                idle_timeout=max(0, min(86400, int(settings.get("idle_timeout", 0) or 0))),
+                max_connection_time=max(
+                    0, min(86400, int(settings.get("max_connection_time", 0) or 0))
+                ),
+                view_only=bool(settings.get("view_only", False)),
+                max_cut_text=max(
+                    0, min(16 * 1024 * 1024, int(settings.get("max_cut_text", 0) or 0))
+                ),
+                disconnect_clients=bool(settings.get("disconnect_clients", False)),
+                audio_rate=max(0, int(settings.get("audio_rate", 0) or 0)),
+                audio_no_close_hack=bool(settings.get("audio_no_close_hack", False)),
+                mic_rate=max(0, int(settings.get("mic_rate", 0) or 0)),
+                mic_format=str(settings.get("mic_format", "") or ""),
+                mic_channels=max(0, min(8, int(settings.get("mic_channels", 0) or 0))),
+                resample_method=str(settings.get("resample_method", "") or ""),
+                viewer_bell=bool(settings.get("viewer_bell", True)),
+                show_dot=bool(settings.get("show_dot", False)),
+                viewer_logging=str(settings.get("viewer_logging", "warn") or "warn"),
                 disconnect_timeout=disconnect_timeout,
-                mic=bool(settings.get("mic", True)),
+                mic=bool(settings.get("mic", True)) and mic_allowed,
                 audio_latency_ms=audio_latency,
                 audio_pm=audio_pm,
                 # LAN sharing maps to the server's bind host (S104 is the point).
@@ -253,6 +297,11 @@ class DisplayActions:
                 state.display_status = "error"
                 state.display_error = _reason(exc)
                 self.show_snack(f"display failed: {state.display_error}")
+            from core import shared_services
+
+            self.page.run_task(
+                shared_services.announce, f"display failed in {container}", self.page
+            )
             logger.exception("display start failed for %s", container)
             return
         state.active_display = session.key
@@ -273,6 +322,7 @@ class DisplayActions:
         await self._update_fgs()
 
     async def stop_display(self, key: str) -> None:
+        await self.ad_service.show_interstitial()
         await self.desk_manager.stop(key)
         if state.active_display == key:
             state.active_display = None
@@ -452,16 +502,35 @@ class DisplayActions:
 
     # ── provisioning ──────────────────────────────────────────────────────────
 
-    async def _notify_install(self, title: str, body: str) -> None:
-        """Simple local notification for desktop-install start/finish/fail
-        (owner: just a simple notification, no complications). Reuses the id
-        so the finish message replaces the ongoing one."""
+    @staticmethod
+    def _install_channel():
+        """Its own channel: users can silence installs without touching the
+        session-alive notification (Android groups them independently)."""
+        try:
+            import flet_notifications as ftn
+
+            return ftn.NotificationChannel(id="installs", name="Installs")
+        except Exception:
+            return None
+
+    async def _notify_install(self, title: str, body: str, *, ongoing: bool = False) -> None:
+        """Local notification for desktop-install start/finish/fail. The start
+        shows an indeterminate progress bar and never re-alerts; the finish
+        replaces it (same id) without progress."""
         notifications = getattr(self, "notifications", None)
         if notifications is None:
             return
         try:
+            import flet_notifications as ftn
+
+            options = ftn.AndroidOptions(
+                channel=self._install_channel(),
+                progress=ftn.AndroidProgress(indeterminate=True) if ongoing else None,
+                only_alert_once=ongoing,
+                auto_cancel=not ongoing,
+            )
             await self._ensure_notification_permission()
-            await notifications.show(id=2100, title=title, body=body)
+            await notifications.show(id=2100, title=title, body=body, options=options)
         except Exception as exc:
             logger.debug("install notification failed: %s", exc)
 
@@ -479,6 +548,7 @@ class DisplayActions:
         per-distro script runs."""
         from core.state import display_progress
 
+        await self.ad_service.show_interstitial()
         state.display_installing = container
         state.display_install_logs = []
         state.display_error = ""
@@ -486,7 +556,9 @@ class DisplayActions:
         display_progress.set_running(True)
         self.show_snack(f"installing desktop in {container}…")
         await self._notify_install(
-            "Installing desktop", f"{container} — installing desktop support…"
+            "Installing desktop",
+            f"{container} — installing desktop support…",
+            ongoing=True,
         )
         cell = getattr(self.page, "_display_install_cell", None)
         if cell is not None:
@@ -504,7 +576,8 @@ class DisplayActions:
                 # Runs inside page.run_task: run_task sets ft.context's page
                 # var in the calling thread and the loop task inherits that
                 # context, so the observable notify schedules the card update.
-                state.display_install_logs = [*state.display_install_logs, t]
+                logs = [*state.display_install_logs, t]
+                state.display_install_logs = logs[-2000:]
                 display_progress.append(t)
                 if cell is not None:
                     cell.append_output(t)
@@ -586,11 +659,7 @@ class DisplayActions:
             from core import storage_paths
 
             path = storage_paths.data_root() / "display-logs" / f"{key}.log"
-            lines = []
-            try:
-                lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-            except OSError:
-                pass
+            lines = _tail_file_lines(path, 64 * 1024)
         tail = "\n".join(lines[-200:]) or "(no logs yet)"
         self.page.show_dialog(
             ft.AlertDialog(

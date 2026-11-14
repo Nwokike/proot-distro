@@ -73,6 +73,8 @@ async def _stream_session_log(page: ft.Page, ctrl, container: str) -> None:
             for line in lines[seen:]:
                 ctrl.append_output(line)
             seen = len(lines)
+        elif state.display_status != "starting":
+            break  # the start is over (running/error) — no more polls
         await asyncio.sleep(0.4)
 
 
@@ -231,6 +233,13 @@ def _advanced_display_controls() -> ft.Control:
             ),
             ft.Row(
                 controls=[
+                    _switch_row("Restrict to this device", "restrict_local", False),
+                ],
+                spacing=tokens.SPACE_SM,
+                wrap=True,
+            ),
+            ft.Row(
+                controls=[
                     _picker_with_custom(
                         "Audio latency",
                         (
@@ -251,6 +260,170 @@ def _advanced_display_controls() -> ft.Control:
                             ft.dropdown.Option("0", "Balanced"),
                         ],
                         on_select=lambda e: _set_setting("audio_pm", e.control.value),
+                        width=tokens.DROPDOWN_WIDTH,
+                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+                        text_size=tokens.FONT_XS,
+                    ),
+                ],
+                spacing=tokens.SPACE_SM,
+                wrap=True,
+            ),
+            # ── remaining REAL Xvnc 1.16.2 parameters ──────────────────────
+            ft.Row(
+                controls=[
+                    _switch_row("View only (no remote input)", "view_only", False),
+                    _switch_row("New viewer kicks the others", "disconnect_clients", False),
+                ],
+                spacing=tokens.SPACE_SM,
+                wrap=True,
+            ),
+            ft.Row(
+                controls=[
+                    ft.Dropdown(
+                        label="Pixel diff",
+                        value=str(settings.get("compare_fb", 2)),
+                        options=[
+                            ft.dropdown.Option("2", "Compare (default)"),
+                            ft.dropdown.Option("1", "Region compare"),
+                            ft.dropdown.Option("0", "Always send"),
+                        ],
+                        on_select=lambda e: _set_setting("compare_fb", e.control.value),
+                        width=tokens.DROPDOWN_WIDTH,
+                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+                        text_size=tokens.FONT_XS,
+                    ),
+                    _picker_with_custom(
+                        "DPI",
+                        (("0", "Xvnc default"), ("96", "96"), ("120", "120"), ("144", "144")),
+                        "dpi",
+                        hint="dots per inch (0-480)",
+                    ),
+                ],
+                spacing=tokens.SPACE_SM,
+                wrap=True,
+            ),
+            ft.Row(
+                controls=[
+                    _picker_with_custom(
+                        "Viewer idle timeout",
+                        (("0", "Never"), ("300", "5 minutes"), ("900", "15 minutes")),
+                        "idle_timeout",
+                        hint="seconds (0 = never)",
+                    ),
+                    _picker_with_custom(
+                        "Max connection time",
+                        (("0", "Unlimited"), ("1800", "30 minutes"), ("7200", "2 hours")),
+                        "max_connection_time",
+                        hint="seconds (0 = unlimited)",
+                    ),
+                ],
+                spacing=tokens.SPACE_SM,
+                wrap=True,
+            ),
+            ft.Row(
+                controls=[
+                    _picker_with_custom(
+                        "Clipboard limit",
+                        (
+                            ("0", "Xvnc default"),
+                            ("65536", "64 KiB"),
+                            ("262144", "256 KiB"),
+                            ("1048576", "1 MiB"),
+                        ),
+                        "max_cut_text",
+                        hint="bytes (0-16777216)",
+                    ),
+                    ft.Dropdown(
+                        label="Speaker rate",
+                        value=str(settings.get("audio_rate", 0)),
+                        options=[
+                            ft.dropdown.Option("0", "Device default"),
+                            ft.dropdown.Option("44100", "44.1 kHz"),
+                            ft.dropdown.Option("48000", "48 kHz"),
+                        ],
+                        on_select=lambda e: _set_setting("audio_rate", e.control.value),
+                        width=tokens.DROPDOWN_WIDTH,
+                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+                        text_size=tokens.FONT_XS,
+                    ),
+                ],
+                spacing=tokens.SPACE_SM,
+                wrap=True,
+            ),
+            ft.Row(
+                controls=[
+                    _switch_row("AAudio close workaround", "audio_no_close_hack", False),
+                    _switch_row("Viewer bell", "viewer_bell", True),
+                    _switch_row("Show cursor dot", "show_dot", False),
+                ],
+                spacing=tokens.SPACE_SM,
+                wrap=True,
+            ),
+            ft.Row(
+                controls=[
+                    ft.Dropdown(
+                        label="Mic rate",
+                        value=str(settings.get("mic_rate", 0)),
+                        options=[
+                            ft.dropdown.Option("0", "Device default"),
+                            ft.dropdown.Option("16000", "16 kHz"),
+                            ft.dropdown.Option("44100", "44.1 kHz"),
+                            ft.dropdown.Option("48000", "48 kHz"),
+                        ],
+                        on_select=lambda e: _set_setting("mic_rate", e.control.value),
+                        width=tokens.DROPDOWN_WIDTH,
+                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+                        text_size=tokens.FONT_XS,
+                    ),
+                    ft.Dropdown(
+                        label="Mic format",
+                        value=str(settings.get("mic_format", "")),
+                        options=[
+                            ft.dropdown.Option("", "Device default"),
+                            ft.dropdown.Option("s16le", "s16le"),
+                            ft.dropdown.Option("float32le", "float32le"),
+                        ],
+                        on_select=lambda e: _set_setting("mic_format", e.control.value),
+                        width=tokens.DROPDOWN_WIDTH,
+                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+                        text_size=tokens.FONT_XS,
+                    ),
+                    _picker_with_custom(
+                        "Mic channels",
+                        (("0", "Device default"), ("1", "Mono"), ("2", "Stereo")),
+                        "mic_channels",
+                        hint="channels (0-8)",
+                    ),
+                ],
+                spacing=tokens.SPACE_SM,
+                wrap=True,
+            ),
+            ft.Row(
+                controls=[
+                    ft.Dropdown(
+                        label="Resampler",
+                        value=str(settings.get("resample_method", "")),
+                        options=[
+                            ft.dropdown.Option("", "PulseAudio default"),
+                            ft.dropdown.Option("speex-float-1", "Speex (faster)"),
+                            ft.dropdown.Option("speex-float-5", "Speex HQ"),
+                            ft.dropdown.Option("soxr-hq", "SoXR HQ"),
+                        ],
+                        on_select=lambda e: _set_setting("resample_method", e.control.value),
+                        width=tokens.DROPDOWN_WIDTH,
+                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+                        text_size=tokens.FONT_XS,
+                    ),
+                    ft.Dropdown(
+                        label="Viewer log",
+                        value=str(settings.get("viewer_logging", "warn")),
+                        options=[
+                            ft.dropdown.Option("error", "Errors"),
+                            ft.dropdown.Option("warn", "Warnings"),
+                            ft.dropdown.Option("info", "Info"),
+                            ft.dropdown.Option("debug", "Debug"),
+                        ],
+                        on_select=lambda e: _set_setting("viewer_logging", e.control.value),
                         width=tokens.DROPDOWN_WIDTH,
                         border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
                         text_size=tokens.FONT_XS,

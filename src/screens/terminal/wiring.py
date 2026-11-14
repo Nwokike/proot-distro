@@ -13,6 +13,24 @@ from screens.terminal_controls import _confirm_close, _input
 from services.session_manager import SessionEntry
 
 
+async def copy_selection(page: ft.Page, mt) -> None:
+    """Copy the terminal selection through the ONE app-wide Clipboard.
+
+    flet-terminal's `copy_selection_async` builds its own `ft.Clipboard()`
+    internally — a Service that may never be mounted, so the copy can fail
+    silently. Reading the selection and using `page.clipboard` keeps the
+    single-mount contract every other screen follows."""
+    clipboard = getattr(page, "clipboard", None)
+    if clipboard is None or mt is None:
+        return
+    try:
+        text = await mt.get_selection_async()
+    except Exception:
+        return
+    if text:
+        await clipboard.set(text)
+
+
 def wire_terminal(
     entry: SessionEntry, mt, page: ft.Page, manager, methods, open_new_session
 ) -> None:
@@ -54,7 +72,7 @@ def wire_terminal(
         elif sc == "clear":
             mt.clear()
         elif sc == "copy":
-            page.run_task(mt.copy_selection_async)
+            page.run_task(copy_selection, page, mt)
         elif sc == "paste":
             page.run_task(mt.paste_async)
         elif sc == "new_terminal":

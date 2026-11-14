@@ -23,13 +23,9 @@ logging.getLogger().addHandler(in_memory_log_handler)
 
 
 def main(page) -> None:
-    import flet as ft
-
-    # Global FilePicker mounted at page level matching CollabShell standard
-    file_picker = ft.FilePicker()
-    page.services.append(file_picker)
-    page.file_picker = file_picker
-
+    # A FilePicker is mounted ONCE by AppController._mount_services (this
+    # function used to mount a second instance, which leaked an orphan service
+    # and was immediately overwritten).
     from app_controller import AppController
 
     controller = AppController(page)
@@ -55,6 +51,15 @@ def main(page) -> None:
 
     page.on_platform_brightness_change = _on_brightness
     page.on_resize = lambda _e: page.update()
+    # Lifecycle: the wakelock must follow the foreground state, and pending
+    # display settings are persisted on the way out (the FGS keeps the guest
+    # processes alive either way).
+    page.on_app_lifecycle_state_change = lambda e: page.run_task(controller.on_lifecycle, e)
+    # Unhandled errors must be visible (log + snack), not swallowed by Flet.
+    page.on_error = lambda e: page.run_task(controller.on_page_error, e)
+    # Orientation + keyboard insets (PageMediaData) and hardware-key shortcuts.
+    page.on_media_change = lambda e: page.run_task(controller.on_media_change, e)
+    page.on_keyboard_event = lambda e: page.run_task(controller.on_keyboard_event, e)
 
     # Android back button: display fullscreen → display → terminal fullscreen
     # → terminal → default. Without this handler the back button closes the
