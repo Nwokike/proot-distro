@@ -81,6 +81,11 @@ def SettingsView() -> ft.Control:
     def _open_changelog(_e=None) -> None:
         dialogs.open_changelog(page)
 
+    def _open_help(_e=None) -> None:
+        from screens.help import show_help_sheet
+
+        show_help_sheet(page, methods)
+
     def _open_storage_detail(_e=None) -> None:
         dialogs.open_storage_detail(page, methods)
 
@@ -212,13 +217,13 @@ def SettingsView() -> ft.Control:
                         ft.Column(
                             controls=[
                                 ft.Text(
-                                    "Docker Hub Token",
+                                    "Docker Hub credentials",
                                     size=tokens.FONT_MD,
                                     weight=ft.FontWeight.W_500,
                                     color=theme.text(),
                                 ),
                                 ft.Text(
-                                    "Stored locally on this device. Lifts anonymous rate limits.",
+                                    "username:token (a Personal Access Token as the password). Lifts anonymous rate limits.",
                                     size=tokens.FONT_XS,
                                     color=theme.text_dim(),
                                 ),
@@ -242,7 +247,7 @@ def SettingsView() -> ft.Control:
                     controls=[
                         ft.TextField(
                             value=token,
-                            hint_text="Personal Access Token (optional)",
+                            hint_text="username:token (optional)",
                             password=True,
                             can_reveal_password=True,
                             text_size=tokens.FONT_SM,
@@ -308,6 +313,14 @@ def SettingsView() -> ft.Control:
                 ),
                 padding=tokens.SPACE_MD,
                 alignment=ft.Alignment.CENTER,
+            ),
+            ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
+            _setting_row(
+                ft.Icons.HELP_OUTLINE_ROUNDED,
+                "Help & Shortcuts",
+                "Getting started, terminal keys, display gestures, diagnostics",
+                ft.TextButton("Open Help", on_click=_open_help),
+                stacked=is_narrow,
             ),
             ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
             _setting_row(

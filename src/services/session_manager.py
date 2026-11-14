@@ -70,12 +70,19 @@ class SessionManager:
             n += 1
         return key
 
-    async def open(self, container: str, options: dict | None = None) -> SessionEntry:
+    async def open(
+        self,
+        container: str,
+        options: dict | None = None,
+        extra_env: dict[str, str] | None = None,
+    ) -> SessionEntry:
         """Open a NEW shell on the container (multiple per container allowed).
 
         `options` carries the upstream login options from the "Shell with
         options…" dialog (user/work_dir/env/bind/shared_*); None = the plain
-        `pd login <c>` interactive shell, exactly as before."""
+        `pd login <c>` interactive shell, exactly as before. `extra_env` is the
+        transient overlay (e.g. a running display's DISPLAY/XAUTHORITY): applied
+        with setdefault so an explicit `--env DISPLAY=…` from the dialog wins."""
         loop = asyncio.get_running_loop()
         with self._lock:
             key = self._new_key(container)
@@ -86,6 +93,8 @@ class SessionManager:
                 env, argv = session_service.session_argv_with_options(container, options)
             else:
                 env, argv = session_service.session_argv(container)
+            for env_key, env_value in (extra_env or {}).items():
+                env.setdefault(env_key, env_value)
 
             def _on_bytes(data: bytes) -> None:
                 entry.feed(data)

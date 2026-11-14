@@ -38,6 +38,7 @@ class DisplayStreamServer:
         code: str,
         quality: int = 6,
         compression: int = 2,
+        resize_mode: str = "remote",
     ):
         self.host = host
         self.port = port
@@ -45,17 +46,21 @@ class DisplayStreamServer:
         self.code = code
         self.quality = max(0, min(9, int(quality)))
         self.compression = max(0, min(9, int(compression)))
+        # noVNC's own `resize` setting: remote (server follows the viewport),
+        # scale (local letterbox), off (pan/scroll the framebuffer).
+        self.resize_mode = resize_mode if resize_mode in ("remote", "scale", "off") else "remote"
         self._runner: web.AppRunner | None = None
 
     def local_url(self) -> str:
         """Upstream's viewer URL: autoconnect + the access code riding inside
         the `path` setting (upstream builds the WebSocket URL from `path`
         verbatim, query string included — verified in app/ui.js `UI.connect`).
-        `quality`/`compression` are upstream's own setting names."""
+        `quality`/`compression`/`resize` are upstream's own setting names."""
         return (
             f"http://127.0.0.1:{self.port}{self.viewer_path()}?"
             f"autoconnect=1&path={quote(f'/websockify?code={self.code}', safe='')}"
             f"&quality={self.quality}&compression={self.compression}"
+            f"&resize={self.resize_mode}"
         )
 
     def viewer_path(self) -> str:
@@ -102,6 +107,7 @@ class DisplayStreamServer:
             f"{self.viewer_path()}?autoconnect=1"
             f"&path={quote(f'/websockify?code={code}', safe='')}"
             f"&quality={self.quality}&compression={self.compression}"
+            f"&resize={self.resize_mode}"
         )
         raise web.HTTPFound(target)
 

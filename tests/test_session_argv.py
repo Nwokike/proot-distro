@@ -83,3 +83,36 @@ async def test_run_argv_parses_upstream_line(monkeypatch):
     assert env["TERM"] == "xterm-256color"
     assert argv[0].endswith("libproot.so")
     assert argv[-2:] == ["/bin/bash", "-l"]
+
+
+def test_hardening_makes_the_termux_only_login_options_real(monkeypatch, tmp_path):
+    """hostname/kernel shape the kernel-release line WE own (upstream only emits
+    it when IS_TERMUX); shared_tmp binds a real dir; isolated drops the Android
+    convenience binds but keeps teardown safety."""
+    from services.session_service import argv as argv_mod
+
+    monkeypatch.setenv("ANDROID_NATIVE_LIBRARY_DIR", str(tmp_path))
+    base_env, base_argv = argv_mod._parse_proot_cmd_line(GOLDEN_CMD)
+
+    _env, hard = argv_mod._harden_session(
+        dict(base_env),
+        list(base_argv),
+        "debian",
+        hostname="mybox",
+        kernel="6.9.0-mine",
+        shared_tmp=True,
+    )
+    joined = " ".join(hard)
+    assert r"\Linux\mybox\6.9.0-mine" in joined
+    assert any(arg.startswith("--bind=") and arg.endswith(":/tmp") for arg in hard)
+    assert any(
+        arg.startswith("--bind=") and "shared-tmp" in arg and arg.endswith(":/tmp") for arg in hard
+    )
+    assert "--link2symlink" in hard  # normal hardening intact
+
+    _env, isolated = argv_mod._harden_session(
+        dict(base_env), list(base_argv), "debian", isolated=True
+    )
+    assert "--kill-on-exit" in isolated  # teardown safety survives isolation
+    assert "--link2symlink" not in isolated
+    assert not any("--bind=/dev/urandom" in arg for arg in isolated)

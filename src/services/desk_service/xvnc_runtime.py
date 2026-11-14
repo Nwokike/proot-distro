@@ -298,11 +298,29 @@ def ensure_prefix_bin() -> Path | None:
 
 
 def xvnc_command(
-    display: int, geometry: str, xauth_path: Path, xkb_dir: Path
+    display: int,
+    geometry: str,
+    xauth_path: Path,
+    xkb_dir: Path,
+    *,
+    depth: str = "24",
+    frame_rate: int = 30,
+    shared_policy: str = "auto",
+    clipboard: bool = True,
+    disconnect_timeout: int = 0,
+    desktop_name: str = "",
 ) -> tuple[list[str], dict[str, str]]:
     """The Xvnc argv + env. RFB stays loopback-only (TigerVNC defaults -localhost
     to yes since 1.11 — our stream server is the only client, also local). The
-    X port 6000+N serves the guest apps and is gated by the cookie file."""
+    X port 6000+N serves the guest apps and is gated by the cookie file.
+
+    Every option here maps 1:1 to a real Xvnc 1.16.2 parameter: depth → -depth,
+    frame_rate → -FrameRate, shared_policy → -AlwaysShared/-NeverShared,
+    clipboard → -AcceptCutText/-SendCutText, disconnect_timeout →
+    -MaxDisconnectionTime, desktop_name → -desktop. `-SecurityTypes None` is
+    kept deliberately: RFB is loopback-only, and LAN/tunnel clients reach the
+    viewer through the stream server's access-code gate — a VNC password would
+    gate a port the user can never reach."""
     ensure_lock_dir()  # the rewritten prefix's <app>/tmp must exist before start
     ensure_prefix_bin()  # <app>/bin/sh + <app>/bin/xkbcomp, the paths Xvnc execs
     binary = xvnc_binary()
@@ -312,7 +330,7 @@ def xvnc_command(
         "-geometry",
         geometry,
         "-depth",
-        "24",
+        str(depth),
         "-rfbport",
         str(RFB_PORT_BASE + display),
         "-SecurityTypes",
@@ -321,6 +339,8 @@ def xvnc_command(
         str(xauth_path),
         "-xkbdir",
         str(xkb_dir),
+        # FrameRate default in Xvnc is 60; the app default is 30 (phone CPU).
+        f"-FrameRate={int(frame_rate)}",
         # The unix socket lives under /tmp/.X11-unix, which does not exist on
         # Android; the guest apps connect over TCP anyway (shared loopback).
         # -listen tcp sets PartialNetwork, so the missing unix socket is
@@ -331,29 +351,53 @@ def xvnc_command(
         "unix",
         "-noreset",
     ]
+    if shared_policy == "always":
+        argv.append("-AlwaysShared=1")
+    elif shared_policy == "never":
+        # One viewer at a time; a new connection takes over.
+        argv.extend(["-NeverShared=1", "-DisconnectClients=1"])
+    if not clipboard:
+        # Clipboard sync off in BOTH directions (privacy for shared displays).
+        argv.extend(["-AcceptCutText=0", "-SendCutText=0"])
+    if int(disconnect_timeout) > 0:
+        # Auto-teardown N seconds after the last viewer leaves.
+        argv.append(f"-MaxDisconnectionTime={int(disconnect_timeout)}")
+    if desktop_name:
+        argv.extend(["-desktop", str(desktop_name)])
     return argv, _payload_env(binary.parent)
 
 
-def write_pulse_config(runtime: Path) -> Path:
+def write_pulse_config(
+    runtime: Path, *, mic: bool = True, latency_ms: int = 0, pm: int = 2
+) -> Path:
     """The daemon script: load OUR modules by absolute path (the compiled module
     dir is the Termux prefix, which does not exist in the app) and serve guests
-    on the shared loopback only."""
+    on the shared loopback only.
+
+    Options map to real module args: `latency=` (ms; 0 = AAudio's own
+    buffer-derived value) and `pm=` (AAudio performance-mode offset — 2 is
+    LOW_LATENCY) for the sink; the mic source is loaded only when enabled."""
     pa_dir = runtime / "pulse"
     pa_dir.mkdir(parents=True, exist_ok=True)
+    sink_args = " sink_name=output"
+    if int(latency_ms) > 0:
+        sink_args += f" latency={int(latency_ms)}"
+    sink_args += f" pm={int(pm)}"
     lines = [
         # speakers (AAudio — the OpenSL ES sink broke on Android 16)
-        f"load-module {module_path('module-aaudio-sink.so')} sink_name=output",
+        f"load-module {module_path('module-aaudio-sink.so')}{sink_args}",
         # fallback when the device audio stack refuses the sink above
         f"load-module {module_path('module-null-sink.so')} sink_name=fallback",
-        # microphone (guest apps record through PULSE_SERVER)
-        f"load-module {module_path('module-sles-source.so')} source_name=mic",
-        # serve guest apps over loopback TCP
-        (
-            f"load-module {module_path('module-native-protocol-tcp.so')}"
-            f" port={PULSE_TCP_PORT} listen=127.0.0.1"
-            " auth-ip-acl=127.0.0.1 auth-anonymous=1"
-        ),
     ]
+    if mic:
+        # microphone (guest apps record through PULSE_SERVER)
+        lines.append(f"load-module {module_path('module-sles-source.so')} source_name=mic")
+    lines.append(
+        # serve guest apps over loopback TCP
+        f"load-module {module_path('module-native-protocol-tcp.so')}"
+        f" port={PULSE_TCP_PORT} listen=127.0.0.1"
+        " auth-ip-acl=127.0.0.1 auth-anonymous=1"
+    )
     path = pa_dir / "default.pa"
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
@@ -426,14 +470,19 @@ def request_mic_permission() -> None:
         logger.debug("mic permission request skipped: %s", exc)
 
 
-def pulseaudio_command() -> tuple[list[str], dict[str, str]]:
+def pulseaudio_command(
+    *, mic: bool = True, latency_ms: int = 0, pm: int = 2
+) -> tuple[list[str], dict[str, str]]:
     """The PulseAudio daemon argv + env (one app-wide daemon; the manager starts
     it with the first display and stops it with the last). -n skips the missing
-    system default.pa; -F runs ours, which loads every module by absolute path."""
-    request_mic_permission()
+    system default.pa; -F runs ours, which loads every module by absolute path.
+    `mic`/`latency_ms`/`pm` configure the module lines (see write_pulse_config);
+    the RECORD_AUDIO grant is requested only when the mic is enabled."""
+    if mic:
+        request_mic_permission()
     binary = pulseaudio_binary()
     runtime = storage_paths.support_root() / "runtime"
-    script = write_pulse_config(runtime)
+    script = write_pulse_config(runtime, mic=mic, latency_ms=latency_ms, pm=pm)
     env = _payload_env(binary.parent)
     pa_libs = ensure_pa_libs()
     # libcrypto-free linker path (see ensure_pa_libs)

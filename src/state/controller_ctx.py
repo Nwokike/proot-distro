@@ -51,7 +51,9 @@ class ControllerMethods:
 
     # Container actions
     rename_container: Callable[[str, str], Awaitable[None]] = field(default=_noop_async)
-    backup_container: Callable[[str, str | None], Awaitable[None]] = field(default=_noop_async)
+    backup_container: Callable[[str, str | None, str | None], Awaitable[None]] = field(
+        default=_noop_async
+    )
     restore_container: Callable[[], Awaitable[None]] = field(default=_noop_async)
     copy_path: Callable[[str, str, bool, bool], Awaitable[None]] = field(default=_noop_async)
     sync_path: Callable[[str, str, bool, bool], Awaitable[None]] = field(default=_noop_async)
@@ -62,7 +64,6 @@ class ControllerMethods:
 
     # Onboarding + hints
     finish_onboarding: Callable[[], Awaitable[None]] = field(default=_noop_async)
-    dismiss_hints: Callable[[], Awaitable[None]] = field(default=_noop_async)
 
     # Terminal sessions
     open_session: Callable[[str], Awaitable[None]] = field(default=_noop_async)
@@ -79,6 +80,7 @@ class ControllerMethods:
         default=_noop_async
     )
     stop_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    start_x_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     retry_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     resume_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     cancel_install_display: Callable[[], Awaitable[None]] = field(default=_noop_async)

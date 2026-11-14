@@ -36,7 +36,6 @@ def _fresh_state():
     state.probe_passed = True
     state.probe_summary = ""
     state.theme_mode = "dark"
-    state.hints_dismissed = False
     yield
 
 
@@ -112,7 +111,6 @@ def test_state_changes_rerender_without_frozen_errors():
         {"name": "ubuntu:24.04", "stars": 10, "pulls": 20, "official": True, "description": "d"}
     ]
     state.search_status = "1 result(s)"
-    state.hints_dismissed = True
     assert _render(screens.DistroView) is not None
 
     state.theme_mode = "light"
@@ -413,3 +411,38 @@ def test_theme_provides_readable_status_colors_and_outfit_family():
     assert theme.ok().startswith("#")
     assert theme.warn().startswith("#")
     assert theme.accent().startswith("#")
+
+
+def test_help_is_the_one_reference_surface():
+    """The duplicated "How it works" blocks are gone; the canonical guidance
+    lives in ONE searchable Help sheet (Colab/GitHub pattern) reachable from
+    the header, the terminal FAB, the display menu, Settings and onboarding."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    help_src = (root / "src" / "screens" / "help" / "__init__.py").read_text(encoding="utf-8")
+    for section in (
+        "Getting started",
+        "Terminal",
+        "Display viewer",
+        "Resources",
+        "Diagnostics",
+        "About",
+    ):
+        assert section in help_src, section
+    for path in (
+        "src/screens/distro/sections.py",
+        "src/components/ui.py",
+        "src/components/app_header.py",
+    ):
+        src = (root / path).read_text(encoding="utf-8")
+        for gone in ("How It Works", "What Proot Distro Can Do", "hints_card"):
+            assert gone not in src, f"{gone} still in {path}"
+    for path in (
+        "src/components/app_header.py",
+        "src/screens/terminal/menu.py",
+        "src/screens/desktop/__init__.py",
+        "src/screens/settings/__init__.py",
+        "src/screens/onboarding_view.py",
+    ):
+        assert "show_help_sheet" in (root / path).read_text(encoding="utf-8"), path

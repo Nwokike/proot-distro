@@ -20,8 +20,23 @@ _ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 _HOST_ESSENTIALS = ("LD_LIBRARY_PATH", "PROOT_LOADER", "PROOT_TMP_DIR")
 
 
-def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
-    """Harden session with the verified Android Termux extensions and bindings from M0 spike."""
+def _harden_session(
+    env: Env,
+    argv: Argv,
+    container: str,
+    *,
+    hostname: str | None = None,
+    kernel: str | None = None,
+    shared_tmp: bool = False,
+    isolated: bool = False,
+) -> tuple[Env, Argv]:
+    """Harden session with the verified Android Termux extensions and bindings from M0 spike.
+
+    The upstream login options that only work when IS_TERMUX (true on Termux,
+    false in this app) are implemented HERE so they stay real for our users:
+    `hostname`/`kernel` shape the `--kernel-release` line we own; `shared_tmp`
+    binds one app-wide dir to /tmp; `isolated` turns the Android hardening
+    binds off (keeping teardown safety)."""
     if not argv:
         return env, argv
 
@@ -51,7 +66,14 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
         os.chmod(shm, 0o1777)  # noqa: S103 - sticky bit required for /dev/shm
         shm_bind = f"--bind={shm}:/dev/shm"
 
-        l2s = rootfs_path / ".l2s"
+        # PROOT_L2S_DIR must be a REAL directory at the RESOLVED path: proot
+        # uses the value verbatim (no realpath) while it canonicalizes the
+        # rootfs, and an L2S chain written under one Android spelling of the
+        # app dir is unresolvable through the other (/data/data vs
+        # /data/user/0) — the dpkg ".dpkg-new ENOENT" failure (oonid/pr#35).
+        l2s = rootfs_path.resolve() / ".l2s"
+        if l2s.is_symlink():
+            l2s.unlink()  # a planted symlink would send every chain elsewhere
         l2s.mkdir(parents=True, exist_ok=True)
         env["PROOT_L2S_DIR"] = str(l2s)
 
@@ -110,28 +132,61 @@ def _harden_session(env: Env, argv: Argv, container: str) -> tuple[Env, Argv]:
 
     is_android = bool(os.environ.get("ANDROID_NATIVE_LIBRARY_DIR") or Path("/data/app").exists())
     if is_android:
-        _add_if_missing("--kill-on-exit")
-        _add_if_missing("--link2symlink")
-        _add_if_missing("--sysvipc")
-        _add_if_missing("-L")
-
         uname_m = platform.machine() or "aarch64"
-        kernel_fake = f"--kernel-release=\\Linux\\localhost\\{platform.release()}\\#1 SMP PREEMPT_DYNAMIC Fri, 10 Oct 2025 00:00:00 +0000\\{uname_m}\\localdomain\\-1\\"
+
+        def _clean(value: str | None, fallback: str) -> str:
+            # --kernel-release is a backslash-separated proot string: strip
+            # anything that would break it rather than injecting raw input.
+            if not value:
+                return fallback
+            cleaned = str(value).replace("\\", " ").replace("\n", " ").strip()
+            return cleaned or fallback
+
+        host = _clean(hostname, "localhost")
+        release = _clean(kernel, platform.release() or "unknown")
+        kernel_fake = (
+            f"--kernel-release=\\Linux\\{host}\\{release}\\#1 SMP PREEMPT_DYNAMIC "
+            f"Fri, 10 Oct 2025 00:00:00 +0000\\{uname_m}\\localdomain\\-1\\"
+        )
         if not any(a.startswith("--kernel-release=") for a in head):
             head.append(kernel_fake)
 
-        # Standard devices & stdio streams required by proot on Android
-        _add_if_missing("--bind=/dev/urandom:/dev/random")
-        _add_if_missing("--bind=/proc/self/fd:/dev/fd")
-        _add_if_missing("--bind=/proc/self/fd/0:/dev/stdin")
-        _add_if_missing("--bind=/proc/self/fd/1:/dev/stdout")
-        _add_if_missing("--bind=/proc/self/fd/2:/dev/stderr")
+        # --isolated (upstream suppresses its Termux binds under this flag) is
+        # implemented HERE: our equivalent is dropping the Android convenience
+        # binds while keeping teardown safety. A user asking for isolation
+        # gets exactly that — fewer host paths visible in the guest.
+        if not isolated:
+            _add_if_missing("--kill-on-exit")
+            _add_if_missing("--link2symlink")
+            _add_if_missing("--sysvipc")
+            _add_if_missing("-L")
+            # Standard devices & stdio streams required by proot on Android
+            _add_if_missing("--bind=/dev/urandom:/dev/random")
+            _add_if_missing("--bind=/proc/self/fd:/dev/fd")
+            _add_if_missing("--bind=/proc/self/fd/0:/dev/stdin")
+            _add_if_missing("--bind=/proc/self/fd/1:/dev/stdout")
+            _add_if_missing("--bind=/proc/self/fd/2:/dev/stderr")
 
-        if shm_bind:
-            _add_if_missing(shm_bind)
+            if shm_bind:
+                _add_if_missing(shm_bind)
 
-        for b in sysdata_binds:
-            _add_if_missing(b)
+            for b in sysdata_binds:
+                _add_if_missing(b)
+        else:
+            # Isolation still needs the session to die with the app.
+            _add_if_missing("--kill-on-exit")
+
+        # --shared-tmp (upstream: Termux prefix /tmp → guest /tmp) is real
+        # here too: one app-wide host dir, created on demand, shared by every
+        # container that opts in.
+        if shared_tmp:
+            try:
+                shared = storage_paths.data_root() / "shared-tmp"
+                shared.mkdir(parents=True, exist_ok=True)
+                shared.chmod(0o1777)
+                _add_if_missing(f"--bind={shared}:/tmp")
+            except OSError as exc:
+                logger.debug("shared_tmp unavailable: %r", exc)
 
     env.setdefault("TERM", "xterm-256color")
     env.setdefault("COLORTERM", "truecolor")
@@ -188,8 +243,8 @@ def session_argv_with_options(container: str, options: dict | None = None) -> tu
     """(env, argv) for `pd login <c> --get-proot-cmd` with the upstream login
     options the "Shell with options…" dialog wraps one-to-one: user,
     work_dir, env, bind, shared_tmp, shared_home, shared_x11, fix_low_ports
-    (→ upstream's redirect_ports destination), isolated. Interactive shell:
-    no login_cmd, exactly like `pd login <c>`."""
+    (→ upstream's redirect_ports destination), isolated, hostname, kernel,
+    emulator. Interactive shell: no login_cmd, exactly like `pd login <c>`."""
     opts = options or {}
     login_opts: dict[str, object] = {}
     user = str(opts.get("user") or "root").strip()
@@ -204,11 +259,30 @@ def session_argv_with_options(container: str, options: dict | None = None) -> tu
     for key in ("shared_tmp", "shared_home", "shared_x11", "isolated"):
         if opts.get(key):
             login_opts[key] = True
+    if opts.get("emulator"):
+        # upstream treats --emulator as a QEMU BINARY PATH, not a flag
+        login_opts["emulator"] = str(opts["emulator"])
+    if opts.get("hostname"):
+        login_opts["hostname"] = str(opts["hostname"])
+    if opts.get("kernel"):
+        login_opts["kernel"] = str(opts["kernel"])
     if opts.get("fix_low_ports"):
         login_opts["redirect_ports"] = True
+    if opts.get("login_cmd"):
+        # The guest command after `--` (display scripts, or an explicit shell
+        # fallback when the image has no bash).
+        login_opts["login_cmd"] = [str(item) for item in opts["login_cmd"]]
     line = proot_service.get_proot_cmd_with_options(container, **login_opts)
     env, argv = _parse_proot_cmd_line(line)
-    return _harden_session(env, argv, container)
+    return _harden_session(
+        env,
+        argv,
+        container,
+        hostname=str(opts.get("hostname") or "") or None,
+        kernel=str(opts.get("kernel") or "") or None,
+        shared_tmp=bool(opts.get("shared_tmp")),
+        isolated=bool(opts.get("isolated")),
+    )
 
 
 def run_argv(container: str, run_args: list[str], work_dir: str | None = None) -> tuple[Env, Argv]:

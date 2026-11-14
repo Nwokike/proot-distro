@@ -78,6 +78,18 @@ class DeskSession:
     fps: float = 12.0
     quality: int = 70
     geometry: str = "1280x720"
+    # Real Xvnc options (all threaded to the argv — see xvnc_command).
+    depth: str = "24"
+    frame_rate: int = 30
+    shared_policy: str = "always"  # always | never ("auto" == always for our viewer)
+    resize_mode: str = "remote"  # remote | scale | off (noVNC's own `resize` setting)
+    clipboard: bool = True
+    disconnect_timeout: int = 0  # seconds after the last viewer; 0 = never
+    desktop_name: str = ""  # "" → "<container>:<display>"
+    # PulseAudio module options (app-wide daemon; set by the first display).
+    mic: bool = True
+    audio_latency_ms: int = 0  # 0 = AAudio's own buffer-derived latency
+    audio_pm: int = 2  # AAudio performance-mode offset (2 = LOW_LATENCY)
     host: str = "127.0.0.1"  # 0.0.0.0 = LAN sharing is on
     tunnel: bool = False  # upstream localhost.run tunnel requested
     tunnel_url: str = ""  # filled asynchronously from the guest tunnel log
@@ -221,10 +233,20 @@ class DeskManager:
         display: int | None = None,
         desktop_env: str = DEFAULT_DESKTOP,
         app_command: str | None = None,
-        fps: float = 12.0,  # kept for the settings surface — RFB has no fps knob
+        bare: bool = False,  # X server only — no guest session (terminal use)
+        frame_rate: int = 30,  # Xvnc -FrameRate (updates/second to the viewer)
         quality: int = 70,
         compression: int = 2,
         geometry: str = "1280x720",
+        depth: str = "24",
+        shared_policy: str = "always",
+        resize_mode: str = "remote",
+        clipboard: bool = True,
+        disconnect_timeout: int = 0,
+        desktop_name: str = "",
+        mic: bool = True,
+        audio_latency_ms: int = 0,
+        audio_pm: int = 2,
         host: str = "127.0.0.1",
         tunnel: bool = False,
         options: dict | None = None,
@@ -247,14 +269,30 @@ class DeskManager:
             session = DeskSession(
                 container=container,
                 key=key,
-                mode="app" if app_command and app_command.strip() else "desktop",
+                mode=(
+                    "display"
+                    if bare
+                    else "app"
+                    if app_command and app_command.strip()
+                    else "desktop"
+                ),
                 app_command=(app_command or "").strip(),
                 desktop_env=desktop_env,
                 display=display,
                 port=_free_port(),
-                fps=fps,
+                fps=float(frame_rate),
                 quality=quality,
                 geometry=geometry,
+                depth=depth,
+                frame_rate=frame_rate,
+                shared_policy=shared_policy,
+                resize_mode=resize_mode,
+                clipboard=clipboard,
+                disconnect_timeout=disconnect_timeout,
+                desktop_name=desktop_name,
+                mic=mic,
+                audio_latency_ms=audio_latency_ms,
+                audio_pm=audio_pm,
                 host=host,
                 tunnel=tunnel,
             )
@@ -295,6 +333,7 @@ class DeskManager:
                 _generate_code(),
                 quality=_quality_level(quality),
                 compression=compression,
+                resize_mode=session.resize_mode,
             )
             await server.start()
         except Exception as exc:
@@ -389,6 +428,37 @@ class DeskManager:
         with self._lock:
             return [s for s in self._sessions.values() if s.container == container]
 
+    def pulse_server_alive(self) -> bool:
+        """True while the app-wide PulseAudio daemon runs. Public accessor —
+        the actions layer must never read the private process handle."""
+        process = self._pulse_process
+        return process is not None and process.poll() is None
+
+    def guest_display_env(self, container: str) -> dict[str, str]:
+        """DISPLAY/XAUTHORITY/PULSE_SERVER for a NEW shell on `container` while
+        one of its displays runs — so GUI apps launched from any shell reach
+        the display (device 2026-11-14: `firefox` → "no DISPLAY"). Deterministic
+        pick: desktop-mode first, then the lowest display; only RUNNING sessions
+        count (STARTING/STOPPING/ERROR point nowhere). Empty when no display
+        runs — the shell keeps today's plain environment."""
+        from .display_env import guest_display_env as _env
+
+        with self._lock:
+            candidates = [
+                s
+                for s in self._sessions.values()
+                if s.container == container and s.status is DeskStatus.RUNNING
+            ]
+        # A display whose auth file is gone cannot be used (XAUTHORITY would
+        # fail) — skip it rather than poisoning the whole shell env.
+        candidates = [
+            s for s in candidates if xvnc_runtime.guest_cookie_path(container, s.display).is_file()
+        ]
+        if not candidates:
+            return {}
+        chosen = min(candidates, key=lambda s: (s.mode != "desktop", s.display))
+        return _env(chosen.display, pulse=self.pulse_server_alive())
+
     # ── sync implementation (worker threads) ─────────────────────────────────
 
     def _spawn(self, session: DeskSession) -> None:
@@ -422,7 +492,16 @@ class DeskManager:
             # Xvnc FIRST — the guest session connects to its X port the moment
             # it starts. Own process group, own log reader.
             xvnc_argv, xvnc_env = xvnc_runtime.xvnc_command(
-                session.display, session.geometry, cookie_path, xkb_dir
+                session.display,
+                session.geometry,
+                cookie_path,
+                xkb_dir,
+                depth=session.depth,
+                frame_rate=session.frame_rate,
+                shared_policy=session.shared_policy,
+                clipboard=session.clipboard,
+                disconnect_timeout=session.disconnect_timeout,
+                desktop_name=session.desktop_name or session.key,
             )
             session._xvnc_process = xvnc_runtime.spawn(xvnc_argv, xvnc_env)
             threading.Thread(
@@ -430,7 +509,20 @@ class DeskManager:
                 args=(session, session._xvnc_process, "xvnc"),
                 daemon=True,
             ).start()
-            self._ensure_pulseaudio()
+            self._ensure_pulseaudio(
+                mic=session.mic,
+                latency_ms=session.audio_latency_ms,
+                pm=session.audio_pm,
+            )
+            # A file guests/scripts can `source` — the same values every new
+            # shell inherits (display_env is the ONE source of truth).
+            self._write_display_env_file(session)
+
+            if session.mode == "display":
+                # Bare X display (started from a terminal): no session to run —
+                # the caller's existing shell gets DISPLAY injected directly.
+                session.pid = None
+                return
 
             script = build_guest_script(
                 display=session.display,
@@ -477,6 +569,26 @@ class DeskManager:
                 pass
             raise
 
+    def _write_display_env_file(self, session: DeskSession) -> None:
+        """Write `<rootfs>/tmp/x11/env` — the display's guest environment in
+        sourceable form (`source /tmp/x11/env`). Same values as the shell
+        overlay, from the same helper."""
+        from .display_env import guest_display_env
+
+        try:
+            rootfs = storage_paths.containers_dir() / session.container / "rootfs"
+            target = rootfs / "tmp" / "x11" / "env"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            lines = [
+                f"export {key}={value}"
+                for key, value in guest_display_env(
+                    session.display, pulse=self.pulse_server_alive()
+                ).items()
+            ]
+            target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        except OSError as exc:
+            logger.debug("display env file not written: %r", exc)
+
     def _read_logs(self, session: DeskSession, process: subprocess.Popen, kind: str) -> None:
         if process.stdout is None:
             return
@@ -510,12 +622,32 @@ class DeskManager:
         # session ended (single app closed) or the X server died. Both end the
         # session; shut the stream server down on the session loop.
         if session.status is DeskStatus.RUNNING and process.poll() is not None:
-            what = "the X server" if kind == "xvnc" else "the display session"
-            self._fail(
-                session,
-                f"{what} exited (code {process.returncode})",
-                session.log_tail,
+            # A configured auto-close (MaxDisconnectionTime) makes Xvnc exit
+            # with code 0 once the last viewer has been gone for N seconds —
+            # that is the feature WORKING, not a crash: close the session
+            # cleanly instead of surfacing a false ERROR.
+            clean_auto_close = (
+                kind == "xvnc" and process.returncode == 0 and session.disconnect_timeout > 0
             )
+            if clean_auto_close:
+                logger.info(
+                    "display: %s auto-closed after %ss without viewers",
+                    session.key,
+                    session.disconnect_timeout,
+                )
+                # Full teardown bookkeeping (kills the guest tree, closes the
+                # log handle, frees the session) — not just a status flip.
+                with self._lock:
+                    session.status = DeskStatus.STOPPING
+                self._stop_sync(session)
+                self._notify_changed()
+            else:
+                what = "the X server" if kind == "xvnc" else "the display session"
+                self._fail(
+                    session,
+                    f"{what} exited (code {process.returncode})",
+                    session.log_tail,
+                )
             loop = session._loop
             server = session.server
             if loop is not None and server is not None:
@@ -531,16 +663,29 @@ class DeskManager:
                 except RuntimeError:
                     pass  # loop gone (app closed) — the process is dying anyway
 
-    def _ensure_pulseaudio(self) -> None:
-        """One app-wide daemon; audio degrades gracefully if it cannot start."""
-        if self._pulse_process is not None and self._pulse_process.poll() is None:
-            return
+    def _ensure_pulseaudio(self, *, mic: bool = True, latency_ms: int = 0, pm: int = 2) -> None:
+        """One app-wide daemon; audio degrades gracefully if it cannot start.
+
+        The first display configures it; a LATER display that asks for a
+        different audio shape (mic on/off, AAudio latency/performance) makes
+        the daemon restart with the new configuration — otherwise those
+        controls would be silently inert until every display stopped (device
+        audit 2026-11-14: first-display-wins)."""
+        config = (bool(mic), int(latency_ms), int(pm))
+        alive = self._pulse_process is not None and self._pulse_process.poll() is None
+        if alive:
+            if getattr(self, "_pulse_config", None) == config:
+                return
+            logger.info("display: pulseaudio reconfiguring for %s", config)
+            self._stop_pulseaudio()
         try:
-            pa_argv, pa_env = xvnc_runtime.pulseaudio_command()
+            pa_argv, pa_env = xvnc_runtime.pulseaudio_command(mic=mic, latency_ms=latency_ms, pm=pm)
             self._pulse_process = xvnc_runtime.spawn(pa_argv, pa_env)
+            self._pulse_config = config
         except Exception as exc:
             logger.warning("display: pulseaudio could not start (audio disabled): %s", exc)
             self._pulse_process = None
+            self._pulse_config = None
             return
         threading.Thread(
             target=self._read_pulse_logs, args=(self._pulse_process,), daemon=True
@@ -571,7 +716,18 @@ class DeskManager:
                 os.killpg(process.pid, signal.SIGTERM)
             except OSError:
                 pass
+            try:
+                process.wait(timeout=2.0)  # port must be free before a restart
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    process.wait(timeout=1.0)
+                except OSError:
+                    pass
+                except subprocess.TimeoutExpired:
+                    logger.warning("pulseaudio refused to die")
         self._pulse_process = None
+        self._pulse_config = None
 
     def _wait_xvfb(self, session: DeskSession, timeout: float) -> None:
         deadline = time.monotonic() + timeout

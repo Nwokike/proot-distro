@@ -162,6 +162,50 @@ def test_xvnc_command_argv_and_env(fake_native):
     assert "XDG_RUNTIME_DIR" in env
 
 
+def test_xvnc_command_threads_every_real_option(fake_native, tmp_path):
+    """Depth, frame rate, sharing policy, clipboard and auto-close are REAL
+    Xvnc parameters — each one must appear in the argv exactly as set."""
+    argv, _env = xvnc_runtime.xvnc_command(
+        1,
+        "1280x720",
+        tmp_path / "xauth-1",
+        tmp_path / "xkb",
+        depth="16",
+        frame_rate=15,
+        shared_policy="never",
+        clipboard=False,
+        disconnect_timeout=1800,
+        desktop_name="debian:1",
+    )
+    assert argv[argv.index("-depth") + 1] == "16"
+    assert "-FrameRate=15" in argv
+    assert "-NeverShared=1" in argv and "-DisconnectClients=1" in argv
+    assert "-AlwaysShared=1" not in argv
+    assert "-AcceptCutText=0" in argv and "-SendCutText=0" in argv
+    assert "-MaxDisconnectionTime=1800" in argv
+    assert argv[argv.index("-desktop") + 1] == "debian:1"
+
+    # Auto policy keeps upstream defaults (no sharing flags at all).
+    plain, _ = xvnc_runtime.xvnc_command(1, "1280x720", tmp_path / "x", tmp_path / "y")
+    for absent in ("-AlwaysShared=1", "-NeverShared=1", "-MaxDisconnectionTime=1800"):
+        assert absent not in plain
+    assert "-FrameRate=30" in plain  # the app default
+
+
+def test_pulse_config_mic_toggle_and_audio_knobs(fake_native, tmp_path, monkeypatch):
+    """Mic off → the sles-source module line is absent (privacy); AAudio
+    latency/performance mode ride the sink line (real module args)."""
+    body_off = xvnc_runtime.write_pulse_config(
+        tmp_path / "rt", mic=False, latency_ms=80, pm=1
+    ).read_text(encoding="utf-8")
+    assert "module-sles-source.so" not in body_off
+    assert "sink_name=output latency=80 pm=1" in body_off
+    body_on = xvnc_runtime.write_pulse_config(tmp_path / "rt2").read_text(encoding="utf-8")
+    assert "module-sles-source.so" in body_on
+    assert "sink_name=output pm=2" in body_on  # latency 0 → device default
+    assert "latency=" not in body_on
+
+
 def test_xvnc_command_creates_the_app_tmp_dir(fake_native, tmp_path):
     """The builder rewrites Xvnc's compiled Termux prefix to <app>/tmp (the lock
     file + compiled keymaps live there) — the dir must exist before start."""

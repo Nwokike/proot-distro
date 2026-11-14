@@ -27,7 +27,21 @@ from core.state import state
 from screens.settings_components import _setting_row, _settings_card
 from state.controller_ctx import ControllerMethodsCtx
 
-_ARCH_CHOICES = ("host", "aarch64", "arm", "i686", "riscv64", "x86_64")
+# Upstream accepts both plain proot-distro archs AND Docker platform strings
+# (build's -a passthrough) — expose only the ones its arch map knows.
+_ARCH_CHOICES = (
+    "host",
+    "aarch64",
+    "arm",
+    "i686",
+    "riscv64",
+    "x86_64",
+    "linux/arm64",
+    "linux/arm/v7",
+    "linux/amd64",
+    "linux/386",
+    "linux/riscv64",
+)
 
 
 def _field(

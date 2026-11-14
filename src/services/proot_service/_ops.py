@@ -19,7 +19,7 @@ from services.proot_namespaces import (
     _ns_sync,
 )
 
-from ._core import Outcome, _run_command
+from ._core import Outcome, _imp, _run_command
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +85,38 @@ def remove_cached_image(
     )
 
 
+def _ensure_build_engine_env() -> None:
+    """Make RUN steps executable on Android.
+
+    Upstream's build engine constructs the child environment for RUN from
+    scratch (no os.environ inheritance), and the proot it shells out to is an
+    UNBUNDLED-LOADER build: without PROOT_LOADER / LD_LIBRARY_PATH /
+    PROOT_TMP_DIR it cannot start. Our session layer injects those three for
+    every PTY session; the build path has no equivalent — so wrap the engine's
+    env builder and add exactly those keys (the same contract, nothing else)."""
+    import os
+
+    try:
+        module = _imp("proot_distro.helpers.build_engine.run_step")
+    except Exception as exc:
+        logger.debug("build engine env adapter unavailable: %r", exc)
+        return
+    original = getattr(module, "_build_child_env", None)
+    if original is None or getattr(original, "_kiri_host_env", False):
+        return
+
+    def _build_child_env(engine, stage):
+        env = original(engine, stage)
+        for key in ("PROOT_LOADER", "LD_LIBRARY_PATH", "PROOT_TMP_DIR"):
+            value = os.environ.get(key)
+            if value and key not in env:
+                env[key] = value
+        return env
+
+    _build_child_env._kiri_host_env = True  # type: ignore[attr-defined]
+    module._build_child_env = _build_child_env
+
+
 def build_image(
     path: str = ".",
     *,
@@ -103,12 +135,11 @@ def build_image(
 ) -> Outcome:
     """Build an OCI image from a Dockerfile (upstream's full build engine).
 
-    RUN steps execute under proot against the stage rootfs — on this app that
-    works because the payload ships with the APK (D-025 spawn path is only for
-    interactive sessions; build's RUN steps use subprocess.Popen from upstream
-    run_step, which is fine because it runs off the UI thread in a short-lived
-    build). `on_line` streams the engine's stage lines live.
-    """
+    RUN steps execute under proot against the stage rootfs. That needs the
+    bundled proot's host environment (see `_ensure_build_engine_env`) — without
+    it every RUN fails before executing. `on_line` streams the engine's stage
+    lines live."""
+    _ensure_build_engine_env()
     return _run_command(
         "proot_distro.commands.build",
         "command_build",

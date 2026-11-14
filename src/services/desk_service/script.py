@@ -27,8 +27,8 @@ from __future__ import annotations
 import re
 import shlex
 
+from .display_env import guest_display_env
 from .environments import BY_KEY
-from .xvnc_runtime import PULSE_TCP_PORT
 
 # Strict geometry allow-list format: the value is validated everywhere the
 # display size is chosen (Xvnc's -geometry app-side). The script itself no
@@ -101,10 +101,11 @@ def build_guest_script(
             f" > {guest_tunnel_log(display)} 2>&1 ) &\n"
         )
 
+    guest_env = guest_display_env(display)
     return f"""set -u
-export DISPLAY=127.0.0.1:{display}
-export XAUTHORITY="/tmp/x11/xauth-{display}"
-export PULSE_SERVER=127.0.0.1:{PULSE_TCP_PORT}
+export DISPLAY={guest_env["DISPLAY"]}
+export XAUTHORITY="{guest_env["XAUTHORITY"]}"
+export PULSE_SERVER={guest_env["PULSE_SERVER"]}
 export XDG_SESSION_TYPE=x11
 export XDG_RUNTIME_DIR=/tmp/runtime-root
 export NO_AT_BRIDGE=1

@@ -206,7 +206,23 @@ class DisplayActions:
         # before the PulseAudio daemon (which loads the mic module) starts —
         # AFTER the starting feedback, so the dialog never appears out of
         # nowhere. A denial degrades audio only.
-        await self._ensure_mic_permission()
+        if settings.get("mic", True):
+            await self._ensure_mic_permission()
+        # Every value below is clamped/validated here, then threads straight
+        # into the Xvnc argv / PulseAudio module lines (no dead knobs).
+        depth = str(settings.get("depth", "24"))
+        if depth not in ("16", "24", "32"):
+            depth = "24"
+        shared_policy = str(settings.get("shared_policy", "always"))
+        if shared_policy not in ("auto", "always", "never"):
+            shared_policy = "always"
+        resize_mode = str(settings.get("resize", "remote"))
+        if resize_mode not in ("remote", "scale", "off"):
+            resize_mode = "remote"
+        frame_rate = max(1, min(60, int(settings.get("fps", 30) or 30)))
+        disconnect_timeout = max(0, min(86400, int(settings.get("disconnect_timeout", 0) or 0)))
+        audio_latency = max(0, min(2000, int(settings.get("audio_latency_ms", 0) or 0)))
+        audio_pm = max(0, min(3, int(settings.get("audio_pm", 2) or 2)))
         try:
             session = await manager.start(
                 container,
@@ -214,10 +230,18 @@ class DisplayActions:
                 desktop_env=env,
                 app_command=app_command,
                 options=options,
-                fps=float(settings["fps"]),
+                frame_rate=frame_rate,
                 quality=int(settings["quality"]),
                 compression=int(settings.get("compression", 2)),
                 geometry=self._resolve_geometry(settings),
+                depth=depth,
+                shared_policy=shared_policy,
+                resize_mode=resize_mode,
+                clipboard=bool(settings.get("clipboard", True)),
+                disconnect_timeout=disconnect_timeout,
+                mic=bool(settings.get("mic", True)),
+                audio_latency_ms=audio_latency,
+                audio_pm=audio_pm,
                 # LAN sharing maps to the server's bind host (S104 is the point).
                 host=(
                     "0.0.0.0" if settings["lan"] else "127.0.0.1"  # noqa: S104 - LAN feature

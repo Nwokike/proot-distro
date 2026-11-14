@@ -137,20 +137,40 @@ class SessionActions:
                 ft.dropdown.Option("HUP"),
                 ft.dropdown.Option("QUIT"),
                 ft.dropdown.Option("KILL"),
+                ft.dropdown.Option("USR1"),
+                ft.dropdown.Option("USR2"),
+                ft.dropdown.Option("STOP"),
+                ft.dropdown.Option("CONT"),
+                ft.dropdown.Option("ALRM"),
             ],
             width=tokens.DIALOG_SIGNAL_WIDTH,
         )
+        # Upstream accepts any signal name/number — a free-text field keeps the
+        # full surface reachable (e.g. numeric 9 or a rare name).
+        signal_custom = ft.TextField(
+            label="Or a custom signal",
+            hint_text="name or number, e.g. 9 or USR1",
+            width=tokens.DIALOG_SIGNAL_WIDTH,
+            text_size=tokens.FONT_XS,
+            border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+        )
+
+        def _signal() -> str | None:
+            custom = (signal_custom.value or "").strip()
+            return custom or signal_dropdown.value or None
 
         def _close_dlg(_e=None):
             self.page.pop_dialog()
 
         def _kill(pid):
+            sig = _signal()
             _close_dlg()
-            self.page.run_task(self.kill_session, str(pid), signal_dropdown.value or None)
+            self.page.run_task(self.kill_session, str(pid), sig)
 
         def _kill_all(_e):
+            sig = _signal()
             _close_dlg()
-            self.page.run_task(self.kill_all_sessions, signal_dropdown.value or None)
+            self.page.run_task(self.kill_all_sessions, sig)
 
         items = []
         for r in rows:
@@ -208,6 +228,44 @@ class SessionActions:
             f"stopped session {pid}" if outcome.ok else self.proot.friendly_job_error(outcome)
         )
 
+    async def start_x_display(self, key: str) -> None:
+        """Start a bare X display for this shell's container and inject its
+        environment INTO THE LIVE SHELL — GUI apps then just run here
+        (`firefox` with no tab switch; device 2026-11-14: shells had no
+        DISPLAY). The display also appears on the Display tab for the viewer."""
+        import shlex as _shlex
+
+        entries = getattr(self.session_manager, "entries", {}) or {}
+        entry = entries.get(key)
+        if entry is None or getattr(entry, "session", None) is None:
+            self.show_snack("open a shell first")
+            return
+        manager = getattr(self, "desk_manager", None)
+        if manager is None:
+            return
+        container = entry.container
+        settings = self._display_settings()
+        try:
+            session = await manager.start(
+                container,
+                bare=True,
+                frame_rate=int(settings.get("fps", 30) or 30),
+                quality=int(settings.get("quality", 70)),
+                compression=int(settings.get("compression", 2)),
+                geometry=self._resolve_geometry(settings),
+            )
+        except Exception as exc:
+            self.show_snack(f"X display failed: {_reason(exc)}")
+            return
+        env = manager.guest_display_env(container)
+        if env:
+            payload = "; ".join(f"export {k}={_shlex.quote(v)}" for k, v in env.items())
+            try:
+                entry.session.write((payload + "\n").encode())
+            except Exception as exc:
+                logger.debug("could not inject the display env into the shell: %s", exc)
+        self.show_snack(f"X display :{session.display} attached to this shell")
+
     async def open_session(self, container: str) -> None:
         """Open a NEW shell on the container (multi-shell; no ad on open).
         In-flight guard: a double-tap must not open two shells."""
@@ -223,6 +281,44 @@ class SessionActions:
         finally:
             opening.discard(container)
 
+    def _display_env_for(self, container: str) -> dict[str, str]:
+        """A running display's guest environment for a NEW shell — DISPLAY,
+        XAUTHORITY and PULSE_SERVER — so GUI apps launched from any shell reach
+        the display (device 2026-11-14: `firefox` → "no DISPLAY"). Empty when
+        no display runs (plain shell), and never fatal on lookup errors."""
+        manager = getattr(self, "desk_manager", None)
+        if manager is None:
+            return {}
+        try:
+            return manager.guest_display_env(container)
+        except Exception as exc:
+            logger.debug("display env lookup failed for %s: %s", container, exc)
+            return {}
+
+    def _shell_preflight(self, container: str) -> tuple[dict | None, str | None]:
+        """Which shell the container can actually run, and whether it can run
+        one at all.
+
+        Distroless/scratch images ship no shell — login has nothing to exec, so
+        the user got a generic "could not open". Images with /bin/sh but no
+        bash failed the same way even though they are perfectly usable. Returns
+        (login options override, honest error) — both None when bash is there.
+        """
+        from core import storage_paths
+
+        rootfs = storage_paths.containers_dir() / container / "rootfs"
+        if not rootfs.is_dir():
+            return None, f"{container} has no rootfs on disk — reinstall it."
+        if (rootfs / "bin" / "bash").exists() or (rootfs / "usr" / "bin" / "bash").exists():
+            return None, None
+        if (rootfs / "bin" / "sh").exists() or (rootfs / "usr" / "bin" / "sh").exists():
+            return {"login_cmd": ["/bin/sh"]}, None
+        return (
+            None,
+            f"{container} has no /bin/sh or /bin/bash — this image is distroless "
+            "and cannot host a terminal. Use a distro image instead.",
+        )
+
     async def _open_session_impl(self, container: str) -> None:
         state.session_error = ""
         # If an image ref was passed instead of a container name (e.g.
@@ -234,8 +330,17 @@ class SessionActions:
                 container.rsplit("/", 1)[-1],
             )
             container = match
+        shell_opts, shell_error = self._shell_preflight(container)
+        if shell_error:
+            state.session_error = shell_error
+            self.show_snack(shell_error)
+            return
         try:
-            entry = await self.session_manager.open(container)
+            entry = await self.session_manager.open(
+                container,
+                options=shell_opts,
+                extra_env=self._display_env_for(container),
+            )
         except Exception as exc:
             state.session_error = f"could not open {container}: {_reason(exc)}"
             self.show_snack(state.session_error)
@@ -252,8 +357,16 @@ class SessionActions:
         wrap: user, work-dir, env, bind, shared tmp/home, fix-low-ports,
         isolated). Same flow as open_session otherwise."""
         state.session_error = ""
+        shell_opts, shell_error = self._shell_preflight(container)
+        if shell_error:
+            state.session_error = shell_error
+            self.show_snack(shell_error)
+            return
+        merged = {**(shell_opts or {}), **opts}  # user's own login_cmd wins
         try:
-            entry = await self.session_manager.open(container, options=opts)
+            entry = await self.session_manager.open(
+                container, options=merged, extra_env=self._display_env_for(container)
+            )
         except Exception as exc:
             state.session_error = f"could not open {container}: {_reason(exc)}"
             self.show_snack(state.session_error)

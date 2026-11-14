@@ -33,7 +33,9 @@ class ContainerActions:
         if outcome.ok:
             await self.ad_service.show_interstitial()
 
-    async def backup_container(self, container: str, compression: str | None = None) -> None:
+    async def backup_container(
+        self, container: str, compression: str | None = None, name: str | None = None
+    ) -> None:
         if self.file_picker is None:
             self.show_snack("file picker unavailable on this build")
             return
@@ -41,11 +43,19 @@ class ContainerActions:
         # picker: on mobile `save_file` without `src_bytes` raises ValueError
         # (there is no writable shared path to stream to), which made the
         # backup action die silently on the only platform that ships.
+        # `name` is the user-chosen archive name — honored, not discarded.
         suffix = _COMPRESS_EXT.get(compression or "", ".tar.gz") if compression else ".tar.gz"
-        staging = storage_paths.exports_root() / f"{container}{suffix}"
+        stem = (name or "").strip() or container
+        if stem.endswith(".tar") or stem.endswith(".tar.gz") or stem.endswith(suffix):
+            stem = stem[: -len(suffix)] if stem.endswith(suffix) else stem.removesuffix(".tar")
+        safe_stem = "".join(c for c in stem if c.isalnum() or c in "-_.").strip(".") or container
+        staging = storage_paths.exports_root() / f"{safe_stem}{suffix}"
 
         def _stage() -> object:
             staging.parent.mkdir(parents=True, exist_ok=True)
+            # A previous backup of the same name must not make this one fail
+            # ("file exists" — upstream refuses to overwrite).
+            staging.unlink(missing_ok=True)
             return self.proot.backup_container(container, str(staging), compression=compression)
 
         outcome = await asyncio.to_thread(_stage)
@@ -54,7 +64,7 @@ class ContainerActions:
             return
         target = await self.file_picker.save_file(
             dialog_title=f"Backup {container}",
-            file_name=f"{container}{suffix}",
+            file_name=f"{safe_stem}{suffix}",
             src_bytes=staging.read_bytes(),
         )
         if not target:

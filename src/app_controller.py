@@ -21,7 +21,7 @@ from controller_actions import (
     SessionActions,
 )
 from core import proot_probe, shared_services, theme
-from core.constants import STORAGE_HINTS_DISMISSED, STORAGE_ONBOARDING_DONE
+from core.constants import STORAGE_ONBOARDING_DONE
 from core.state import state
 from services import ad_service, desk_service, proot_service, session_manager
 from state.controller_ctx import ControllerMethods, ControllerMethodsCtx
@@ -192,6 +192,7 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             probe_display=self.probe_display,
             start_display=self.start_display,
             stop_display=self.stop_display,
+            start_x_display=self.start_x_display,
             retry_display=self.retry_display,
             resume_display=self.resume_display,
             cancel_install_display=self.cancel_install_display,
@@ -201,7 +202,6 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             set_display_fullscreen=self.set_display_fullscreen,
             share_display=self.share_display,
             finish_onboarding=self.finish_onboarding,
-            dismiss_hints=self.dismiss_hints,
             exit_app=self.exit_app,
             run_build=self.run_build,
             push_image=self.push_image,
@@ -300,9 +300,15 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             theme.apply_theme_mode(self.page, mode)
         token = await self.prefs.get("docker_token")
         if isinstance(token, str):
-            state.docker_token = token
-            if token:
-                os.environ["PD_DOCKER_AUTH"] = token
+            if token and ":" not in token:
+                # A bare PAT saved by an older build would break even anonymous
+                # pulls (upstream needs user:token) — never apply it.
+                logger.warning("ignoring a malformed persisted Docker credential")
+                state.docker_token = ""
+            else:
+                state.docker_token = token
+                if token:
+                    os.environ["PD_DOCKER_AUTH"] = token
         saved_settings = await self.prefs.get("display_settings")
         if isinstance(saved_settings, str) and saved_settings:
             try:
@@ -341,7 +347,15 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             logger.warning("refresh_containers failed: %s", exc)
 
     async def set_docker_token(self, token: str) -> None:
+        """Docker Hub credentials — upstream's PD_DOCKER_AUTH needs
+        `username:password` (username:PAT), NOT a bare PAT: a malformed value
+        breaks even anonymous pulls (device audit 2026-11-14)."""
         token = token.strip()
+        if token and ":" not in token:
+            self.show_snack(
+                "Docker credentials need the form username:token — a bare token breaks pulls"
+            )
+            return
         state.docker_token = token
         if token:
             os.environ["PD_DOCKER_AUTH"] = token
@@ -349,7 +363,9 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             os.environ.pop("PD_DOCKER_AUTH", None)
         if self.prefs is not None:
             await self.prefs.set("docker_token", token)
-        self.show_snack("Docker Hub token saved" if token else "Docker Hub token cleared")
+        self.show_snack(
+            "Docker Hub credentials saved" if token else "Docker Hub credentials cleared"
+        )
 
     async def set_theme_mode(self, mode: str) -> None:
         if mode not in _THEME_MODES:
@@ -416,20 +432,11 @@ class AppController(DistroActions, ContainerActions, SessionActions, BuildAction
             return
         done = await self.prefs.get(STORAGE_ONBOARDING_DONE)
         state.onboarding_done = done == "true"
-        hints = await self.prefs.get(STORAGE_HINTS_DISMISSED)
-        if hints == "true":
-            state.hints_dismissed = True
 
     async def finish_onboarding(self) -> None:
         state.onboarding_done = True
         if self.prefs is not None:
             await self.prefs.set(STORAGE_ONBOARDING_DONE, "true")
-
-    async def dismiss_hints(self) -> None:
-        """The hints card stays gone across launches, not per-render."""
-        state.hints_dismissed = True
-        if self.prefs is not None:
-            await self.prefs.set(STORAGE_HINTS_DISMISSED, "true")
 
     async def _check_for_updates(self) -> None:
         """Silent background check; a newer build flips the header chip."""

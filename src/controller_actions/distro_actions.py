@@ -98,6 +98,7 @@ class DistroActions:
             outcome = await asyncio.to_thread(_run)
             if outcome.ok:
                 state.install_stage = f"installed {state.installing}"
+                self._remember_install(state.installing or name, image, arch, insecure)
             else:
                 state.install_stage = (
                     self.proot.PULL_LIMIT_COPY
@@ -128,6 +129,37 @@ class DistroActions:
                 state.last_installed = installed_now
                 await self.ad_service.show_interstitial()
 
+    @staticmethod
+    def _remember_install(container: str, image: str, arch: str | None, insecure: bool) -> None:
+        """Record how the container was installed. Reset must reproduce the
+        SAME install — upstream's reset re-pulls with TLS verification and
+        cannot carry --allow-insecure (device audit 2026-11-14)."""
+        import json
+
+        from core import storage_paths
+
+        meta = storage_paths.containers_dir() / container / "app-install.json"
+        try:
+            meta.write_text(
+                json.dumps({"image": image, "arch": arch or "", "insecure": bool(insecure)}),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            logger.debug("install metadata not written for %s: %r", container, exc)
+
+    @staticmethod
+    def _install_metadata(container: str) -> dict:
+        import json
+
+        from core import storage_paths
+
+        meta = storage_paths.containers_dir() / container / "app-install.json"
+        try:
+            data = json.loads(meta.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except OSError, ValueError:
+            return {}
+
     async def remove_container(self, name: str) -> None:
         outcome = await asyncio.to_thread(self.proot.remove_container, name)
         self.show_snack(f"removed {name}" if outcome.ok else self.proot.friendly_job_error(outcome))
@@ -140,7 +172,24 @@ class DistroActions:
             await self.ad_service.show_interstitial()
 
     async def reset_container(self, name: str) -> None:
-        outcome = await asyncio.to_thread(self.proot.reset_container, name)
+        meta = self._install_metadata(name)
+        if meta.get("insecure") and meta.get("image"):
+            # Upstream reset re-pulls with TLS verification and has no
+            # --allow-insecure, so insecure-registry containers could never
+            # reset — replay OUR install instead (reset semantics).
+            await asyncio.to_thread(self.proot.remove_container, name)
+            outcome = await asyncio.to_thread(
+                self.proot.install,
+                str(meta["image"]),
+                name,
+                override_arch=str(meta.get("arch") or "") or None,
+                allow_insecure=True,
+            )
+            if outcome.ok:
+                # Keep the metadata: a SECOND reset must stay on this path.
+                self._remember_install(name, str(meta["image"]), str(meta.get("arch") or ""), True)
+        else:
+            outcome = await asyncio.to_thread(self.proot.reset_container, name)
         self.show_snack(f"reset {name}" if outcome.ok else self.proot.friendly_job_error(outcome))
         if outcome.ok:
             # The rootfs changed on disk — drop the cached caps and re-probe.

@@ -95,10 +95,16 @@ def cached_images() -> list[dict]:
 
 
 def storage_bytes() -> int:
-    try:
-        return _tree_bytes(storage_paths.xdg_data_home() / "proot-distro")
-    except OSError as exc:
-        raise ProotUnavailable(f"storage size unavailable: {exc}") from exc
+    """Total footprint of containers AND the OCI cache — the OCI layers live in
+    the CACHE root, so counting only the data root understated it badly (the
+    UI label says "containers and cache")."""
+    total = 0
+    for root in (storage_paths.xdg_data_home(), storage_paths.xdg_cache_home()):
+        try:
+            total += _tree_bytes(root / "proot-distro")
+        except OSError as exc:
+            raise ProotUnavailable(f"storage size unavailable: {exc}") from exc
+    return total
 
 
 def _area(path) -> dict:

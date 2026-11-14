@@ -106,21 +106,13 @@ def _open_update_dialog(page: ft.Page | None) -> None:
 
 
 def _open_help_dialog(page: ft.Page | None) -> None:
-    """The header Help slot: the capability hints in a dialog."""
+    """The header Help slot: ONE reference surface (getting started, terminal
+    keys, display gestures, resources, diagnostics) — see screens/help."""
     if page is None:
         return
-    from components.ui import hints_card
+    from screens.help import show_help_sheet
 
-    page.show_dialog(
-        ft.AlertDialog(
-            title=ft.Text("How this works", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
-            content=ft.Container(
-                content=hints_card(False, lambda _e: page.pop_dialog()),
-                width=tokens.DIALOG_MIN_WIDTH,
-            ),
-            actions=[ft.TextButton("Got it", on_click=lambda _e: page.pop_dialog())],
-        )
-    )
+    show_help_sheet(page)
 
 
 def AppHeader(
@@ -143,7 +135,7 @@ def AppHeader(
                 ft.IconButton(
                     icon=ft.Icons.HELP_OUTLINE_ROUNDED,
                     icon_size=tokens.ICON_MD,
-                    tooltip="How this works",
+                    tooltip="Help",
                     on_click=lambda _e: _open_help_dialog(page),
                 ),
                 theme_button(on_cycle_theme),

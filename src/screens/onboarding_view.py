@@ -258,6 +258,11 @@ def OnboardingView() -> ft.Control:
     def _skip(_e=None) -> None:
         page.run_task(methods.finish_onboarding)
 
+    def _open_help(_e=None) -> None:
+        from screens.help import show_help_sheet
+
+        show_help_sheet(page, methods)
+
     def _swipe(e: ft.DragEndEvent) -> None:
         v = getattr(e, "primary_velocity", 0) or 0
         if v < -200 and slide_index < TOTAL_SLIDES - 1:
@@ -298,12 +303,25 @@ def OnboardingView() -> ft.Control:
                     controls=dots,
                     spacing=tokens.SPACE_XS,
                 ),
-                ft.FilledButton(
-                    "Get Started" if is_last else "Next",
-                    on_click=_next,
-                    style=ft.ButtonStyle(
-                        shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
-                    ),
+                ft.Row(
+                    controls=[
+                        # The Help sheet is the canonical reference — first-run
+                        # users get a shortcut to it right where they finish.
+                        ft.TextButton(
+                            "Help",
+                            on_click=_open_help,
+                            visible=is_last,
+                        ),
+                        ft.FilledButton(
+                            "Get Started" if is_last else "Next",
+                            on_click=_next,
+                            style=ft.ButtonStyle(
+                                shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)
+                            ),
+                        ),
+                    ],
+                    spacing=tokens.SPACE_SM,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,

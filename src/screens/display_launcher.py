@@ -21,6 +21,7 @@ from core import theme, tokens
 from core.state import state
 from services import session_service
 from services.desk_service import DEFAULT_DESKTOP, DESKTOP_ENVIRONMENTS
+from services.desk_service import manager as desk_manager
 from services.desk_service.provision import install_script, package_manager_for
 
 logger = logging.getLogger(__name__)
@@ -137,6 +138,129 @@ def _picker_with_custom(
         text_size=tokens.FONT_XS,
     )
     return ft.Column(controls=[dropdown, custom_field], spacing=tokens.SPACE_XXS, tight=True)
+
+
+def _switch_row(label: str, key: str, default: bool) -> ft.Switch:
+    return ft.Switch(
+        label=label,
+        value=bool((state.display_settings or {}).get(key, default)),
+        on_change=lambda e: _set_setting(key, bool(e.control.value)),
+    )
+
+
+def _advanced_display_controls() -> ft.Control:
+    """Real Xvnc/PulseAudio options for technical users — every control here
+    threads 1:1 into the server argv/module lines (depth → -depth, frame rate →
+    -FrameRate, viewers → -AlwaysShared/-NeverShared, auto-close →
+    -MaxDisconnectionTime, clipboard → -AcceptCutText/-SendCutText, audio →
+    the PulseAudio module args). Defaults keep the friendly path intact."""
+    settings = state.display_settings or {}
+    return ft.ExpansionTile(
+        title=ft.Text("Advanced display options", size=tokens.FONT_SM, weight=ft.FontWeight.W_600),
+        subtitle=ft.Text(
+            "Depth, frame rate, viewers, privacy, audio — applied when the display starts.",
+            size=tokens.FONT_XXS,
+            color=theme.text_dim(),
+        ),
+        expanded=False,
+        controls=[
+            ft.Row(
+                controls=[
+                    ft.Dropdown(
+                        label="Color depth",
+                        value=str(settings.get("depth", "24")),
+                        options=[
+                            ft.dropdown.Option("16", "16-bit (fastest)"),
+                            ft.dropdown.Option("24", "24-bit (default)"),
+                            ft.dropdown.Option("32", "32-bit"),
+                        ],
+                        on_select=lambda e: _set_setting("depth", e.control.value),
+                        width=tokens.DROPDOWN_WIDTH,
+                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+                        text_size=tokens.FONT_XS,
+                    ),
+                    _picker_with_custom(
+                        "Frame rate",
+                        (("60", "60 /s"), ("30", "30 /s"), ("15", "15 /s")),
+                        "fps",
+                        hint="updates per second (1-60)",
+                    ),
+                ],
+                spacing=tokens.SPACE_SM,
+                wrap=True,
+            ),
+            ft.Row(
+                controls=[
+                    ft.Dropdown(
+                        label="Viewers",
+                        value=str(settings.get("shared_policy", "auto")),
+                        options=[
+                            # noVNC always asks for shared=1, so upstream's
+                            # "auto" is observably identical to "always" —
+                            # exposing both would be a fake choice.
+                            ft.dropdown.Option("always", "Several viewers"),
+                            ft.dropdown.Option("never", "One viewer at a time"),
+                        ],
+                        on_select=lambda e: _set_setting("shared_policy", e.control.value),
+                        width=tokens.DROPDOWN_WIDTH,
+                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+                        text_size=tokens.FONT_XS,
+                    ),
+                    _picker_with_custom(
+                        "Auto-close",
+                        (
+                            ("0", "Never"),
+                            ("900", "15 minutes"),
+                            ("1800", "30 minutes"),
+                            ("3600", "1 hour"),
+                        ),
+                        "disconnect_timeout",
+                        hint="seconds after the last viewer (0 = never)",
+                    ),
+                ],
+                spacing=tokens.SPACE_SM,
+                wrap=True,
+            ),
+            ft.Row(
+                controls=[
+                    _switch_row("Clipboard sync", "clipboard", True),
+                    _switch_row("Microphone", "mic", True),
+                ],
+                spacing=tokens.SPACE_SM,
+                wrap=True,
+            ),
+            ft.Row(
+                controls=[
+                    _picker_with_custom(
+                        "Audio latency",
+                        (
+                            ("0", "Device default"),
+                            ("40", "40 ms"),
+                            ("80", "80 ms"),
+                            ("125", "125 ms"),
+                        ),
+                        "audio_latency_ms",
+                        hint="milliseconds (0-2000)",
+                    ),
+                    ft.Dropdown(
+                        label="Audio performance",
+                        value=str(settings.get("audio_pm", "2")),
+                        options=[
+                            ft.dropdown.Option("2", "Low latency"),
+                            ft.dropdown.Option("1", "Power saving"),
+                            ft.dropdown.Option("0", "Balanced"),
+                        ],
+                        on_select=lambda e: _set_setting("audio_pm", e.control.value),
+                        width=tokens.DROPDOWN_WIDTH,
+                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+                        text_size=tokens.FONT_XS,
+                    ),
+                ],
+                spacing=tokens.SPACE_SM,
+                wrap=True,
+            ),
+        ],
+    )
 
 
 def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> None:
@@ -344,8 +468,21 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
                         "geometry",
                         hint="WxH, e.g. 2560x1440",
                     ),
+                    ft.Dropdown(
+                        label="Fit to screen",
+                        value=str((state.display_settings or {}).get("resize", "remote")),
+                        options=[
+                            ft.dropdown.Option("remote", "Resize the desktop"),
+                            ft.dropdown.Option("scale", "Scale (letterbox)"),
+                            ft.dropdown.Option("off", "Keep the resolution"),
+                        ],
+                        on_select=lambda e: _set_setting("resize", e.control.value),
+                        width=tokens.DROPDOWN_WIDTH,
+                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
+                        text_size=tokens.FONT_XS,
+                    ),
                     _picker_with_custom(
-                        "Fullscreen",
+                        "Orientation",
                         (
                             ("landscape", "Landscape"),
                             ("portrait", "Portrait"),
@@ -386,6 +523,8 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
                 color=theme.text_dim(),
             )
         )
+        # Real server options for technical users (collapsed by default).
+        rows.append(_advanced_display_controls())
 
         body.controls = rows
         try:
@@ -569,6 +708,10 @@ def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None
         for key in ("shared_tmp", "shared_home", "isolated", "fix_low_ports"):
             if fields[key].value:
                 opts[key] = True
+        for key in ("hostname", "kernel", "emulator"):
+            value = (fields[key].value or "").strip()
+            if value:
+                opts[key] = value
         return opts
 
     def _start_app_job(ctrl) -> None:
@@ -661,6 +804,11 @@ def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None
     adv_work = _field("work_dir", "Work dir (-w)", "/root")
     adv_env = _field("env", "Env (-e VAR=VALUE)", "one per line", multiline=True)
     adv_bind = _field("bind", "Bind (-b PATH[:PATH])", "one per line", multiline=True)
+    adv_hostname = _field("hostname", "Hostname (--hostname)", "guest hostname")
+    adv_kernel = _field("kernel", "Kernel release (--kernel)", "uname -r string")
+    adv_emulator_path = _field(
+        "emulator", "Emulator (--emulator PATH)", "qemu-user path (foreign-arch images)"
+    )
     adv_shared_tmp = ft.Switch(label="Shared tmp", label_position=ft.LabelPosition.LEFT, scale=0.9)
     adv_shared_home = ft.Switch(
         label="Shared home", label_position=ft.LabelPosition.LEFT, scale=0.9
@@ -690,6 +838,9 @@ def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None
             adv_work,
             adv_env,
             adv_bind,
+            adv_hostname,
+            adv_kernel,
+            adv_emulator_path,
             ft.Row(
                 controls=[adv_shared_tmp, adv_shared_home],
                 wrap=True,
@@ -700,6 +851,13 @@ def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None
                 wrap=True,
                 spacing=tokens.SPACE_MD,
             ),
+            ft.Text(
+                "Display options",
+                size=tokens.FONT_XS,
+                weight=ft.FontWeight.W_600,
+                color=theme.text_dim(),
+            ),
+            _advanced_display_controls(),
         ],
         spacing=tokens.SPACE_XS,
         visible=False,
@@ -727,7 +885,9 @@ def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None
     display_dd = ft.Dropdown(
         label="Display",
         value=str(display_no["value"]),
-        options=[ft.dropdown.Option(str(n), f":{n}") for n in range(10)],
+        options=[
+            ft.dropdown.Option(str(n), f":{n}") for n in range(desk_manager.MAX_DISPLAY_NUMBER + 1)
+        ],
         on_select=lambda e: display_no.__setitem__("value", int(e.control.value or 0)),
         width=140,
         border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),

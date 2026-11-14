@@ -188,6 +188,16 @@ def build_terminal_fab(
         ft.PopupMenuItem(),
         _item("Browse Files", ft.Icons.FOLDER_OPEN_ROUNDED, on_click=lambda _e: on_browse_files()),
         _item(
+            "Start X display (GUI apps here)",
+            ft.Icons.DESKTOP_WINDOWS_ROUNDED,
+            on_click=lambda _e: page.run_task(methods.start_x_display, entry.key),
+        ),
+        _item(
+            "Help & Shortcuts",
+            ft.Icons.HELP_OUTLINE_ROUNDED,
+            on_click=lambda _e: _open_help(page, methods),
+        ),
+        _item(
             "Exit Full Screen" if fullscreen else "Full Screen",
             ft.Icons.FULLSCREEN_EXIT_ROUNDED if fullscreen else ft.Icons.FULLSCREEN_ROUNDED,
             on_click=lambda _e: on_toggle_fullscreen(),
@@ -212,6 +222,14 @@ def build_terminal_fab(
         mini=True,
         tooltip="Terminal actions",
     )
+
+
+def _open_help(page: ft.Page, methods) -> None:
+    """The in-session Help entry — the header (and its help icon) is hidden
+    while a shell owns the screen, so the reference must be reachable here."""
+    from screens.help import show_help_sheet
+
+    show_help_sheet(page, methods)
 
 
 def open_new_session_sheet(page: ft.Page, methods, manager) -> None:

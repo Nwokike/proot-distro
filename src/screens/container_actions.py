@@ -28,6 +28,11 @@ def container_menu_items(page: ft.Page, methods, cname: str) -> list[ft.PopupMen
             on_click=lambda _e: ask_backup(page, methods, cname),
         ),
         ft.PopupMenuItem(
+            icon=ft.Icons.UNARCHIVE_ROUNDED,
+            content=ft.Text("Restore from backup…", size=tokens.FONT_SM),
+            on_click=lambda _e: page.run_task(methods.restore_container),
+        ),
+        ft.PopupMenuItem(
             icon=ft.Icons.FOLDER_COPY_ROUNDED,
             content=ft.Text("Copy a path", size=tokens.FONT_SM),
             on_click=lambda _e: ask_copy(page, methods, cname),
@@ -102,11 +107,25 @@ def ask_remove(page: ft.Page, methods, container: str) -> None:
     def _yes(_e) -> None:
         page.pop_dialog()
         should_clean = bool(clean_cache_cb.value)
+        # The image this container came from — read BEFORE removal, then drop
+        # its cached manifest/blobs. The old flow ran clear-cache --orphan,
+        # which KEEPS every blob a cached image references, so the checkbox
+        # was inert (device audit 2026-11-14).
+        from core.state import state as _state
+
+        image_ref = next(
+            (
+                str(row.get("image") or "")
+                for row in (_state.containers or [])
+                if row.get("name") == container
+            ),
+            "",
+        )
 
         async def _do_remove() -> None:
             await methods.remove_container(container)
-            if should_clean:
-                await methods.clear_orphan_layers()
+            if should_clean and image_ref:
+                await methods.remove_cached_image(image_ref)
 
         page.run_task(_do_remove)
 
@@ -183,6 +202,34 @@ def ask_shell_options(page: ft.Page, methods, container: str) -> None:
     shared_home = ft.Switch(label="Shared home (--shared-home)", value=False)
     fix_low_ports = ft.Switch(label="Fix low ports (--fix-low-ports)", value=False)
     isolated = ft.Switch(label="Isolated (--isolated)", value=False)
+    emulator = ft.TextField(
+        # Upstream treats --emulator as a QEMU BINARY PATH (not a flag).
+        label="Emulator (--emulator PATH)",
+        hint_text="/path/to/qemu-<arch> — needed only for foreign-arch images",
+        text_size=tokens.FONT_SM,
+        height=tokens.CONTROL_INPUT,
+        border=ft.OutlineInputBorder(
+            border_radius=tokens.RADIUS_MD, side=ft.BorderSide(1, theme.surface_alt())
+        ),
+    )
+    hostname = ft.TextField(
+        label="Hostname (--hostname)",
+        hint_text="guest hostname",
+        text_size=tokens.FONT_SM,
+        height=tokens.CONTROL_INPUT,
+        border=ft.OutlineInputBorder(
+            border_radius=tokens.RADIUS_MD, side=ft.BorderSide(1, theme.surface_alt())
+        ),
+    )
+    kernel = ft.TextField(
+        label="Kernel release (--kernel)",
+        hint_text="uname -r string",
+        text_size=tokens.FONT_SM,
+        height=tokens.CONTROL_INPUT,
+        border=ft.OutlineInputBorder(
+            border_radius=tokens.RADIUS_MD, side=ft.BorderSide(1, theme.surface_alt())
+        ),
+    )
 
     def _lines(field: ft.TextField) -> list[str]:
         return [ln.strip() for ln in (field.value or "").splitlines() if ln.strip()]
@@ -212,6 +259,9 @@ def ask_shell_options(page: ft.Page, methods, container: str) -> None:
             "shared_home": bool(shared_home.value),
             "fix_low_ports": bool(fix_low_ports.value),
             "isolated": bool(isolated.value),
+            "emulator": (emulator.value or "").strip() or None,
+            "hostname": (hostname.value or "").strip() or None,
+            "kernel": (kernel.value or "").strip() or None,
         }
         page.run_task(methods.open_session_with_options, container, opts)
 
@@ -228,6 +278,9 @@ def ask_shell_options(page: ft.Page, methods, container: str) -> None:
                     work_dir,
                     env,
                     bind,
+                    hostname,
+                    kernel,
+                    emulator,
                     shared_tmp,
                     shared_home,
                     fix_low_ports,
@@ -322,7 +375,9 @@ def ask_backup(page: ft.Page, methods, container: str) -> None:
 
     def _save(_e) -> None:
         page.pop_dialog()
-        page.run_task(methods.backup_container, container, compress.value or None)
+        page.run_task(
+            methods.backup_container, container, compress.value or None, dest.value or None
+        )
 
     page.show_dialog(
         ft.AlertDialog(

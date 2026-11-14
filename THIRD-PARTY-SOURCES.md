@@ -6,7 +6,7 @@ open-source software licenses, including the GNU General Public License (GPL).
 ## Source Code Written Offer (GPL-2.0 §3(b) / GPL-3.0 §6(b))
 
 The complete machine-readable Corresponding Source for the GPL-licensed components
-(PRoot, TigerVNC's Xvnc, PulseAudio, talloc and friends) and for this application
+(PRoot, TigerVNC's Xvnc, PulseAudio, QEMU, talloc and friends) and for this application
 is available at:
 https://github.com/Nwokike/proot-distro/tree/v1.2.0/
 and via GitHub Releases at: https://github.com/Nwokike/proot-distro/releases/latest
@@ -90,6 +90,27 @@ sink/source, native-protocol-tcp) and its runtime closure:
 | `libogg` | 1.3.6-1 | BSD-3-Clause | [libogg](https://packages.termux.com) | [pool/main/libo/libogg/libogg_1.3.6-1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libo/libogg/libogg_1.3.6-1_aarch64.deb) | `4f1700a532f251ad3600f44f88cd764f1f6b0542d3343391117944b47a92802d` |
 | `libmpg123` | 1.33.7 | LGPL-2.1-or-later | [libmpg123](https://packages.termux.com) | [pool/main/libm/libmpg123/libmpg123_1.33.7_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libm/libmpg123/libmpg123_1.33.7_aarch64.deb) | `883b104faae53820b2e758363300ccf99e28f627a263d766af61ae07b73b07b3` |
 | `libmp3lame` | 4.0-1 | LGPL-2.0-or-later | [libmp3lame](https://packages.termux.com) | [pool/main/libm/libmp3lame/libmp3lame_4.0-1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libm/libmp3lame/libmp3lame_4.0-1_aarch64.deb) | `59f70ad8885578063bcbea3b11e74fb69e2416ca036b47aa255c1fa4f074565e` |
+
+## Native Payloads (Packaged in flet-qemu)
+
+QEMU user-mode emulators (all four non-host architectures) and the extra
+runtime closure they need beyond flet-xvnc/flet-proot. QEMU is GPL-2.0; the
+written offer above covers it:
+
+| Package | Version | License | Upstream Source | Termux Pool URL | SHA-256 |
+|---|---|---|---|---|---|
+| `glib` | 2.90.1 | LGPL-2.1-or-later | [glib](https://github.com/termux/termux-packages) | [glib_2.90.1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/g/glib/glib_2.90.1_aarch64.deb) | `132d8ce961d96a7252fd4bc2228bddd385b1b17b706a46caae6d541ae0e4b2c0` |
+| `pcre2` | 10.49 | BSD-3-Clause | [pcre2](https://github.com/termux/termux-packages) | [pcre2_10.49_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/p/pcre2/pcre2_10.49_aarch64.deb) | `c27995e5f52b8ecc9b8b3e662eb08e49f82a18bfd3f34343936acc7b23964724` |
+| `libdw` | 0.197 | GPL-2.0-or-later / LGPL-3.0-or-later | [libdw](https://github.com/termux/termux-packages) | [libdw_0.197_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libd/libdw/libdw_0.197_aarch64.deb) | `6c25c05cbba67671238434306ca5e55444d29c9b425600a710618a189d4f9ebb` |
+| `libelf` | 0.197 | GPL-2.0-or-later / LGPL-3.0-or-later | [libelf](https://github.com/termux/termux-packages) | [libelf_0.197_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libe/libelf/libelf_0.197_aarch64.deb) | `c47ee2eee8450274f22218307b31471b76113b2825d3c69a5fdc47180cd68c13` |
+| `liblzma` | 5.8.4 | 0BSD / LGPL-2.1-or-later | [liblzma](https://github.com/termux/termux-packages) | [liblzma_5.8.4_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libl/liblzma/liblzma_5.8.4_aarch64.deb) | `44e95e6e60dddb3705e60a344a4f009a1085a210797342b721eaff41b44033c0` |
+| `argp` | 1.5.0-1 | GPL-2.0-or-later | [argp](https://github.com/termux/termux-packages) | [argp_1.5.0-1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/a/argp/argp_1.5.0-1_aarch64.deb) | `4096bfb8cba379efc3699e94e1cee400e72c274d734b5c1ed5f274ec42003405` |
+| `json-c` | 0.19 | MIT | [json-c](https://github.com/termux/termux-packages) | [json-c_0.19_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/j/json-c/json-c_0.19_aarch64.deb) | `894fef1e1001807e862f909cd5645dbb51bc77434779124f69178efe13690655` |
+| `qemu-user-aarch64` | 1:11.1.3 | GPL-2.0-or-later | [qemu](https://www.qemu.org) | [qemu-user-aarch64_1:11.1.3_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/q/qemu-user-aarch64/qemu-user-aarch64_1%3A11.1.3_aarch64.deb) | `90808036f9a350a96e15e7af03d817a97be7ccc2df1070ff7b29171948da072d` |
+| `qemu-user-arm` | 1:11.1.3 | GPL-2.0-or-later | [qemu](https://www.qemu.org) | [qemu-user-arm_1:11.1.3_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/q/qemu-user-arm/qemu-user-arm_1%3A11.1.3_aarch64.deb) | `f8f707de1c77cda50f29f95759319064af0f2b1339a27d4597b260a3f4b7384f` |
+| `qemu-user-i386` | 1:11.1.3 | GPL-2.0-or-later | [qemu](https://www.qemu.org) | [qemu-user-i386_1:11.1.3_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/q/qemu-user-i386/qemu-user-i386_1%3A11.1.3_aarch64.deb) | `09224ac69c2fc08a63594bc4b109361d2b1367a466af0b950dfe54caef0030a8` |
+| `qemu-user-riscv64` | 1:11.1.3 | GPL-2.0-or-later | [qemu](https://www.qemu.org) | [qemu-user-riscv64_1:11.1.3_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/q/qemu-user-riscv64/qemu-user-riscv64_1%3A11.1.3_aarch64.deb) | `a7c7efc9c0104dd46a48adeeaa42d55e8c4a183df45af47f6945b60eb971a7dd` |
+| `qemu-user-x86-64` | 1:11.1.3 | GPL-2.0-or-later | [qemu](https://www.qemu.org) | [qemu-user-x86-64_1:11.1.3_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/q/qemu-user-x86-64/qemu-user-x86-64_1%3A11.1.3_aarch64.deb) | `0ab9a9b0b1587c344eea1873cb2dd8c0d63f227fc5e5c3d4271adf9cb43e913f` |
 
 ## Vendored Assets
 

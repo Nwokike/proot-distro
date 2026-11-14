@@ -30,6 +30,7 @@ except ImportError:
 
 from core import theme, tokens
 from core.state import state
+from screens.help import show_help_sheet
 from services.desk_service import DeskStatus
 from state.controller_ctx import ControllerMethodsCtx
 
@@ -207,6 +208,10 @@ def DesktopView(session) -> ft.Control:
                     ft.PopupMenuItem(
                         content=ft.Text("Logs"),
                         on_click=lambda _e: page.run_task(methods.show_display_logs, session.key),
+                    ),
+                    ft.PopupMenuItem(
+                        content=ft.Text("Help"),
+                        on_click=lambda _e: show_help_sheet(page, methods),
                     ),
                     ft.PopupMenuItem(
                         content=ft.Text("Stop"),

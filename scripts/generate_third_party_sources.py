@@ -167,7 +167,7 @@ def generate_markdown() -> str:
         "## Source Code Written Offer (GPL-2.0 §3(b) / GPL-3.0 §6(b))",
         "",
         "The complete machine-readable Corresponding Source for the GPL-licensed components",
-        "(PRoot, TigerVNC's Xvnc, PulseAudio, talloc and friends) and for this application",
+        "(PRoot, TigerVNC's Xvnc, PulseAudio, QEMU, talloc and friends) and for this application",
         "is available at:",
         f"https://github.com/{REPO_OWNER}/{REPO_NAME}/tree/v{APP_VERSION}/",
         f"and via GitHub Releases at: {GITHUB_RELEASES_URL}",
@@ -236,6 +236,56 @@ def generate_markdown() -> str:
             PA_UPSTREAMS,
         )
     )
+
+    # QEMU user-mode emulators + their closure (flet-qemu). Pins live in the
+    # builder; read them there so this table cannot drift.
+    import build_flet_qemu_wheel as _qemu
+
+    qemu_lines = [
+        "",
+        "## Native Payloads (Packaged in flet-qemu)",
+        "",
+        "QEMU user-mode emulators (all four non-host architectures) and the extra",
+        "runtime closure they need beyond flet-xvnc/flet-proot. QEMU is GPL-2.0; the",
+        "written offer above covers it:",
+        "",
+        "| Package | Version | License | Upstream Source | Termux Pool URL | SHA-256 |",
+        "|---|---|---|---|---|---|",
+    ]
+    _QEMU_LICENSES = {
+        "glib": "LGPL-2.1-or-later",
+        "pcre2": "BSD-3-Clause",
+        "libdw": "GPL-2.0-or-later / LGPL-3.0-or-later",
+        "libelf": "GPL-2.0-or-later / LGPL-3.0-or-later",
+        "liblzma": "0BSD / LGPL-2.1-or-later",
+        "json-c": "MIT",
+        "argp": "GPL-2.0-or-later",
+    }
+    seen_qemu: set[str] = set()
+    for pkg, version in _qemu._VERSIONS.items():
+        if pkg in seen_qemu or pkg.startswith("qemu-user-"):
+            continue
+        seen_qemu.add(pkg)
+        pool_dir = _qemu._POOL_DIRS[pkg]
+        sha = _qemu._SHA["aarch64"].get(pkg) or _qemu._SHA["x86_64"].get(pkg, "")
+        filename = f"{pkg}_{version}_aarch64.deb"
+        url = f"{_qemu.POOL}/{pool_dir}/{filename.replace(':', '%3A')}"
+        lines_url = f"[{filename}]({url})"
+        qemu_lines.append(
+            f"| `{pkg}` | {version} | {_QEMU_LICENSES.get(pkg, 'Open Source')} | "
+            f"[{pkg}](https://github.com/termux/termux-packages) | {lines_url} | `{sha}` |"
+        )
+    for emulator in sorted({p for spec in _qemu._EMULATORS.values() for p in spec["pkgs"]}):
+        version = _qemu._VERSIONS[emulator]
+        pool_dir = _qemu._POOL_DIRS[emulator]
+        sha = _qemu._SHA["aarch64"].get(emulator, "")
+        filename = f"{emulator}_{version}_aarch64.deb"
+        url = f"{_qemu.POOL}/{pool_dir}/{filename.replace(':', '%3A')}"
+        qemu_lines.append(
+            f"| `{emulator}` | {version} | GPL-2.0-or-later | "
+            f"[qemu](https://www.qemu.org) | [{filename}]({url}) | `{sha}` |"
+        )
+    lines.extend(qemu_lines)
 
     lines.extend(
         [

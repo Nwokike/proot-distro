@@ -214,12 +214,12 @@ def _stub_runtime(monkeypatch):
     monkeypatch.setattr(
         desk_manager.xvnc_runtime,
         "xvnc_command",
-        lambda display, geometry, xauth, xkb: (["/bin/true", f":{display}"], {}),
+        lambda display, geometry, xauth, xkb, **kw: (["/bin/true", f":{display}"], {}),
     )
     monkeypatch.setattr(
         desk_manager.xvnc_runtime,
         "pulseaudio_command",
-        lambda: (["/bin/true"], {}),
+        lambda **kw: (["/bin/true"], {}),
     )
     monkeypatch.setattr(
         desk_manager.xvnc_runtime,
@@ -232,7 +232,7 @@ def test_spawn_passes_the_wrap_surface_into_the_script_builder(monkeypatch):
     built = {}
     manager = desk_manager.DeskManager()
     _stub_runtime(monkeypatch)
-    monkeypatch.setattr(manager, "_ensure_pulseaudio", lambda: None)
+    monkeypatch.setattr(manager, "_ensure_pulseaudio", lambda **kw: None)
     monkeypatch.setattr(
         desk_manager, "build_guest_script", lambda **kw: built.update(kw) or "script"
     )
@@ -324,7 +324,7 @@ def test_read_logs_tags_xvnc_lines_and_marks_their_crash():
 class _FakeServer:
     """The stream server's surface as the manager drives it."""
 
-    def __init__(self, host, port, rfb_port, code, quality=6, compression=2):
+    def __init__(self, host, port, rfb_port, code, quality=6, compression=2, **_kw):
         self.host = host
         self.port = port
         self.rfb_port = rfb_port
@@ -469,6 +469,52 @@ def test_display_logs_live_in_the_durable_data_root():
     assert 'cache_root() / "display-logs"' not in src
 
 
+def test_guest_display_env_only_for_running_displays():
+    """A new shell inherits DISPLAY/XAUTHORITY only from a RUNNING display —
+    STARTING/STOPPING/ERROR point nowhere, and no display means a plain shell."""
+    manager = desk_manager.DeskManager()
+    assert manager.guest_display_env("debian") == {}
+    starting = desk_manager.DeskSession(container="debian", key="debian:0", display=0)
+    starting.status = desk_manager.DeskStatus.STARTING
+    manager._sessions[starting.key] = starting
+    assert manager.guest_display_env("debian") == {}
+
+
+def test_guest_display_env_prefers_desktop_then_lowest_display():
+    """Deterministic pick (desktop-mode first, then lowest display) so a
+    container with several displays still exports consistent values."""
+    manager = desk_manager.DeskManager()
+
+    def _cookie(display: int) -> None:
+        path = desk_manager.xvnc_runtime.guest_cookie_path("debian", display)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"cookie")
+
+    app_session = desk_manager.DeskSession(container="debian", key="debian:2", display=2)
+    app_session.mode = "app"
+    app_session.status = desk_manager.DeskStatus.RUNNING
+    desktop_hi = desk_manager.DeskSession(container="debian", key="debian:1", display=1)
+    desktop_hi.status = desk_manager.DeskStatus.RUNNING
+    manager._sessions.update({s.key: s for s in (app_session, desktop_hi)})
+    _cookie(1)
+    _cookie(2)
+
+    env = manager.guest_display_env("debian")
+    assert env["DISPLAY"] == "127.0.0.1:1"  # desktop wins over the app display
+    assert env["XAUTHORITY"] == "/tmp/x11/xauth-1"
+    assert "PULSE_SERVER" not in env  # no daemon running in this test
+
+    desktop_lo = desk_manager.DeskSession(container="debian", key="debian:0", display=0)
+    desktop_lo.status = desk_manager.DeskStatus.RUNNING
+    manager._sessions[desktop_lo.key] = desktop_lo
+    _cookie(0)
+    assert manager.guest_display_env("debian")["DISPLAY"] == "127.0.0.1:0"
+
+    # Missing auth file → no env at all (XAUTHORITY would fail anyway).
+    (desk_manager.xvnc_runtime.guest_cookie_path("debian", 0)).unlink()
+    assert manager.guest_display_env("debian")["DISPLAY"] == "127.0.0.1:1"
+
+
 def test_the_clipboard_bridge_is_gone_vnc_carries_it():
     """RFB's clipboard channel moves text BOTH ways (ServerCutText) — the old
     proot'd xclip bridge (and its W^X execve workaround) is deleted, and the
@@ -539,7 +585,7 @@ def test_ensure_pulseaudio_spawns_once_and_tolerates_probe_failure(monkeypatch):
     monkeypatch.setattr(
         desk_manager.xvnc_runtime,
         "pulseaudio_command",
-        lambda: (["/bin/true"], {}),
+        lambda **kw: (["/bin/true"], {}),
     )
     monkeypatch.setattr(
         desk_manager.xvnc_runtime,
@@ -1123,3 +1169,76 @@ async def test_mic_grant_asks_the_controller_recorder():
     holder.mic_recorder = _Recorder()
     await holder._ensure_mic_permission()
     assert holder.mic_recorder.asked
+
+
+def test_bare_display_spawns_xvnc_without_a_guest_tree(monkeypatch, tmp_path):
+    """The terminal's "Start X display" starts ONLY the X server — the caller's
+    existing shell gets the env injected, so no guest session is spawned."""
+    manager = desk_manager.DeskManager()
+    _stub_runtime(monkeypatch)
+    monkeypatch.setattr(manager, "_ensure_pulseaudio", lambda **kw: None)
+    session = desk_manager.DeskSession(
+        container="debian", key="debian:0", display=0, mode="display"
+    )
+    manager._spawn(session)
+    assert session._xvnc_process is not None
+    assert session._process is None  # no guest tree for a bare display
+    assert session.pid is None
+    env_file = (
+        desk_manager.storage_paths.containers_dir() / "debian" / "rootfs" / "tmp" / "x11" / "env"
+    )
+    assert env_file.is_file()
+    assert "export DISPLAY=127.0.0.1:0" in env_file.read_text(encoding="utf-8")
+
+
+async def test_start_x_display_injects_the_env_into_the_live_shell():
+    """One tap from the terminal: a bare display starts and the exports are
+    written INTO the running shell's PTY (no tab switch, no new shell)."""
+    from app_controller import AppController
+    from tests.conftest import FakePage
+
+    class _Sess:
+        def __init__(self):
+            self.writes: list[bytes] = []
+
+        def write(self, data: bytes) -> None:
+            self.writes.append(data)
+
+    class _Entry:
+        container = "debian"
+        key = "debian"
+
+        def __init__(self):
+            self.session = _Sess()
+
+    class _Manager:
+        def __init__(self):
+            self.started = None
+
+        async def start(self, container, **kw):
+            self.started = kw
+            return type("S", (), {"display": 3})()
+
+        def guest_display_env(self, container):
+            return {
+                "DISPLAY": "127.0.0.1:3",
+                "XAUTHORITY": "/tmp/x11/xauth-3",
+            }
+
+    entry = _Entry()
+    controller = object.__new__(AppController)
+    controller.page = FakePage()
+    controller.page.width = 800
+    controller.page.height = 600
+    controller.session_manager = type("M", (), {"entries": {"debian": entry}})()
+    controller.desk_manager = _Manager()
+    snacks = []
+    controller.show_snack = snacks.append
+
+    await controller.start_x_display("debian")
+
+    assert controller.desk_manager.started["bare"] is True
+    written = b"".join(entry.session.writes).decode()
+    assert "export DISPLAY=127.0.0.1:3" in written
+    assert "export XAUTHORITY=/tmp/x11/xauth-3" in written
+    assert snacks and "attached to this shell" in snacks[-1]

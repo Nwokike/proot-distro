@@ -20,4 +20,3 @@ PRIVACY_POLICY_URL = "https://kiri.ng/privacy"
 TERMS_OF_SERVICE_URL = "https://kiri.ng/terms"
 
 STORAGE_ONBOARDING_DONE = "proot_onboarding_done"
-STORAGE_HINTS_DISMISSED = "proot_hints_dismissed"

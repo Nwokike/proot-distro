@@ -193,3 +193,36 @@ def test_signal_guard_restores_after_test():
         assert result is old or result is None
     finally:
         signal.signal(signal.SIGINT, old)
+
+
+def test_qemu_emulators_are_linked_by_name_and_put_on_path(tmp_path, monkeypatch):
+    """proot-distro finds the interpreter with shutil.which("qemu-<arch>") on
+    the APP path: <app>/bin/qemu-* symlinks into the exec-allowed native dir
+    are what make foreign-arch containers run."""
+    import shutil
+
+    from core import proot_probe
+
+    native = tmp_path / "lib" / "arm64"
+    native.mkdir(parents=True)
+    payload = native / "libqemu-x86_64.so"
+    payload.write_bytes(b"\x7fELF")
+    payload.chmod(0o755)  # APK native libs are extracted 0755
+    monkeypatch.setenv("ANDROID_NATIVE_LIBRARY_DIR", str(native))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    res = proot_probe.ProbeResult()
+
+    proot_probe._link_qemu_emulators(native, res)
+
+    from core import storage_paths
+
+    app_root = storage_paths.app_root()
+    link = app_root / "bin" / "qemu-x86_64"
+    assert link.is_symlink()
+    assert Path(os.readlink(link)) == native / "libqemu-x86_64.so"
+    assert str(app_root / "bin") in os.environ["PATH"].split(os.pathsep)
+    assert shutil.which("qemu-x86_64") == str(link)
+    assert any("qemu emulators on PATH" in s for s in res.staged)
+    # idempotent
+    proot_probe._link_qemu_emulators(native, res)
+    assert link.is_symlink()

@@ -5,15 +5,27 @@ from __future__ import annotations
 import flet as ft
 
 # The ONE source of display-start defaults (used by state.__init__ and by
-# DisplayActions._display_settings — never duplicated).
+# DisplayActions._display_settings — never duplicated). Every key drives a REAL
+# server option: fps → Xvnc -FrameRate, depth → -depth, shared_policy →
+# -AlwaysShared/-NeverShared, clipboard → -AcceptCutText/-SendCutText,
+# disconnect_timeout → -MaxDisconnectionTime, mic/audio_* → the PulseAudio
+# module lines. Friendly defaults; all of them adjustable in Advanced.
 DEFAULT_DISPLAY_SETTINGS: dict = {
-    "fps": 12,  # kept for the settings surface — RFB adapts its own framerate
+    "fps": 30,  # Xvnc -FrameRate (updates per second sent to the viewer)
     "quality": 70,
     "compression": 2,
     "geometry": "auto",
     "orientation": "landscape",
     "lan": False,
     "tunnel": False,
+    "depth": "24",
+    "shared_policy": "always",  # always | never ("auto" == always for our viewer)
+    "resize": "remote",  # remote | scale | off — how the viewer fits the framebuffer
+    "clipboard": True,
+    "disconnect_timeout": 0,  # seconds after the last viewer exits; 0 = keep running
+    "mic": True,
+    "audio_latency_ms": 0,  # 0 = AAudio's own buffer-derived latency
+    "audio_pm": 2,  # AAudio performance-mode offset (2 = LOW_LATENCY)
 }
 
 
@@ -49,8 +61,6 @@ class AppState:
     theme_mode: str = "system"  # "system" | "light" | "dark"
     theme_revision: int = 0  # bumped on every theme flip (re-render signal)
 
-    # Distro screen hints card (CollabShell-style; dismissible)
-    hints_dismissed: bool = False
     apt_note_dismissed: bool = False
     terminal_fullscreen: bool = False
 

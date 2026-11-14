@@ -57,6 +57,9 @@ dependencies = [
     # never imported on desktop; the runtime guards the manifest imports.
     "flet-xvnc==1.16.2",
     "flet-pulseaudio==17.0",
+    # QEMU user-mode emulators (all four non-host arches): foreign-architecture
+    # containers run through `proot -q qemu-<arch>`, located by name on PATH.
+    "flet-qemu==11.1.3",
 ]
 # Our own Android resources (notification small icon drawable), copied into
 # the generated android/app/src/main/res by flet build.
@@ -131,6 +134,7 @@ ignore = ["E501", "EM101", "EM102", "EM103", "TRY003", "BLE001", "S110", "SIM105
 "scripts/build_flet_proot_wheel.py" = ["T201", "S310"]
 "scripts/build_flet_xvnc_wheel.py" = ["T201", "S310"]
 "scripts/build_flet_pulseaudio_wheel.py" = ["T201", "S310"]
+"scripts/build_flet_qemu_wheel.py" = ["T201", "S310"]
 "scripts/fetch_novnc.py" = ["T201"]
 "scripts/check_elf_alignment.py" = ["T201"]
 "scripts/generate_third_party_sources.py" = ["T201", "E402"]

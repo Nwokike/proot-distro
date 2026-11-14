@@ -61,6 +61,46 @@ def _native_dir_from_maps() -> Path | None:
     return None
 
 
+_EMULATOR_ARCHS = ("x86_64", "i386", "arm", "riscv64", "aarch64")
+
+
+def _link_qemu_emulators(native: Path, res: ProbeResult) -> None:
+    """Expose the bundled QEMU user-mode emulators BY NAME.
+
+    proot-distro resolves the interpreter with `shutil.which("qemu-<arch>")`
+    on the APP process PATH, so `<app>/bin/qemu-<arch>` symlinks into the APK
+    native dir are what make foreign-arch containers run. Exec through a
+    symlink resolves to the native dir's inode (exec-allowed) — the same
+    pattern the display uses for xkbcomp."""
+    from core import storage_paths
+
+    app_root = storage_paths.app_root()
+    bin_dir = app_root / "bin"
+    try:
+        present = [arch for arch in _EMULATOR_ARCHS if (native / f"libqemu-{arch}.so").is_file()]
+        if not present:
+            res.staged.append("qemu: no emulator payloads in the APK")
+            return
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        for arch in present:
+            link = bin_dir / f"qemu-{arch}"
+            target = native / f"libqemu-{arch}.so"
+            try:
+                if link.is_symlink() and os.readlink(link) == str(target):
+                    continue
+                if link.is_symlink() or link.exists():
+                    link.unlink()
+                os.symlink(target, link)
+            except OSError as exc:
+                res.problems.append(f"qemu-{arch} symlink failed: {exc!r}")
+        path = os.environ.get("PATH", "")
+        if str(bin_dir) not in path.split(os.pathsep):
+            os.environ["PATH"] = f"{bin_dir}{os.pathsep}{path}" if path else str(bin_dir)
+        res.staged.append(f"qemu emulators on PATH: {', '.join(present)}")
+    except Exception as exc:
+        res.problems.append(f"qemu setup skipped: {exc!r}")
+
+
 def _native_library_dir() -> Path | None:
     """The APK's extracted native libs dir (empty unless on a packaged app)."""
     native = os.environ.get("ANDROID_NATIVE_LIBRARY_DIR", "")
@@ -242,6 +282,8 @@ def bootstrap_env(runtime_root: Path | None = None) -> ProbeResult:
         os.environ["LD_LIBRARY_PATH"] = ":".join(ld)
         os.environ["PD_PROOT_BIN"] = str(native / "libproot.so")
         os.environ["PROOT_LOADER"] = str(native / "libproot-loader.so")
+        # Foreign-arch containers: qemu-<arch> must be findable by name.
+        _link_qemu_emulators(native, res)
 
     os.environ["PROOT_TMP_DIR"] = str(storage_paths.proot_tmp_dir())
 

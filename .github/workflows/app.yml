@@ -38,8 +38,8 @@ jobs:
         run: uv sync --frozen --group dev
       - name: Ruff
         run: |
-          uv run ruff check src tests scripts/build_flet_proot_wheel.py scripts/build_flet_xvnc_wheel.py scripts/build_flet_pulseaudio_wheel.py scripts/fetch_novnc.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
-          uv run ruff format --check src tests scripts/build_flet_proot_wheel.py scripts/build_flet_xvnc_wheel.py scripts/build_flet_pulseaudio_wheel.py scripts/fetch_novnc.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
+          uv run ruff check src tests scripts/build_flet_proot_wheel.py scripts/build_flet_xvnc_wheel.py scripts/build_flet_pulseaudio_wheel.py scripts/build_flet_qemu_wheel.py scripts/fetch_novnc.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
+          uv run ruff format --check src tests scripts/build_flet_proot_wheel.py scripts/build_flet_xvnc_wheel.py scripts/build_flet_pulseaudio_wheel.py scripts/build_flet_qemu_wheel.py scripts/fetch_novnc.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
       - name: Flet API guard (AST, installed flet)
         run: |
           for f in $(find src -name "*.py"); do
@@ -176,6 +176,9 @@ jobs:
       - name: Build PulseAudio wheel (Termux debs, pinned + sha256-verified)
         run: uv run python scripts/build_flet_pulseaudio_wheel.py --out wheels
 
+      - name: Build QEMU user-mode wheel (Termux debs, pinned + sha256-verified)
+        run: uv run python scripts/build_flet_qemu_wheel.py --out wheels
+
       - name: Decode signing keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -232,8 +235,13 @@ jobs:
               echo "::error::unexpected artifact name $artifact"
               exit 1
             fi
+            if [[ "$artifact" == *arm64* ]]; then
+              qemu_lib="$abi_dir/libqemu-x86_64.so"
+            else
+              qemu_lib="$abi_dir/libqemu-aarch64.so"
+            fi
             for lib in "$abi_dir/libXvnc.so" "$abi_dir/libpulseaudio.so" \
-                       "$abi_dir/module-aaudio-sink.so"; do
+                       "$abi_dir/module-aaudio-sink.so" "$qemu_lib"; do
               if ! unzip -l "$artifact" | grep -q "$lib"; then
                 echo "::error::$lib missing from $artifact — the display payload wheel did not ship"
                 exit 1
@@ -270,6 +278,9 @@ jobs:
 
       - name: Build PulseAudio wheel (Termux debs, pinned + sha256-verified)
         run: uv run python scripts/build_flet_pulseaudio_wheel.py --out wheels
+
+      - name: Build QEMU user-mode wheel (Termux debs, pinned + sha256-verified)
+        run: uv run python scripts/build_flet_qemu_wheel.py --out wheels
 
       - name: Decode signing keystore
         env:

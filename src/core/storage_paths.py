@@ -96,12 +96,29 @@ def exports_root() -> Path:
     return p
 
 
+def app_root() -> Path:
+    """The app's private root, RESOLVED.
+
+    Android names the same directory `/data/data/<pkg>` and
+    `/data/user/0/<pkg>`; proot canonicalizes the rootfs while link2symlink
+    chains may store the other spelling — a hard link dpkg just made then
+    becomes unresolvable ("error setting ownership of '…dpkg-new': No such
+    file or directory", device 2026-11-14 / oonid/pr#35). Every path we hand
+    to proot must use ONE spelling: the resolved one."""
+    return data_root().parents[1].resolve()
+
+
 def env_contract() -> dict[str, str]:
-    """The env proot-distro must see BEFORE its first import."""
+    """The env proot-distro must see BEFORE its first import.
+
+    TERMUX__PREFIX/HOME are derived from the REAL app root (resolved), never
+    from a hardcoded `/data/data/<pkg>` — the two Android spellings of the same
+    directory must not leak into proot + link2symlink paths."""
+    root = app_root()
     contract = {
         "TERMUX_APP__PACKAGE_NAME": PACKAGE_NAME,
-        "TERMUX__PREFIX": "/data/data/" + PACKAGE_NAME + "/files/usr",
-        "TERMUX__HOME": "/data/data/" + PACKAGE_NAME + "/files/home",
+        "TERMUX__PREFIX": str(root / "files" / "usr"),
+        "TERMUX__HOME": str(root / "files" / "home"),
         "XDG_DATA_HOME": str(xdg_data_home()),
         "XDG_CACHE_HOME": str(xdg_cache_home()),
         "PROOT_TMP_DIR": str(proot_tmp_dir()),
@@ -115,4 +132,12 @@ def env_contract() -> dict[str, str]:
             "certifi unavailable — OCI layer pulls will not validate registry certificates: %r",
             exc,
         )
+    # Upstream's --shared-home binds TERMUX__HOME; it must EXIST or the bind
+    # silently points nowhere. We create it (the home dir only — deliberately
+    # NOT files/usr, whose existence would flip upstream's IS_TERMUX detection
+    # and move its runtime paths off the XDG contract).
+    try:
+        Path(contract["TERMUX__HOME"]).mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        logger.debug("could not create the shared home dir: %r", exc)
     return contract

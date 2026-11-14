@@ -207,3 +207,40 @@ def test_fetch_novnc_vendors_the_full_upstream_viewer(monkeypatch, tmp_path):
     assert not (dest / "docs").exists()
     assert not (dest / "po").exists()
     assert not (dest / "vnc_lite.html").exists()
+
+
+def test_qemu_builder_ships_all_four_emulators_per_abi():
+    import build_flet_qemu_wheel as q
+
+    assert set(q._EMULATORS["aarch64"]["pkgs"]) == {
+        "qemu-user-x86-64",
+        "qemu-user-i386",
+        "qemu-user-arm",
+        "qemu-user-riscv64",
+    }
+    assert set(q._EMULATORS["x86_64"]["pkgs"]) == {
+        "qemu-user-aarch64",
+        "qemu-user-i386",
+        "qemu-user-arm",
+        "qemu-user-riscv64",
+    }
+    # every pinned package has a real sha256 (no empty placeholders)
+    for pins in q._SHA.values():
+        for pkg, sha in pins.items():
+            assert sha, f"missing pin for {pkg}"
+    # the closure the emulators need beyond flet-xvnc/flet-proot
+    for bare in (
+        "libglib-2.0.so",
+        "libgmodule-2.0.so",
+        "libgobject-2.0.so",
+        "libpcre2-8.so",
+        "libdw.so",
+        "libelf.so",
+        "liblzma.so",
+        "libjson-c.so",
+        "libargp.so",
+    ):
+        assert bare in q._BARE_LIBS, bare
+    # DT_NEEDED rewrites are same-or-shorter (in-place byte rewriting)
+    for old, new in q._NEEDED_REWRITES:
+        assert len(new.rstrip(b"\0")) <= len(old.rstrip(b"\0"))

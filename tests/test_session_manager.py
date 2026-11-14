@@ -36,6 +36,34 @@ async def test_session_manager_has_no_concurrency_cap(monkeypatch):
     assert all(e.ready for e in entries)
 
 
+async def test_extra_env_overlay_reaches_the_shell(monkeypatch):
+    """A running display's DISPLAY/XAUTHORITY are injected into a NEW shell —
+    but an explicit env from the options dialog WINS (setdefault semantics)."""
+    from services import session_manager as sm
+
+    monkeypatch.setattr(session_service, "ProotSession", _FakeSession)
+    monkeypatch.setattr(
+        session_service.proot_service, "get_proot_cmd", lambda container: GOLDEN_CMD
+    )
+    monkeypatch.setattr(
+        session_service,
+        "session_argv",
+        lambda container: ({"DISPLAY": "user-set"}, ["/bin/sh"]),
+    )
+
+    manager = sm.SessionManager()
+    xauth = "/tmp/x11/xauth-0"  # noqa: S108 - guest path assertion only
+    entry = await manager.open(
+        "debian",
+        extra_env={"DISPLAY": "127.0.0.1:0", "XAUTHORITY": xauth},
+    )
+    assert entry.session.env["DISPLAY"] == "user-set"  # explicit wins
+    assert entry.session.env["XAUTHORITY"] == xauth  # overlay added
+
+    entry2 = await manager.open("debian")
+    assert "XAUTHORITY" not in entry2.session.env  # no overlay, no leakage
+
+
 def test_session_entry_replay_sends_the_buffer_in_order():
     from services import session_manager as sm
 

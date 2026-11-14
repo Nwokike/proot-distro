@@ -28,7 +28,23 @@ def DistroView() -> ft.Control:
     # Sherlock's email/username swap: one bar, two modes.
     mode, set_mode = ft.use_state("install")  # "install" | "search"
 
-    _ARCH_CHOICES = ("host", "aarch64", "arm", "i686", "riscv64", "x86_64")
+    # Upstream accepts both plain proot-distro archs AND Docker platform
+    # strings (install's --architecture passthrough) — expose only the ones
+    # upstream's arch map actually knows (linux/arm64/v8 and linux/arm/v6 are
+    # NOT in it → "unknown architecture").
+    _ARCH_CHOICES = (
+        "host",
+        "aarch64",
+        "arm",
+        "i686",
+        "riscv64",
+        "x86_64",
+        "linux/arm64",
+        "linux/arm/v7",
+        "linux/amd64",
+        "linux/386",
+        "linux/riscv64",
+    )
 
     is_narrow = bool(
         page
@@ -382,9 +398,6 @@ def DistroView() -> ft.Control:
             controls.append(
                 ft.Text(st.data_note, size=tokens.FONT_XS, color=theme.warn(), selectable=True)
             )
-
-    if mode == "install":
-        controls.extend(sections.build_info_sections(page))
 
     # No banner after the last section — banners live between sections only.
     controls.append(ft.Container(height=tokens.NAV_BAR_CLEARANCE))

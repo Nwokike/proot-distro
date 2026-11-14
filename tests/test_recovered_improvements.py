@@ -101,9 +101,15 @@ async def test_install_progress_refreshes_the_open_dialog(fake_page):
 @pytest.mark.asyncio
 async def test_open_session_logs_and_reraises_the_original_error(caplog):
     error = RuntimeError("session startup failed")
+    # The shell preflight runs before the manager: give the container a shell
+    # so this test exercises the spawn error, not the distroless check.
+    from core import storage_paths
+
+    (storage_paths.containers_dir() / "debian" / "rootfs" / "bin").mkdir(parents=True)
+    (storage_paths.containers_dir() / "debian" / "rootfs" / "bin" / "bash").write_text("")
 
     class SessionManagerStub:
-        async def open(self, _container):
+        async def open(self, _container, **kwargs):
             raise error
 
     snacks = []

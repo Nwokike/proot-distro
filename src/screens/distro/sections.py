@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import flet as ft
 
-from components import card, section_header
-from components.banner_ad import pooled_banner_ad
+from components import card
 from core import theme, tokens
 
 
@@ -117,50 +116,3 @@ def build_search_results(st, consent_install) -> list[ft.Control]:
                 )
             )
     return controls
-
-
-def build_info_sections(page: ft.Page) -> list[ft.Control]:
-    """How It Works + capabilities sections, with the banner between them."""
-    return [
-        section_header("How It Works"),
-        card(
-            ft.Column(
-                controls=[
-                    _step_row(
-                        "1",
-                        "Pick or Search a Distro",
-                        "Select Debian, Ubuntu, Alpine or enter any public container image reference.",
-                    ),
-                    _step_row(
-                        "2",
-                        "One-Tap Install",
-                        "Downloads and unpacks official container layers directly into private app storage.",
-                    ),
-                    _step_row(
-                        "3",
-                        "Launch Interactive Terminal",
-                        "Enjoy full bash shell access with apt package manager, tools, and multi-session tabs.",
-                    ),
-                ],
-                spacing=tokens.SPACE_MD,
-            ),
-            padding=tokens.SPACE_LG,
-        ),
-        pooled_banner_ad("home-2", page),
-        section_header("What Proot Distro Can Do"),
-        _feature_card(
-            ft.Icons.SECURITY_ROUNDED,
-            "Rootless Linux Userspace",
-            "Execute full Linux userland binaries without rooting your Android device or altering system partitions.",
-        ),
-        _feature_card(
-            ft.Icons.TERMINAL_ROUNDED,
-            "Native Interactive PTY",
-            "True terminal experience with soft keyboard handling, extra virtual keys, zoom controls, and live title tracking.",
-        ),
-        _feature_card(
-            ft.Icons.FOLDER_COPY_ROUNDED,
-            "Container Backup & Sync",
-            "Backup snapshots to tar archives, synchronize folders, and inspect container configurations anytime.",
-        ),
-    ]
