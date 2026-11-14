@@ -119,7 +119,7 @@ def build_command_cell(
         min_lines=1,
         max_lines=10,
         text_style=ft.TextStyle(font_family=tokens.MONO_FONT, size=tokens.FONT_SM),
-        border=ft.OutlineInputBorder(side=ft.BorderSide(color=ft.Colors.TRANSPARENT)),
+        border=ft.OutlineInputBorder(side=ft.BorderSide(color=theme.TRANSPARENT)),
         bgcolor=ft.Colors.TRANSPARENT,
         hint_text=hint,
         content_padding=tokens.SPACE_SM,
@@ -180,7 +180,7 @@ def build_command_cell(
                         ft.Text(
                             "OUTPUT",
                             size=tokens.FONT_XXS,
-                            color=ft.Colors.with_opacity(0.5, theme.text()),
+                            color=ft.Colors.with_opacity(tokens.OPACITY_DIM, theme.text()),
                             weight=ft.FontWeight.W_600,
                         ),
                         ft.Row(
@@ -190,7 +190,7 @@ def build_command_cell(
                                     icon_size=tokens.ICON_SM,
                                     tooltip="Copy Output",
                                     on_click=lambda _e: page.run_task(
-                                        ft.Clipboard().set, controller.output_text()
+                                        _copy_output(page, controller.output_text())
                                     ),
                                 ),
                                 ft.IconButton(
@@ -237,7 +237,7 @@ def build_command_cell(
                         spacing=0,
                     ),
                     border_radius=tokens.RADIUS_SM,
-                    bgcolor=ft.Colors.with_opacity(0.03, theme.text()),
+                    bgcolor=ft.Colors.with_opacity(tokens.OPACITY_WHISPER, theme.text()),
                 ),
                 ft.Container(
                     content=output_panel,
@@ -251,3 +251,15 @@ def build_command_cell(
         margin=ft.Margin(0, tokens.SPACE_SM, 0, tokens.SPACE_SM),
     )
     return cell, controller
+
+
+async def _copy_output(page: ft.Page, text: str) -> None:
+    """Copy through the ONE mounted Clipboard (a fresh ft.Clipboard() is an
+    unmounted Service and its set() raises)."""
+    from components.snack import show_snack
+
+    clipboard = getattr(page, "clipboard", None)
+    if clipboard is None:
+        return
+    await clipboard.set(text)
+    show_snack(page, "output copied")

@@ -15,7 +15,7 @@ import flet as ft
 
 from components import card, containers_required_empty_state, section_header
 from components.banner_ad import pooled_banner_ad
-from core import theme, tokens
+from core import styles, theme, tokens
 from core.state import display_progress as progress
 from core.state import state
 from screens.display_progress_card import DisplayProgressCard
@@ -371,7 +371,7 @@ def DisplayView() -> ft.Control:
                 icon=ft.Icons.DESKTOP_WINDOWS,
                 on_click=_open,
                 height=tokens.CONTROL_SM,
-                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)),
+                style=styles.pill_button_style(),
             )
             # Matching distro screen card layout: icon + expanding text column + right-aligned action
             content = ft.Row(

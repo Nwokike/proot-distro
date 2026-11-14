@@ -12,7 +12,7 @@ import logging
 import flet as ft
 
 from components import card, containers_required_empty_state
-from components.banner_ad import pooled_banner_ad
+from components.banner_ad import page_tail
 from components.file_item import build_file_item
 from core import theme, tokens
 from core.state import state
@@ -357,8 +357,7 @@ def FilesView(
                 content=card(file_list_content, padding=tokens.SPACE_SM),
                 expand=True,
             ),
-            pooled_banner_ad("files-1", page),
-            ft.Container(height=tokens.NAV_BAR_CLEARANCE),
+            page_tail("files-1", page),
         ],
         spacing=tokens.SPACE_SM,
         expand=True,

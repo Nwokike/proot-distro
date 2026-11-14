@@ -29,7 +29,7 @@ def show_snack(page: ft.Page | None, message: str) -> None:
             behavior=ft.SnackBarBehavior.FLOATING,
             show_close_icon=True,
             dismiss_direction=ft.DismissDirection.HORIZONTAL,
-            duration=3000,
+            duration=tokens.SNACK_DURATION_MS,
             open=True,
         )
         page.overlay.append(snack)

@@ -19,7 +19,7 @@ except ImportError:
     # Extension not installed in this environment (e.g. `flet run` with the
     # system flet instead of the project venv) — render a placeholder pane
     # instead of dying at import (house pattern: ad_service.py guards the
-    # same way; docs/testing-findings.md prescribes placeholder panes).
+    # same way).
     BUILTIN_THEMES = {}
     MobileTerminal = None
     _HAS_TERMINAL = False

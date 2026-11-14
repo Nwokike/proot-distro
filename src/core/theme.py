@@ -9,6 +9,7 @@ from core.tokens import OPACITY_CONTAINER
 
 class AppColors:
     WHITE = ft.Colors.WHITE
+    BLACK = ft.Colors.BLACK
     # Terminal-native brand: Catppuccin-derived dark, clean light.
     LIGHT_BG = "#F4F4F8"
     LIGHT_SURFACE = "#FFFFFF"
@@ -114,6 +115,11 @@ def warn() -> str:
     return AppColors.LIGHT_WARN if is_light_theme() else AppColors.WARN
 
 
+def danger() -> str:
+    """Destructive/error red, contrasted per palette (alias of warn())."""
+    return warn()
+
+
 def accent() -> str:
     """Accent with ≥3:1 contrast in the active palette."""
     return AppColors.LIGHT_ACCENT if is_light_theme() else AppColors.ACCENT
@@ -182,6 +188,7 @@ def glass_border() -> str:
 
 
 WHITE = AppColors.WHITE
+BLACK = AppColors.BLACK
 TRANSPARENT = AppColors.TRANSPARENT
 
 

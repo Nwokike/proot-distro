@@ -11,7 +11,7 @@ import logging
 
 import flet as ft
 
-from core import theme, tokens
+from core import layout, theme, tokens
 from core.changelog import notes_for
 from core.constants import APP_NAME, APP_VERSION, GITHUB_RELEASES_URL, PLAY_STORE_URL
 from core.shared_services import launch_url
@@ -27,14 +27,8 @@ def _launch(page: ft.Page, url: str) -> None:
 
 
 def _dialog_width(page: ft.Page) -> int:
-    """Fits a narrow phone; the action row lives outside the scroll."""
-    try:
-        page_width = int(getattr(page, "width", 0) or 0)
-    except TypeError, ValueError:  # PEP 758 — parenthesized for clarity
-        page_width = 0
-    if not page_width:
-        return tokens.DIALOG_WIDTH
-    return min(tokens.DIALOG_WIDTH, max(tokens.DIALOG_MIN_WIDTH, page_width - 48))
+    """Fits a narrow phone (one definition: core.layout)."""
+    return layout.dialog_width(page)
 
 
 def show_update_dialog(page: ft.Page, update_data: dict | None = None) -> None:

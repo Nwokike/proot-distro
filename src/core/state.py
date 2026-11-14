@@ -5,11 +5,13 @@ from __future__ import annotations
 import flet as ft
 
 # The ONE source of display-start defaults (used by state.__init__ and by
-# DisplayActions._display_settings — never duplicated). Every key drives a REAL
-# server option: fps → Xvnc -FrameRate, depth → -depth, shared_policy →
-# -AlwaysShared/-NeverShared, clipboard → -AcceptCutText/-SendCutText,
-# disconnect_timeout → -MaxDisconnectionTime, mic/audio_* → the PulseAudio
-# module lines. Friendly defaults; all of them adjustable in Advanced.
+# DisplayActions._display_settings — never duplicated). Every key has a real
+# consumer, in one of three layers: Xvnc argv (fps → -FrameRate, depth →
+# -depth, shared_policy → -AlwaysShared/-NeverShared, clipboard →
+# -AcceptCutText/-SendCutText, disconnect_timeout → -MaxDisconnectionTime),
+# PulseAudio module lines (mic/audio_*), or the viewer/host layer
+# (quality/compression/resize → noVNC settings, orientation → the orientation
+# lock, lan/tunnel → the bind host and the guest ssh forward).
 DEFAULT_DISPLAY_SETTINGS: dict = {
     "fps": 30,  # Xvnc -FrameRate (updates per second sent to the viewer)
     "quality": 70,
@@ -65,7 +67,6 @@ class AppState:
     # Probe / environment
     probe_passed: bool = False
     probe_summary: str = ""
-    probe_running: bool = False
     # Why data is missing/empty when it is — failures are shown, never swallowed.
     data_note: str = ""
 
@@ -85,7 +86,6 @@ class AppState:
     storage_bytes: int = 0
     cached_count: int = 0
     cached_images: list = None  # list[dict] — cached OCI images
-    busy_locks: list = None  # list[str] — locks held by active operations
     storage_detail: dict | None = None  # per-area sizes under the Flet storage roots
     cache_busy: bool = False
     online: bool = True  # Connectivity service's last known state
@@ -95,14 +95,12 @@ class AppState:
     theme_mode: str = "system"  # "system" | "light" | "dark"
     theme_revision: int = 0  # bumped on every theme flip (re-render signal)
 
-    apt_note_dismissed: bool = False
     terminal_fullscreen: bool = False
 
     # Run (one-shot command in a container) — result shown in a dialog
     run_busy: str | None = None  # container name while a run is in progress
     run_status: str = ""
     run_output: str = ""
-    run_returncode: int | None = None
 
     # Build (Dockerfile → OCI image) — live stage lines like install
     build_busy: bool = False
@@ -120,8 +118,9 @@ class AppState:
     # First run: the onboarding deck shows until it is dismissed once.
     onboarding_done: bool = False
 
-    # Ads: the UMP consent verdict — banners and interstitials gate on it,
-    # so the first render can never request an ad before consent resolves.
+    # Ads: the UMP consent verdict. BANNERS gate on it (their load must wait
+    # for consent); interstitials never do — they serve regardless (owner
+    # ruling), so an ad always shows for a major action.
     can_request_ads: bool = False
 
     # Update feed (M5): the version chip flips when the feed is ahead.
@@ -132,7 +131,7 @@ class AppState:
     active_session: str | None = None
     session_error: str = ""
 
-    # Display / X11 (v1.1.0): the container whose display is open, or None.
+    # Display / X11: the container whose display is open, or None.
     active_display: str | None = None
     # Bumped by DeskManager.on_sessions_changed on every session transition so
     # the Display tab re-reads manager.running()/visible() immediately (the
@@ -148,9 +147,6 @@ class AppState:
     display_url: str = ""
     display_fullscreen: bool = False
     display_support: dict | None = None  # per-container caps cache: name -> guest_capabilities
-    display_installing: str | None = None  # container currently installing the desktop
-    display_logs: list = None  # list[str] — bounded log tail for the active display
-    display_install_logs: list = None  # list[str] — live provisioning output
     # Launcher-set options for the NEXT start — the display wrap surface:
     # quality/compression (noVNC knobs; fps kept for the persisted surface),
     # geometry (Xvnc screen, "auto" = device aspect), orientation (fullscreen
@@ -161,12 +157,9 @@ class AppState:
         self.containers = []
         self.search_results = []
         self.cached_images = []
-        self.busy_locks = []
         self.install_logs = []
         self.build_logs = []
         self.display_support = {}
-        self.display_logs = []
-        self.display_install_logs = []
         self.display_settings = dict(DEFAULT_DISPLAY_SETTINGS)
 
 
@@ -186,27 +179,24 @@ class DisplayProgress:
         self.logs: list[str] = []
         self.is_running: bool = False
         self.rev: int = 0
-        self.finished_ok: bool | None = None
 
     def append(self, line: str) -> None:
         clean = line.rstrip()
         if not clean:
             return
-        self.logs = [*self.logs[-399:], clean]
+        self.logs = [*self.logs[-400:], clean]
         self.rev += 1
 
     def clear(self, container: str | None = None) -> None:
         self.container = container
         self.logs = []
         self.rev += 1
-        self.finished_ok = None
 
     def set_running(self, flag: bool) -> None:
         self.is_running = bool(flag)
 
     def finish(self, ok: bool | None) -> None:
         self.is_running = False
-        self.finished_ok = ok
 
 
 display_progress = DisplayProgress()

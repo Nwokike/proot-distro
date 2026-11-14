@@ -32,7 +32,7 @@
 | Capability | Description |
 | :--- | :--- |
 | **Rootless Linux Userspace** | Execute genuine Linux distributions (Debian, Ubuntu, Alpine) on Android and Linux without root privileges or system modifications. |
-| **X11 Display, Streamed In-App** | Run any GUI app — or a full desktop — on its own X display, streamed straight into the app. The X server (Xvnc) and audio (PulseAudio) run inside the app itself: single apps need **nothing** installed in the container. |
+| **X11 Display, Streamed In-App** | Run any GUI app — or a full desktop — on its own X display, streamed straight into the app. The X server (Xvnc) and audio (PulseAudio) run inside the app itself: single apps need **nothing** installed in the container. The display is X11 (Xvnc + noVNC); Wayland-only apps cannot render yet. |
 | **Interactive PTY Terminal** | Real-time POSIX pseudo-terminal sessions with custom virtual extra keys, sticky modifiers (CTRL/ALT), search, zoom, and live title tracking. |
 | **Tabbed Multi-Shell Workspace** | Seamlessly switch between concurrent container shells directly above the terminal canvas. |
 | **Container Filesystem Explorer** | Browse container directories, preview text and images, upload files, download files, and zip entire directories with rootfs-jailed safety. |

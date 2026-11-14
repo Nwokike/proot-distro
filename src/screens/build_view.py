@@ -22,7 +22,7 @@ import flet as ft
 
 from components import card, pill_dropdown, section_header
 from components.banner_ad import pooled_banner_ad
-from core import theme, tokens
+from core import layout, styles, theme, tokens
 from core.state import state
 from screens.settings_components import _setting_row, _settings_card
 from state.controller_ctx import ControllerMethodsCtx
@@ -93,7 +93,7 @@ def _pill_button(
         on_click=on_click,
         disabled=disabled,
         height=tokens.CONTROL_MD,
-        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL)),
+        style=styles.pill_button_style(),
     )
 
 
@@ -106,9 +106,7 @@ def BuildView() -> ft.Control:
     st, _ = ft.use_state(state)
     methods = ft.use_context(ControllerMethodsCtx)
     page = ft.context.page
-    # Sherlock breakpoint: on narrow screens every row's control goes UNDER
-    # the label (stacked), never beside it.
-    is_narrow = bool(page and getattr(page, "width", None) and page.width < 600)
+    is_narrow = layout.is_narrow(page)
 
     path_f, set_path = ft.use_state(".")
     dockerfile_f, set_dockerfile = ft.use_state("")

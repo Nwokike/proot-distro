@@ -22,10 +22,7 @@ from aiohttp import web
 logger = logging.getLogger(__name__)
 
 _NOVNC_DIR = Path(__file__).parent / "novnc"
-# Upstream requires revalidation so a bumped vnc.html never pairs with stale
-# cached JS (docs/EMBEDDING.md — "the confusingly named Cache-Control: no-cache").
-# The app/ tree only changes with a new APK build, so it may be cached: it is
-# re-fetched and re-parsed on every display open otherwise.
+# vnc.html must revalidate; app/ only changes with an APK build, so it caches.
 _NO_CACHE_HEADERS = {"Cache-Control": "no-cache"}
 _APP_CACHE_HEADERS = {"Cache-Control": "public, max-age=86400"}
 _WS_MAX_MSG = 64 * 1024  # inbound RFB messages (pointer/key/clipboard) are tiny
@@ -35,7 +32,7 @@ _WRITE_HIGH_WATER = 512 * 1024  # drain only when the buffer passes this
 
 class DisplayStreamServer:
     """One session's HTTP+WS surface. `start()` returns after binding — the
-    manager never calls run(), mirroring how TermuxDeskServer was driven."""
+    manager never calls run()."""
 
     def __init__(
         self,
@@ -137,7 +134,6 @@ class DisplayStreamServer:
         if not str(path).startswith(str(root)) or not path.is_file():
             raise web.HTTPNotFound
         # Upstream's deployment requirement: revalidate the entry page, or a
-        # bumped vnc.html can pair with stale cached JS (docs/EMBEDDING.md).
         # The app/ JS itself ships with the APK and only changes on update.
         cacheable = path.suffix in (".js", ".css", ".woff2", ".png", ".svg")
         return web.FileResponse(

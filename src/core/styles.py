@@ -161,3 +161,25 @@ def loading_state(label: str = "Loading…") -> ft.Control:
         padding=ft.Padding.symmetric(vertical=tokens.SPACE_XXXL),
         expand=True,
     )
+
+
+def pill_button_style() -> ft.ButtonStyle:
+    """The house pill shape for Filled/FilledTonal buttons."""
+    return ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL))
+
+
+def dialog_title(text: str) -> ft.Text:
+    """The standard dialog/sheet title (large, bold)."""
+    return ft.Text(text, size=tokens.FONT_LG, weight=ft.FontWeight.BOLD)
+
+
+def log_box(content: ft.Control, height: int = tokens.LOG_BOX_HEIGHT) -> ft.Container:
+    """A monospace log surface (the repeated box behind every streamed log)."""
+    return ft.Container(
+        content=content,
+        height=height,
+        bgcolor=ft.Colors.with_opacity(tokens.OPACITY_TEXT_HINT, theme.text()),
+        border=ft.Border.all(tokens.HAIRLINE, theme.surface_alt()),
+        border_radius=tokens.RADIUS_SM,
+        padding=tokens.SPACE_SM,
+    )

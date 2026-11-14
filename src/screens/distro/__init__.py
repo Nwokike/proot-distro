@@ -7,7 +7,7 @@ import flet as ft
 from components import card, empty_state, pill_dropdown, probe_banner, section_header
 from components.banner_ad import pooled_banner_ad
 from components.brand_hero import build_brand_hero
-from core import theme, tokens
+from core import layout, theme, tokens
 from core.state import state
 from screens.container_card import build_container_card
 from state.controller_ctx import ControllerMethodsCtx
@@ -46,13 +46,7 @@ def DistroView() -> ft.Control:
         "linux/riscv64",
     )
 
-    is_narrow = bool(
-        page
-        and (
-            (hasattr(page, "platform") and page.platform.is_mobile())
-            or (getattr(page, "width", None) and page.width < 650)
-        )
-    )
+    is_narrow = layout.is_mobile_layout(page)
 
     def _consent_install(target_ref: str | None = None, target_name: str | None = None) -> None:
         image = (target_ref or query).strip()

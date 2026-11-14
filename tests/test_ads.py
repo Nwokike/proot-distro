@@ -61,7 +61,6 @@ def test_close_releases_services():
     asyncio.run(service.close())
     assert ad not in page.services
     assert service.interstitial is None
-    assert service._is_shutting_down is True
 
 
 def test_production_ids_are_shipped_and_test_ids_are_gone():

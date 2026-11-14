@@ -110,6 +110,12 @@ def _build_slide_1() -> ft.Column:
                 "Native PTY shell with apt package manager, development tools, and extra keys.",
             ),
             _feature_row(
+                ft.Icons.DESKTOP_WINDOWS_ROUNDED,
+                "Desktop & Apps (X11)",
+                "Run a full X11 desktop or one app, streamed in the app. X11 only — "
+                "Wayland-only apps cannot render yet.",
+            ),
+            _feature_row(
                 ft.Icons.FOLDER_COPY_ROUNDED,
                 "Container Backup & Sync",
                 "Create tar snapshot backups, synchronize folders, and manage OCI images.",
@@ -154,8 +160,8 @@ def _build_slide_2() -> ft.Column:
             ft.Container(height=tokens.SPACE_SM),
             _onboarding_step_row(
                 "3",
-                "Launch Your Shell",
-                "Open an interactive terminal session and execute commands as root.",
+                "Launch",
+                "Open a shell for a terminal, or a display for one app or a full X11 desktop.",
             ),
             ft.Container(height=tokens.SPACE_LG),
             ft.Container(
@@ -211,7 +217,7 @@ def _build_slide_3() -> ft.Column:
                             color=theme.ok(),
                         ),
                         ft.Text(
-                            "100% Local Sandbox · Zero Remote Tracking",
+                            "Your files and sessions stay on this device",
                             size=tokens.FONT_SM,
                             weight=ft.FontWeight.W_600,
                             color=theme.text(),
@@ -226,7 +232,9 @@ def _build_slide_3() -> ft.Column:
             ),
             ft.Container(height=tokens.SPACE_LG),
             ft.Text(
-                "No registration or accounts required. PRoot translates system calls entirely in user-space without root access.",
+                "No registration or accounts required. PRoot translates system calls in "
+                "user-space without root. Ads, the update check and image pulls are the "
+                "only network calls.",
                 size=tokens.FONT_XS,
                 color=theme.text_dim(),
                 text_align=ft.TextAlign.CENTER,

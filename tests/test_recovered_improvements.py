@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import flet as ft
 import pytest
+from _src_text import module_text
 
 from app_controller import AppController
 from components.install_progress_modal import show_install_progress_modal
@@ -102,7 +103,6 @@ async def test_install_progress_refreshes_the_open_dialog(fake_page):
 async def test_open_session_logs_and_reraises_the_original_error(caplog):
     error = RuntimeError("session startup failed")
     # The shell preflight runs before the manager: give the container a shell
-    # so this test exercises the spawn error, not the distroless check.
     from core import storage_paths
 
     (storage_paths.containers_dir() / "debian" / "rootfs" / "bin").mkdir(parents=True)
@@ -252,9 +252,8 @@ def test_backups_are_delivered_by_path_not_through_memory():
 
 def test_restore_asks_for_confirmation_first():
     """Upstream's restore destroys the target rootfs; the trigger must confirm."""
-    from pathlib import Path
 
-    src = (Path(__file__).resolve().parents[1] / "src/screens/container_actions.py").read_text()
+    src = module_text("screens/container_actions.py", "screens/container_dialogs")
     assert "_confirm_restore" in src
     assert "Everything currently in the container is lost." in src
 

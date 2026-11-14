@@ -90,7 +90,7 @@ def DisplayProgressCard(
             ft.Text(
                 "OUTPUT",
                 size=tokens.FONT_XXS,
-                color=ft.Colors.with_opacity(0.5, theme.text()),
+                color=ft.Colors.with_opacity(tokens.OPACITY_DIM, theme.text()),
                 weight=ft.FontWeight.W_600,
             ),
             ft.Row(
@@ -106,7 +106,7 @@ def DisplayProgressCard(
                         icon_size=tokens.ICON_SM,
                         icon_color=theme.warn(),
                         tooltip="Stop install",
-                        on_click=lambda _e: on_cancel() if on_cancel else None,
+                        on_click=lambda e: on_cancel(e) if on_cancel else None,
                         visible=progress.is_running,
                     ),
                 ],

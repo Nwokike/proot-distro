@@ -236,7 +236,7 @@ def test_xvnc_command_links_the_baked_prefix_binaries(fake_native, tmp_path, mon
     exec policy allows; a plain file in the app home would be blocked."""
     shell = tmp_path / "platform-sh"
     shell.write_bytes(b"#!/bin/sh\n")
-    monkeypatch.setattr(xvnc_runtime, "_SYSTEM_SHELL", str(shell))
+    monkeypatch.setattr(xvnc_runtime.xvnc_paths, "_SYSTEM_SHELL", str(shell))
 
     xvnc_runtime.xvnc_command(0, "1280x720", tmp_path / "xauth-0", tmp_path / "xkb")
     app_root = storage_paths.data_root().parents[1]
@@ -252,7 +252,7 @@ def test_prefix_bin_relinks_after_an_app_update(fake_native, tmp_path, monkeypat
     payload re-links and an unchanged one is left alone."""
     shell = tmp_path / "platform-sh"
     shell.write_bytes(b"#!/bin/sh\n")
-    monkeypatch.setattr(xvnc_runtime, "_SYSTEM_SHELL", str(shell))
+    monkeypatch.setattr(xvnc_runtime.xvnc_paths, "_SYSTEM_SHELL", str(shell))
     bin_dir = xvnc_runtime.ensure_prefix_bin()
     link = bin_dir / "xkbcomp"
     link.unlink()

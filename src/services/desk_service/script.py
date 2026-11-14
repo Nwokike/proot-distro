@@ -12,10 +12,9 @@ the shared loopback, needing NOTHING installed for single apps:
 - `PULSE_SERVER=127.0.0.1:4713` — the app-side PulseAudio daemon (guest apps
   that link libpulse play through the phone; no guest audio packages).
 
-With the tunnel enabled, the EXACT upstream `LocalhostRunTunnel` command line
-(`ssh -R 80:localhost:PORT nokey@localhost.run`, tunnel.py) runs in the guest —
-Android hosts have no ssh binary — and its output lands in
-`/tmp/x11/tunnel-{N}.log`, where the manager applies upstream's same URL regex.
+With the tunnel enabled, our own `ssh -R` forward runs in the guest (Android
+hosts have no ssh binary); its output lands in `/tmp/x11/tunnel-{N}.log`.
+It needs the guest's ssh client, which desktop provisioning installs.
 
 No python, no pip, no vendoring in the guest. Every UI-supplied value is
 validated or shlex-quoted — the script runs as guest root inside proot, still
@@ -34,8 +33,8 @@ from .environments import BY_KEY
 # display size is chosen (Xvnc's -geometry app-side). The script itself no
 # longer starts any X server — it validates to keep one source of truth.
 _GEOMETRY_RE = re.compile(r"^\d{2,5}x\d{2,5}$")
-# Upstream tunnel.py's own URL pattern (verbatim) — the manager applies it to
-# the guest tunnel log.
+# The public URL localhost.run prints; the manager applies it to the
+# guest tunnel log.
 TUNNEL_URL_RE = re.compile(r"(https://[^\s]+\.lhr\.life[^\s]*)")
 
 
@@ -104,9 +103,7 @@ def build_guest_script(
 
     tunnel_block = ""
     if tunnel:
-        # Upstream LocalhostRunTunnel's exact command line (tunnel.py), run in
-        # the guest; output goes to the log the manager parses with
-        # TUNNEL_URL_RE — the same pattern as upstream's parser.
+        # Output goes to the log the manager parses with TUNNEL_URL_RE.
         tunnel_block = (
             f"( ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30"
             f" -R 80:localhost:{int(port)} nokey@localhost.run"

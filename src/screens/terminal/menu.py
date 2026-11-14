@@ -115,7 +115,7 @@ def _clear_terminal(entry, mt) -> None:
     from screens.terminal_controls import _write
 
     _write(entry, b"\x0c")
-    entry.scrollback.clear()
+    entry.clear_scrollback()
     if mt is not None:
         mt.clear()
 
@@ -178,13 +178,13 @@ def build_terminal_fab(
             "Cursor Blink",
             ft.Icons.VISIBILITY_ROUNDED,
             on_click=lambda _e: mt.toggle_cursor_blink(),
-            checked=True,
+            checked=bool(getattr(getattr(mt, "_terminal", None), "cursor_blink", True)),
         ),
         _item(
             "Search Bar",
             ft.Icons.SEARCH_ROUNDED,
             on_click=lambda _e: mt.toggle_search(),
-            checked=False,
+            checked=bool(getattr(mt, "show_search", False)),
         ),
         ft.PopupMenuItem(),
         _item("Browse Files", ft.Icons.FOLDER_OPEN_ROUNDED, on_click=lambda _e: on_browse_files()),
@@ -216,7 +216,7 @@ def build_terminal_fab(
         content=ft.PopupMenuButton(
             items=items,
             icon=ft.Icons.MORE_VERT_ROUNDED,
-            icon_color=ft.Colors.WHITE,
+            icon_color=theme.WHITE,
             icon_size=tokens.ICON_MD,
         ),
         bgcolor=theme.primary(),

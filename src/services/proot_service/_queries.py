@@ -69,7 +69,7 @@ def list_containers() -> list[dict]:
     return _container_rows()
 
 
-def search_images(query: str, limit: int = 20) -> list[dict]:
+def search_images(query: str, limit: int = 25) -> list[dict]:
     """Docker Hub search — upstream's own normalized hits (plain dicts)."""
     docker_search = _imp("proot_distro.helpers.docker.search")
 

@@ -24,7 +24,7 @@ except ImportError:
 class AdService:
     """Manages AdMob interstitial ads and UMP consent."""
 
-    # Production unit IDs (owner's AdMob account) — v1.0.0 ships these only;
+    # Production unit IDs (owner's AdMob account);
     # the CI quality gate fails the build if Google's test IDs appear anywhere.
     INTERSTITIAL_ID_ANDROID = "ca-app-pub-5679949845754640/6520707042"
 
@@ -38,8 +38,6 @@ class AdService:
         self._on_close: Callable | None = None
         self._can_request_ads: bool = True
         self._consent_manager = None
-        self._privacy_options_required: bool | None = None
-        self._is_shutting_down: bool = False
         self._last_interstitial_at: float | None = None
 
     @property
@@ -82,9 +80,6 @@ class AdService:
             self._can_request_ads = await self._consent_manager.can_request_ads()
             try:
                 status = await self._consent_manager.get_privacy_options_requirement_status()
-                self._privacy_options_required = (
-                    status == fta.PrivacyOptionsRequirementStatus.REQUIRED
-                )
                 logger.debug(
                     "AdService: consent status=%s can_request_ads=%s",
                     status,
@@ -92,7 +87,6 @@ class AdService:
                 )
             except Exception as exc:
                 logger.debug("AdService: privacy-requirement probe failed: %s", exc)
-            # Recorded, never obeyed — ads show with or without consent.
         except Exception as e:
             logger.debug("AdService: UMP consent flow failed, defaulting to allow ads: %s", e)
             self._can_request_ads = True
@@ -126,9 +120,6 @@ class AdService:
     async def preload_interstitial(self, on_close: Callable | None = None):
         """Pre-load an interstitial ad for later display."""
         self._on_close = on_close
-        if self._is_shutting_down:
-            logger.debug("AdService: preload skipped — shutting down")
-            return
         if not _HAS_ADS or not self._is_mobile():
             logger.debug("AdService: preload skipped — flet_ads missing or non-mobile")
             return
@@ -194,8 +185,7 @@ class AdService:
                 _release_service(self.page.services, ad_to_show)
                 return False
             finally:
-                if not self._is_shutting_down:
-                    await self.preload_interstitial(on_close=self._on_close)
+                await self.preload_interstitial(on_close=self._on_close)
 
         try:
 
@@ -232,8 +222,8 @@ class AdService:
         logger.debug("AdService: fresh interstitial queued — it will show on load")
         return True
 
-    async def close(self):
-        self._is_shutting_down = True
+    async def close(self) -> None:
+        """Release the ad controls and the pooled banners on app exit."""
         for ad in (self.interstitial, self._shown_interstitial):
             if ad is not None:
                 _release_service(self.page.services, ad)
@@ -242,6 +232,10 @@ class AdService:
         clear_banner_pool()
 
 
-def _release_service(services: list, item) -> None:
-    if item in services:
-        services.remove(item)
+def _release_service(services, control) -> None:
+    """Remove a one-shot ad control from page.services (ignore double-removal)."""
+    try:
+        if control in services:
+            services.remove(control)
+    except ValueError, AttributeError:
+        pass

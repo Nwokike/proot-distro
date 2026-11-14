@@ -24,7 +24,6 @@ RADIUS_XS = 4
 RADIUS_SM = 8
 RADIUS_MD = 12
 RADIUS_LG = 16
-RADIUS_XL = 24
 RADIUS_PILL = 999
 
 # Typography — no user-facing text below 11pt (the legibility floor)
@@ -34,8 +33,6 @@ FONT_SM = 12
 FONT_MD = 14
 FONT_LG = 16
 FONT_XL = 20
-FONT_XXL = 24
-FONT_HERO = 32
 
 # Icons
 ICON_MICRO = 12
@@ -43,15 +40,12 @@ ICON_XS = 14
 ICON_SM = 16
 ICON_MD = 20
 ICON_LG = 24
-ICON_XL = 32
 ICON_XXL = 48
 ICON_HERO = 64
 ICON_XXXL = 80
 ICON_EMPTY = 48
 
 # Components
-ICON_BACKDROP = 44
-ICON_CONTAINER = 56
 HERO_ICON_SIZE = 80  # CollabShell's ICON_XXXL — the brand hero renders at this
 EMPTY_ICON_SIZE = 96
 STATUS_DOT = 12
@@ -73,10 +67,12 @@ OPACITY_TINT = 0.10
 OPACITY_MEDIUM = 0.12
 OPACITY_CONTAINER = 0.14
 OPACITY_CHIP = 0.15
-OPACITY_STRONG = 0.20
 OPACITY_SELECTED = 0.24
 OPACITY_BORDER = 0.30
 OPACITY_DIM = 0.50
+
+# SnackBar visible time (ms) — the app-wide default.
+SNACK_DURATION_MS = 3000
 
 # Control heights — the touch-target scale
 CONTROL_XS = 26  # numbered step badge
@@ -88,8 +84,6 @@ CONTROL_INPUT = 44  # text fields and search bars
 
 # Fixed field/dropdown widths (rows never overflow; narrow screens wrap under)
 FIELD_NAME_WIDTH = 190
-FIELD_LIMIT_WIDTH = 64
-DROPDOWN_ARCH_WIDTH = 140
 DROPDOWN_WIDTH = 150
 FIELD_TARGET_WIDTH = 170
 FIELD_INSTALL_AS_WIDTH = 190
@@ -125,7 +119,6 @@ BANNER_HEIGHT = 50
 # Fixed-height surfaces
 LOG_BOX_HEIGHT = 180  # the install log terminal
 FILE_LIST_HEIGHT = 320
-FILE_PREVIEW_HEIGHT = 340
 FILE_MODAL_HEIGHT = 480
 
 # Chrome

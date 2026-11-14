@@ -17,8 +17,7 @@ from core import theme, tokens
 
 logger = logging.getLogger(__name__)
 
-# Production unit ID (owner's AdMob account) — v1.0.0 ships this only; the CI
-# quality gate fails the build if Google's test IDs appear anywhere.
+# Production unit ID (owner's AdMob account); CI fails on Google test IDs.
 BANNER_ID_ANDROID = "ca-app-pub-5679949845754640/4029827969"
 
 _BANNER_POOL: dict[str, Control] = {}
@@ -116,3 +115,25 @@ def build_banner_ad(page: ft.Page | None = None) -> Control:
         ),
         padding=ft.Padding.symmetric(horizontal=tokens.SPACE_SM),
     )
+
+
+def page_tail(slot: str, page: ft.Page | None = None) -> ft.Control:
+    """The standard page trailer: one banner slot + nav-bar clearance."""
+    return ft.Column(
+        controls=[
+            pooled_banner_ad(slot, page),
+            ft.Container(height=tokens.NAV_BAR_CLEARANCE),
+        ],
+        spacing=tokens.SPACE_NONE,
+        tight=True,
+    )
+
+
+def insert_periodic(
+    rows: list[Control], slot_prefix: str, *, every: int = 5, page: ft.Page | None = None
+) -> list[Control]:
+    """Insert a banner after every `every`-th row, never after the last."""
+    out = list(rows)
+    for index in range(every - 1, len(out) - 1, every):
+        out.insert(index + 1, pooled_banner_ad(f"{slot_prefix}-{index // every + 1}", page))
+    return out

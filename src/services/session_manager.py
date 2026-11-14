@@ -119,6 +119,14 @@ class SessionEntry:
         while self._scrollback_bytes > SCROLLBACK_BYTES and len(self.scrollback) > 1:
             self._scrollback_bytes -= len(self.scrollback.popleft())
 
+    def clear_scrollback(self) -> None:
+        """Drop the replay buffer AND its byte budget (a bare list.clear() left
+        `_scrollback_bytes` counting ghosts and mis-trimmed the next flush)."""
+        self.scrollback.clear()
+        self._scrollback_bytes = 0
+        with self._pending_lock:
+            self._pending.clear()
+
     def replay(self, send_bytes) -> None:
         """Replay the scrollback in ≤256 KiB frames — one send per chunk made a
         mount cost thousands of bridge messages (the tab-switch freeze)."""
@@ -145,7 +153,7 @@ class SessionEntry:
 
 
 class SessionManager:
-    """Opens, closes and switches guest shells; caps concurrency."""
+    """Opens, closes and switches guest shells."""
 
     def __init__(self):
         self.entries: dict[str, SessionEntry] = {}

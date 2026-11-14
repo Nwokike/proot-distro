@@ -404,15 +404,6 @@ def show_help_sheet(page: ft.Page, methods=None) -> None:
                         "to mirrorcache.opensuse.org.",
                     ),
                 ),
-                (
-                    "shell distroless no bash sh",
-                    _row(
-                        ft.Icons.TERMINAL_ROUNDED,
-                        "A container opens no shell",
-                        "Distroless images have no /bin/sh; images with sh but no bash "
-                        "start sh automatically. Use a distro image for a full shell.",
-                    ),
-                ),
             ],
         ),
         (

@@ -42,14 +42,12 @@ def open_live_activity_terminal(page: ft.Page) -> None:
 
     def _copy_logs(_e):
         from components.snack import show_snack
-        from core.shared_services import shared_url_launcher  # noqa: F401
 
         async def _do_copy():
-            import flet as ft  # local: Clipboard service
-
-            cb = ft.Clipboard()
-            page.services.append(cb)
-            await cb.set("\n".join(in_memory_log_handler.get_logs()))
+            clipboard = getattr(page, "clipboard", None)
+            if clipboard is None:
+                return
+            await clipboard.set("\n".join(in_memory_log_handler.get_logs()))
             show_snack(page, "Logs copied to clipboard")
 
         page.run_task(_do_copy)
@@ -276,7 +274,7 @@ def open_probe_dialog(page: ft.Page, probe_passed: bool, probe_summary: str, che
                         color=theme.ok() if probe_passed else theme.warn(),
                     ),
                     ft.Text(
-                        probe_summary or "Payload verified and 16 KiB page alignment confirmed.",
+                        probe_summary or "Environment probe passed.",
                         size=tokens.FONT_XS,
                         color=theme.text_dim(),
                     ),
@@ -301,6 +299,28 @@ def open_licenses(page: ft.Page) -> None:
             title=ft.Text("Open-Source Licenses", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
             content=licenses_view(),
             actions=[ft.TextButton("Close", on_click=lambda _e: page.pop_dialog())],
+        )
+    )
+
+
+def confirm_exit(page: ft.Page, on_yes) -> None:
+    """Exit kills every shell and display, so it asks first."""
+
+    def _yes(_e) -> None:
+        page.pop_dialog()
+        on_yes()
+
+    page.show_dialog(
+        ft.AlertDialog(
+            title=ft.Text("Exit the app?", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
+            content=ft.Text(
+                "Every shell and display session stops. Container files stay on this device.",
+                size=tokens.FONT_SM,
+            ),
+            actions=[
+                ft.TextButton("Cancel", on_click=lambda _e: page.pop_dialog()),
+                ft.FilledButton("Exit", on_click=_yes),
+            ],
         )
     )
 

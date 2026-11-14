@@ -26,7 +26,6 @@ class ControllerMethods:
     # Distro manager
     refresh_containers: Callable[[], Awaitable[None]] = _noop_async
     install_distro: Callable[[str, str, str, bool], Awaitable[None]] = field(default=_noop_async)
-    cancel_install: Callable[[], None] = field(default=_noop)
     remove_container: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     reset_container: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     search_distro: Callable[[str, int], Awaitable[None]] = field(default=_noop_async)

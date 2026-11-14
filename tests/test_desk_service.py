@@ -16,9 +16,12 @@ from services import desk_service, session_service
 from services.desk_service import manager as desk_manager
 from services.desk_service import provision as desk_provision
 from services.desk_service import script as desk_script
+from services.desk_service import spawn_mixin
 from state.controller_ctx import ControllerMethods
 
 ROOT = Path(__file__).resolve().parents[1]
+
+from _src_text import module_text  # noqa: E402
 
 ALPINE_CAPS = {
     "os": {
@@ -234,12 +237,12 @@ def test_spawn_passes_the_wrap_surface_into_the_script_builder(monkeypatch):
     built = {}
     manager = desk_manager.DeskManager()
     _stub_runtime(monkeypatch)
-    monkeypatch.setattr(manager, "_ensure_pulseaudio", lambda **kw: None)
+    monkeypatch.setattr(desk_manager.DeskManager, "_ensure_pulseaudio", lambda s, **kw: None)
     monkeypatch.setattr(
-        desk_manager, "build_guest_script", lambda **kw: built.update(kw) or "script"
+        spawn_mixin, "build_guest_script", lambda **kw: built.update(kw) or "script"
     )
     monkeypatch.setattr(
-        desk_manager,
+        spawn_mixin,
         "_write_guest_script",
         lambda c, s, d: f"/tmp/x11/run-display-{d}.sh",
     )
@@ -351,7 +354,7 @@ def _stub_server(monkeypatch, manager, server_class):
     monkeypatch.setattr(
         manager, "_spawn", lambda s: setattr(s, "status", desk_manager.DeskStatus.STARTING)
     )
-    monkeypatch.setattr(manager, "_wait_xvnc", lambda s, t: None)
+    monkeypatch.setattr(desk_manager.DeskManager, "_wait_xvnc", lambda s, sess, timeout: None)
 
 
 async def test_start_runs_the_server_in_process_and_stop_closes_it(monkeypatch):
@@ -412,11 +415,13 @@ async def test_start_failure_leaves_an_error_session_and_kills_the_groups(monkey
     _stub_server(monkeypatch, manager, _FakeServer)
     killed: list[str] = []
 
-    def _failing_wait(session, timeout):
+    def _failing_wait(_self, session, timeout):
         manager._fail(session, "the X server exited", session.log_tail)
 
-    monkeypatch.setattr(manager, "_wait_xvnc", _failing_wait)
-    monkeypatch.setattr(manager, "_kill_session", lambda s: killed.append(s.key))
+    monkeypatch.setattr(desk_manager.DeskManager, "_wait_xvnc", _failing_wait)
+    monkeypatch.setattr(
+        desk_manager.DeskManager, "_kill_session", lambda s, sess: killed.append(sess.key)
+    )
 
     with pytest.raises(RuntimeError, match="the X server exited"):
         await manager.start("debian", display=0)
@@ -466,7 +471,7 @@ def test_fail_closes_the_log_handle():
 def test_display_logs_live_in_the_durable_data_root():
     """Upstream clear-cache empties the CACHE root — crash logs must live in
     the data root or "clear cached downloads" destroys the only evidence."""
-    src = (ROOT / "src" / "services" / "desk_service" / "manager.py").read_text(encoding="utf-8")
+    src = module_text("services/desk_service/manager.py", "services/desk_service")
     assert 'data_root() / "display-logs"' in src
     assert 'cache_root() / "display-logs"' not in src
 
@@ -522,7 +527,7 @@ def test_the_clipboard_bridge_is_gone_vnc_carries_it():
     """RFB's clipboard channel moves text BOTH ways (ServerCutText) — the old
     proot'd xclip bridge (and its W^X execve workaround) is deleted, and the
     clipboard UI is upstream's own (app/ui.js clipboard pane + paste)."""
-    src = (ROOT / "src" / "services" / "desk_service" / "manager.py").read_text(encoding="utf-8")
+    src = module_text("services/desk_service/manager.py", "services/desk_service")
     assert "_install_clipboard_bridge" not in src
     assert "xclip" not in src
     ui = (ROOT / "src" / "services" / "desk_service" / "novnc" / "app" / "ui.js").read_text(
@@ -536,7 +541,7 @@ def test_guest_log_reaches_the_diagnostic_terminal_and_no_debug_paint():
     """Every guest + Xvnc log line flows into the diagnostic terminal (the
     level a technical user needs) — and the debug machinery is gone: no red
     root paint, no window-tree dump, nothing painted into the user's session."""
-    src = (ROOT / "src" / "services" / "desk_service" / "manager.py").read_text(encoding="utf-8")
+    src = module_text("services/desk_service/manager.py", "services/desk_service")
     assert 'logger.info("display[%s][%s] %s", session.key, kind, text)' in src
     assert "_x_diagnostic" not in src
     assert "_diagnose_later" not in src
@@ -636,7 +641,9 @@ async def test_stop_stops_pulseaudio_with_the_last_session(monkeypatch):
     manager = desk_manager.DeskManager()
     _stub_server(monkeypatch, manager, _FakeServer)
     stopped = []
-    monkeypatch.setattr(manager, "_stop_pulseaudio", lambda: stopped.append(True))
+    monkeypatch.setattr(
+        desk_manager.DeskManager, "_stop_pulseaudio", lambda s: stopped.append(True)
+    )
 
     session = await manager.start("debian", display=0)
     await manager.stop(session.key)
@@ -785,12 +792,13 @@ def test_container_card_has_exactly_three_inline_actions():
 
 
 def test_container_menu_groups_destructive_actions_last():
-    src = (ROOT / "src" / "screens" / "container_actions.py").read_text(encoding="utf-8")
-    assert '"Shell with options…"' in src
-    divider = src.index("ft.PopupMenuItem(content=ft.Divider")
-    reset = src.index('"Reset"')
-    remove = src.index('"Remove"')
+    menu = (ROOT / "src" / "screens" / "container_dialogs" / "menu.py").read_text(encoding="utf-8")
+    assert '"Shell with options…"' in menu
+    divider = menu.index("ft.PopupMenuItem(content=ft.Divider")
+    reset = menu.index('"Reset"')
+    remove = menu.index('"Remove"')
     assert divider < reset < remove
+    src = module_text("screens/container_actions.py", "screens/container_dialogs")
     assert "theme.warn()" in src
     assert "def ask_reset(" in src
     assert "def ask_remove(" in src
@@ -798,11 +806,9 @@ def test_container_menu_groups_destructive_actions_last():
 
 
 def test_files_banner_sits_at_the_bottom():
+    """The bottom banner is the shared page_tail (banner + nav-bar clearance)."""
     src = (ROOT / "src" / "screens" / "files" / "__init__.py").read_text(encoding="utf-8")
-    file_list = src.index("card(file_list_content")
-    banner = src.index('pooled_banner_ad("files-1"')
-    clearance = src.index("NAV_BAR_CLEARANCE")
-    assert file_list < banner < clearance
+    assert src.index("card(file_list_content") < src.index('page_tail("files-1"')
 
 
 def test_controller_ctx_exposes_the_v11_surface():
@@ -999,7 +1005,7 @@ def test_install_chunk_path_uses_run_task_not_raw_threadsafe():
     """Chunk callbacks must go through page.run_task so ft.context.page
     resolves (a raw call_soon_threadsafe notify raised RuntimeError — the
     99x log spam) — with no error swallowing."""
-    src = (ROOT / "src" / "controller_actions" / "display_actions.py").read_text(encoding="utf-8")
+    src = module_text("controller_actions/display_actions.py", "controller_actions")
     assert "self.page.run_task(_apply)" in src
     assert "call_soon_threadsafe(_apply)" not in src
     assert "_notify_install" in src and "notifications.show(id=2100" in src
@@ -1075,7 +1081,7 @@ def test_distro_banner_between_install_and_containers():
 
 def test_app_sheet_launches_single_app_displays():
     """The custom command must reach start_display as app_command (was dropped)."""
-    src = (ROOT / "src" / "screens" / "display_launcher.py").read_text(encoding="utf-8")
+    src = module_text("screens/display_launcher.py", "screens/display_sheets")
     assert "methods.start_display, container, None, cmd.strip(), None" in src
     assert "asyncio.gather" in src  # probes run in parallel now
 
@@ -1094,7 +1100,7 @@ def test_launcher_is_app_first_with_display_and_advanced_options():
     """The launcher leads with the app command (not the desktop), exposes an
     explicit display number, and keeps the full option set collapsed by default
     so non-technical users get a simple Start."""
-    src = (ROOT / "src" / "screens" / "display_launcher.py").read_text(encoding="utf-8")
+    src = module_text("screens/display_launcher.py", "screens/display_sheets")
     assert 'mode = {"value": "app"}' in src
     assert '"App"' in src and '"Desktop"' in src
     assert "ft.Dropdown(" in src and 'label="Display"' in src
@@ -1118,7 +1124,7 @@ def test_display_toolbar_has_terminal_not_paste_and_inline_output_panel():
 
 
 def test_settings_offer_custom_values_and_portrait():
-    src = (ROOT / "src" / "screens" / "display_launcher.py").read_text(encoding="utf-8")
+    src = module_text("screens/display_launcher.py", "screens/display_sheets")
     assert "_CUSTOM" in src
     assert '("portrait", "Portrait")' in src
     # RFB has no fps knob — quality + compression are the real knobs now.
@@ -1127,7 +1133,7 @@ def test_settings_offer_custom_values_and_portrait():
 
 
 def test_naming_says_open_display_and_install_display_support():
-    launcher = (ROOT / "src" / "screens" / "display_launcher.py").read_text(encoding="utf-8")
+    launcher = module_text("screens/display_launcher.py", "screens/display_sheets")
     card = (ROOT / "src" / "screens" / "container_card.py").read_text(encoding="utf-8")
     view = (ROOT / "src" / "screens" / "display_view.py").read_text(encoding="utf-8")
     # The install CELL keeps its name; cards always open a display (the app
@@ -1149,7 +1155,7 @@ def test_cache_invalidation_on_remove_reset_rename():
 def test_display_settings_single_default_source():
     from core.state import DEFAULT_DISPLAY_SETTINGS
 
-    src = (ROOT / "src" / "controller_actions" / "display_actions.py").read_text(encoding="utf-8")
+    src = module_text("controller_actions/display_actions.py", "controller_actions")
     assert "DEFAULT_DISPLAY_SETTINGS" in src
     assert DEFAULT_DISPLAY_SETTINGS["orientation"] == "landscape"
     assert "compression" in DEFAULT_DISPLAY_SETTINGS
@@ -1179,7 +1185,7 @@ def test_bare_display_spawns_xvnc_without_a_guest_tree(monkeypatch, tmp_path):
     existing shell gets the env injected, so no guest session is spawned."""
     manager = desk_manager.DeskManager()
     _stub_runtime(monkeypatch)
-    monkeypatch.setattr(manager, "_ensure_pulseaudio", lambda **kw: None)
+    monkeypatch.setattr(desk_manager.DeskManager, "_ensure_pulseaudio", lambda s, **kw: None)
     session = desk_manager.DeskSession(
         container="debian", key="debian:0", display=0, mode="display"
     )

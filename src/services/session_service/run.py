@@ -65,7 +65,7 @@ def command_capture(
     container: str,
     command: list[str],
     work_dir: str | None = None,
-    timeout: float | None = 120.0,
+    timeout: float | None = None,
     on_chunk=None,
     on_start=None,
 ) -> dict:

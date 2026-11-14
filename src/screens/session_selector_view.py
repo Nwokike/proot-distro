@@ -9,7 +9,7 @@ from __future__ import annotations
 import flet as ft
 
 from components import card, containers_required_empty_state, section_header
-from components.banner_ad import pooled_banner_ad
+from components.banner_ad import page_tail
 from core import theme, tokens
 from core.state import state
 from core.styles import status_dot
@@ -165,8 +165,7 @@ def SessionSelectorView() -> ft.Control:
         )
 
     # Banner at the very bottom — same position as the Files picker.
-    sections.append(pooled_banner_ad("terminal-1", page))
-    sections.append(ft.Container(height=tokens.NAV_BAR_CLEARANCE))
+    sections.append(page_tail("terminal-1", page))
     return ft.Column(
         controls=sections,
         spacing=tokens.SPACE_SM,

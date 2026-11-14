@@ -135,18 +135,16 @@ def DesktopView(session) -> ft.Control:
             msg = str(getattr(e, "data", "") or "")
             if msg:
                 session.log_tail.append(f"webview: {msg}")
-                state.display_logs = list(session.log_tail)
 
         def _on_console(e) -> None:
             message = getattr(e, "message", "")
             if message:
                 session.log_tail.append(f"console: {message}")
-                state.display_logs = list(session.log_tail)
 
         session.wv = WebView(
             url=st.display_url or session.url,
             expand=True,
-            bgcolor=ft.Colors.BLACK,
+            bgcolor=theme.BLACK,
             on_web_resource_error=_on_resource_error,
             on_console_message=_on_console,
         )

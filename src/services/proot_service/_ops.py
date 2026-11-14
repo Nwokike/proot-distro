@@ -1,4 +1,8 @@
-"""Mutating operations: install/remove/reset/backup/restore/copy/sync/cache/kill/build/push."""
+"""Mutating operations: install/remove/reset/backup/restore/copy/sync/cache/kill/build/push.
+
+`quiet=`/`verbose=` are passed through one-to-one because upstream's handlers
+accept them; the UI does not set them today (output is always captured) — they
+are API parity, not dead parameters."""
 
 from __future__ import annotations
 

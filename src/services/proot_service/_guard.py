@@ -5,7 +5,7 @@ which posts the exit code to the Dart exit bridge and RETURNS instead of
 raising — so on device any sys.exit(...) kills the whole app with that
 code, uncatchable. While an upstream handler runs in-process we swap
 sys.exit / os.exec* / os._exit for raising stubs (refcounted, restored
-afterwards). See docs/decisions.md D-027/D-028.
+afterwards) (D-027, D-028).
 """
 
 from __future__ import annotations
@@ -99,3 +99,4 @@ def _no_process_exit():
 # replace the whole app process with proot — a clean, traceless disappearance
 # on device. In-process calls to these handlers must print the command line
 # instead (get_proot_cmd=True); the PTY session spawns it. _run_command refuses
+# get_proot_cmd=False outright.

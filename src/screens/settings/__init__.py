@@ -4,7 +4,7 @@ import flet as ft
 
 from components import section_header
 from components.banner_ad import pooled_banner_ad
-from core import theme, tokens
+from core import layout, theme, tokens
 from core.constants import (
     APP_BUILD_NUMBER,
     APP_NAME,
@@ -27,7 +27,7 @@ def SettingsView() -> ft.Control:
     page = ft.context.page
     token, set_token = ft.use_state(st.docker_token)
 
-    is_narrow = bool(page and getattr(page, "width", None) and page.width < 600)
+    is_narrow = layout.is_narrow(page)
 
     def _theme_card(mode: str, label: str, icon: ft.IconData) -> ft.Container:
         """Compact icon+label selector card — CollabShell's preferences pattern:
@@ -383,8 +383,10 @@ def SettingsView() -> ft.Control:
                 "Kill all running sessions and close the app",
                 ft.TextButton(
                     "Exit",
-                    on_click=lambda _e: page.run_task(methods.exit_app),
-                    style=ft.ButtonStyle(color=ft.Colors.RED),
+                    on_click=lambda _e: dialogs.confirm_exit(
+                        page, lambda: page.run_task(methods.exit_app)
+                    ),
+                    style=ft.ButtonStyle(color=theme.danger()),
                 ),
                 stacked=is_narrow,
             ),

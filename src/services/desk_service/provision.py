@@ -39,8 +39,8 @@ _PM_BY_ID = {
 }
 
 # Base stack — deliberately MINIMAL: the session bus (GTK/Qt apps want one)
-# and openssh for the upstream localhost.run tunnel. The X server (Xvnc) and
-# PulseAudio run IN THE APP — single-app displays install NOTHING here.
+# and openssh for the display tunnel. The X server (Xvnc) and PulseAudio run
+# IN THE APP — single-app displays install NOTHING here.
 #
 # The desktop-only extras (icon theme / pixbuf / mime / fonts / rsvg) live in
 # the per-DESKTOP-ENVIRONMENT lists below: a minimal container ships none of
