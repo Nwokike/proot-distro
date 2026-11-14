@@ -61,6 +61,7 @@ def build_guest_script(
     geometry: str = "1280x720",
     xauth_cookie: str = "",
     tunnel: bool = False,
+    pulse: bool = True,
     app_command: str | None = None,
 ) -> str:
     """The `/bin/sh` payload for one display session on DISPLAY=:{display}.
@@ -71,7 +72,8 @@ def build_guest_script(
     switches to single-app mode: the DE launch is replaced by `sh -c
     <app_command>`. `port` is only used by the tunnel forward (the host server
     binds it itself). `geometry`/`xauth_cookie` are validated for the surface
-    that consumes them app-side.
+    that consumes them app-side. `pulse` is the app-side daemon's actual state:
+    PULSE_SERVER is only exported when it is listening.
     """
     if not isinstance(display, int) or not 0 <= display <= 99:
         raise ValueError(f"display must be an int 0-99, got {display!r}")
@@ -83,12 +85,22 @@ def build_guest_script(
         raise ValueError("xauth_cookie must be 32 hex chars")
     app_mode = app_command is not None and app_command.strip() != ""
     if app_mode:
-        session_cmd = f"sh -c {shlex.quote(app_command.strip())}"
+        child_cmd = f"sh -c {shlex.quote(app_command.strip())}"
     else:
         de = BY_KEY.get(desktop_env)
         if de is None:
             raise ValueError(f"unknown desktop environment: {desktop_env!r}")
-        session_cmd = f"dbus-run-session -- {shlex.quote(de.starter)}"
+        child_cmd = shlex.quote(de.starter)
+    # A session bus for the WHOLE display (desktop and every later shell see
+    # the same DBUS_SESSION_BUS_ADDRESS). dbus-run-session is the fallback:
+    # it would give the desktop a bus the later shells cannot see.
+    session_cmd = (
+        f'if [ -n "${{DBUS_SESSION_BUS_ADDRESS:-}}" ]; then\n'
+        f"  {child_cmd}\n"
+        f"else\n"
+        f"  dbus-run-session -- {child_cmd}\n"
+        f"fi"
+    )
 
     tunnel_block = ""
     if tunnel:
@@ -101,20 +113,32 @@ def build_guest_script(
             f" > {guest_tunnel_log(display)} 2>&1 ) &\n"
         )
 
-    guest_env = guest_display_env(display)
+    guest_env = guest_display_env(display, pulse=pulse)
+    bus = guest_env["DBUS_SESSION_BUS_ADDRESS"]
+    pulse_line = (
+        f"export PULSE_SERVER={guest_env['PULSE_SERVER']}\n" if "PULSE_SERVER" in guest_env else ""
+    )
     return f"""set -u
 export DISPLAY={guest_env["DISPLAY"]}
 export XAUTHORITY="{guest_env["XAUTHORITY"]}"
-export PULSE_SERVER={guest_env["PULSE_SERVER"]}
-export XDG_SESSION_TYPE=x11
+{pulse_line}export XDG_SESSION_TYPE=x11
 export XDG_RUNTIME_DIR=/tmp/runtime-root
 export NO_AT_BRIDGE=1
 export GTK_A11Y=none
 export LC_ALL=C.UTF-8
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
+mkdir -p /tmp/x11
 
 [ -f "$XAUTHORITY" ] || echo "warning: the display auth file is missing"
+
+# One session bus per display. Chromium and friends probe it on every start;
+# without it they spam "Failed to connect to the bus" and lose portals/UPower.
+if command -v dbus-daemon >/dev/null 2>&1; then
+  dbus-daemon --session --address="{bus}" \
+    --nofork --print-address=1 >/dev/null 2>&1 &
+  export DBUS_SESSION_BUS_ADDRESS="{bus}"
+fi
 
 {session_cmd} &
 SESSION_PID=$!

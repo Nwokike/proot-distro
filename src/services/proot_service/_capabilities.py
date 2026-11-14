@@ -36,7 +36,7 @@ def guest_capabilities(name: str) -> dict:
     """What this container can do for the display feature, probed from the
     rootfs on the host filesystem.
 
-    Returns {"os": {...}, "desk_ready": bool, "dbus": bool, "x_server": bool,
+    Returns {"os": {...}, "desk_ready": bool, "dbus": bool,
     "desktops": {name: bool}}. Raises with the real reason when the
     container/rootfs is unavailable — the UI surfaces it, never a silently
     empty probe. `desk_ready` is ALWAYS true: Xvnc + PulseAudio run in the app
@@ -69,7 +69,6 @@ def guest_capabilities(name: str) -> dict:
             logger.debug("capability check skipped %s/%s: %r", name, exc)
             return False
 
-    x_server = has("usr/bin/Xvfb") or has("usr/bin/Xorg")
     dbus = has(_STACK_BINARIES["dbus"])
 
     return {
@@ -81,7 +80,6 @@ def guest_capabilities(name: str) -> dict:
         },
         "desk_ready": True,
         "dbus": dbus,
-        "x_server": x_server,
         "desktops": {
             key: any(has(starter) for starter in starters)
             for key, starters in DESKTOP_STARTERS.items()

@@ -29,7 +29,6 @@ ALPINE_CAPS = {
     },
     "desk_ready": True,  # apps ALWAYS run — the display is in the app now
     "dbus": False,
-    "x_server": False,
     "desktops": {"xfce": False, "lxqt": False, "mate": False, "icewm": False, "openbox": False},
 }
 
@@ -91,7 +90,10 @@ def test_guest_script_app_mode_replaces_the_desktop():
     desktop = desk_script.build_guest_script(port=9999, desktop_env="xfce")
     assert "dbus-run-session -- startxfce4" in desktop
     app = desk_script.build_guest_script(port=9999, app_command="python3 app.py --flag 'x'")
-    assert "dbus-run-session" not in app
+    # A display-scoped session bus is started first; dbus-run-session is only
+    # the fallback when no bus is available (so later shells share it).
+    assert 'DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/x11/bus-0"' in app
+    assert "dbus-run-session -- sh -c" in app
     assert "sh -c 'python3 app.py --flag '\"'\"'x'\"'\"''" in app  # shlex-quoted command
     assert "startxfce4" not in app
 
@@ -276,23 +278,23 @@ def test_spawn_passes_the_wrap_surface_into_the_script_builder(monkeypatch):
     assert session2._process is not None
 
 
-def test_wait_xvfb_honors_stopping_as_a_quiet_cancel():
+def test_wait_xvnc_honors_stopping_as_a_quiet_cancel():
     manager = desk_manager.DeskManager()
     session = desk_manager.DeskSession(container="debian", key="debian:0")
     session.status = desk_manager.DeskStatus.STOPPING
     session._xvnc_process = type("P", (), {"poll": lambda self: 1})()
-    manager._wait_xvfb(session, 0.5)  # must return silently, no ERROR
+    manager._wait_xvnc(session, 0.5)  # must return silently, no ERROR
     assert session.status is desk_manager.DeskStatus.STOPPING
     assert session.error == ""
 
 
-def test_wait_xvfb_fails_on_dead_x_server(monkeypatch):
+def test_wait_xvnc_fails_on_dead_x_server(monkeypatch):
     manager = desk_manager.DeskManager()
     session = desk_manager.DeskSession(container="debian", key="debian:0", display=0)
     session.status = desk_manager.DeskStatus.STARTING
     session._xvnc_process = type("P", (), {"poll": lambda self: 1, "returncode": 1})()
     monkeypatch.setattr(desk_manager, "_tcp_open", lambda port: False)
-    manager._wait_xvfb(session, 0.5)
+    manager._wait_xvnc(session, 0.5)
     assert session.status is desk_manager.DeskStatus.ERROR
     assert "exited" in session.error
 
@@ -349,7 +351,7 @@ def _stub_server(monkeypatch, manager, server_class):
     monkeypatch.setattr(
         manager, "_spawn", lambda s: setattr(s, "status", desk_manager.DeskStatus.STARTING)
     )
-    monkeypatch.setattr(manager, "_wait_xvfb", lambda s, t: None)
+    monkeypatch.setattr(manager, "_wait_xvnc", lambda s, t: None)
 
 
 async def test_start_runs_the_server_in_process_and_stop_closes_it(monkeypatch):
@@ -413,7 +415,7 @@ async def test_start_failure_leaves_an_error_session_and_kills_the_groups(monkey
     def _failing_wait(session, timeout):
         manager._fail(session, "the X server exited", session.log_tail)
 
-    monkeypatch.setattr(manager, "_wait_xvfb", _failing_wait)
+    monkeypatch.setattr(manager, "_wait_xvnc", _failing_wait)
     monkeypatch.setattr(manager, "_kill_session", lambda s: killed.append(s.key))
 
     with pytest.raises(RuntimeError, match="the X server exited"):
@@ -502,6 +504,7 @@ def test_guest_display_env_prefers_desktop_then_lowest_display():
     env = manager.guest_display_env("debian")
     assert env["DISPLAY"] == "127.0.0.1:1"  # desktop wins over the app display
     assert env["XAUTHORITY"] == "/tmp/x11/xauth-1"
+    assert env["DBUS_SESSION_BUS_ADDRESS"] == "unix:path=/tmp/x11/bus-1"
     assert "PULSE_SERVER" not in env  # no daemon running in this test
 
     desktop_lo = desk_manager.DeskSession(container="debian", key="debian:0", display=0)
@@ -676,14 +679,14 @@ def test_stop_sync_sigterms_both_process_groups(monkeypatch):
     assert session.status is desk_manager.DeskStatus.IDLE
 
 
-def test_wait_xvfb_times_out_when_the_port_never_opens(monkeypatch):
+def test_wait_xvnc_times_out_when_the_port_never_opens(monkeypatch):
     manager = desk_manager.DeskManager()
     session = desk_manager.DeskSession(container="debian", key="debian:0", display=0)
     session.status = desk_manager.DeskStatus.STARTING
     session._xvnc_process = _fake_process(poll_result=None)
     monkeypatch.setattr(desk_manager, "_tcp_open", lambda port: False)
     monkeypatch.setattr(desk_manager.time, "sleep", lambda s: None)
-    manager._wait_xvfb(session, 0.5)
+    manager._wait_xvnc(session, 0.5)
     assert session.status is desk_manager.DeskStatus.ERROR
     assert "timed out" in session.error
 
@@ -1195,7 +1198,6 @@ async def test_start_x_display_injects_the_env_into_the_live_shell():
     """One tap from the terminal: a bare display starts and the exports are
     written INTO the running shell's PTY (no tab switch, no new shell)."""
     from app_controller import AppController
-    from tests.conftest import FakePage
 
     class _Sess:
         def __init__(self):
@@ -1227,9 +1229,7 @@ async def test_start_x_display_injects_the_env_into_the_live_shell():
 
     entry = _Entry()
     controller = object.__new__(AppController)
-    controller.page = FakePage()
-    controller.page.width = 800
-    controller.page.height = 600
+    controller.page = type("P", (), {"width": 800, "height": 600})()
     controller.session_manager = type("M", (), {"entries": {"debian": entry}})()
     controller.desk_manager = _Manager()
     snacks = []

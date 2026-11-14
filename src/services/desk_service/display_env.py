@@ -23,6 +23,10 @@ def guest_display_env(display: int, *, pulse: bool = True) -> dict[str, str]:
     env = {
         "DISPLAY": f"127.0.0.1:{display}",
         "XAUTHORITY": f"/tmp/x11/xauth-{display}",  # noqa: S108 - guest rootfs path
+        # The display script starts one session bus per display; shells (and
+        # the apps they launch) must see the SAME bus, or Chromium's dbus
+        # probes fail with "Failed to connect" (device 2026-11-13).
+        "DBUS_SESSION_BUS_ADDRESS": f"unix:path=/tmp/x11/bus-{display}",
     }
     if pulse:
         env["PULSE_SERVER"] = f"127.0.0.1:{PULSE_TCP_PORT}"

@@ -59,7 +59,9 @@ _BASE_PACKAGES = {
         "openssh-client",
     ],
     "dnf": [
-        "dbus-x11",
+        # Fedora/RHEL have no dbus-x11; dbus-tools carries dbus-run-session.
+        "dbus-daemon",
+        "dbus-tools",
         "openssh-clients",
     ],
     "pacman": [
@@ -67,7 +69,9 @@ _BASE_PACKAGES = {
         "openssh",
     ],
     "zypper": [
-        "dbus-1-x11",
+        # Tumbleweed carries the daemon + tools in dbus-1-daemon (there is no
+        # dbus-1-x11 there; the name exists only in Leap).
+        "dbus-1-daemon",
         "openssh",
     ],
 }
@@ -78,6 +82,8 @@ _BASE_PACKAGES = {
 # Single-app displays don't, which is why they are NOT in the base stack.
 _DESKTOP_EXTRAS = {
     "apk": [
+        # core X bitmap fonts — xterm and Xvnc's font path need them
+        "font-misc-misc",
         "adwaita-icon-theme",
         "gdk-pixbuf",
         "shared-mime-info",
@@ -86,6 +92,7 @@ _DESKTOP_EXTRAS = {
         "font-dejavu",
     ],
     "apt-get": [
+        "xfonts-base",
         "adwaita-icon-theme",
         "shared-mime-info",
         "desktop-file-utils",
@@ -94,6 +101,7 @@ _DESKTOP_EXTRAS = {
         "librsvg2-common",
     ],
     "dnf": [
+        "xorg-x11-fonts-misc",
         "adwaita-icon-theme",
         "shared-mime-info",
         "desktop-file-utils",
@@ -101,6 +109,7 @@ _DESKTOP_EXTRAS = {
         "librsvg2",
     ],
     "pacman": [
+        "xorg-fonts-misc",
         "adwaita-icon-theme",
         "shared-mime-info",
         "desktop-file-utils",
@@ -108,11 +117,12 @@ _DESKTOP_EXTRAS = {
         "librsvg",
     ],
     "zypper": [
+        "xorg-x11-fonts-core",
         "adwaita-icon-theme",
         "shared-mime-info",
         "desktop-file-utils",
         "dejavu-fonts",
-        "librsvg",
+        "librsvg-2-2",
     ],
 }
 
@@ -137,7 +147,8 @@ _DESKTOP_PACKAGES = {
         # xfsettingsd ("No such file or directory" on device) and the session
         # degrades to a bare window manager on a black root.
         "xfce": ["xfce4-session", "xfwm4", "xfce4-panel", "xfdesktop", "xfce4-settings"],
-        "lxqt": ["lxqt-desktop"],
+        # Fedora has no lxqt-desktop package; the comps group is lxqt-desktop.
+        "lxqt": ["@lxqt-desktop"],
         "mate": ["mate-session-manager"],
         "icewm": ["icewm"],
         "openbox": ["openbox"],
@@ -151,8 +162,8 @@ _DESKTOP_PACKAGES = {
     },
     "zypper": {
         "xfce": ["xfce4-session", "xfwm4", "xfce4-panel", "xfdesktop"],
-        "lxqt": ["lxqt-desktop"],
-        "mate": ["mate-desktop-environment"],
+        "lxqt": ["patterns-lxqt-lxqt"],
+        "mate": ["patterns-mate-mate"],
         "icewm": ["icewm"],
         "openbox": ["openbox"],
     },
@@ -163,7 +174,9 @@ _UPDATE_COMMANDS = {
     "apt-get": "apt-get update",
     "dnf": "dnf makecache --refresh=never 2>/dev/null || true",
     "pacman": "pacman -Sy --noconfirm",
-    "zypper": "zypper --non-interactive refresh",
+    # Metadata can be pinned stale (zypper keeps a 0-byte cache on HTTP 304 —
+    # device 2026-11-14 "repomd.xml Document is empty"); clean first.
+    "zypper": "zypper clean -a && zypper --non-interactive refresh",
 }
 
 _INSTALL_COMMANDS = {
@@ -197,9 +210,10 @@ def unsupported_reason(caps: dict) -> str | None:
     """Why this container cannot grow a display, or None when it can."""
     if package_manager_for(caps) is None:
         return (
-            "This container has no supported package manager, so Xvfb and the "
-            "desktop cannot be installed inside it. Use a Debian, Ubuntu, "
-            "Alpine, Fedora or Arch image instead."
+            "This container has no supported package manager, so the desktop "
+            "packages cannot be installed inside it. The display server itself "
+            "ships with the app; use a Debian, Ubuntu, Alpine, Fedora or Arch "
+            "image for a full desktop."
         )
     return None
 

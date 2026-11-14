@@ -116,3 +116,36 @@ def test_hardening_makes_the_termux_only_login_options_real(monkeypatch, tmp_pat
     assert "--kill-on-exit" in isolated  # teardown safety survives isolation
     assert "--link2symlink" not in isolated
     assert not any("--bind=/dev/urandom" in arg for arg in isolated)
+
+
+def test_hardening_keeps_the_qemu_operand_with_its_flag(monkeypatch, tmp_path):
+    """Cross-arch logins carry `-q <absolute emulator path>` (upstream
+    arch.py). That path is an operand, not the guest command: hardening must
+    insert its flags before `-q`, never between the flag and its value."""
+    from services.session_service import argv as argv_mod
+
+    monkeypatch.setenv("ANDROID_NATIVE_LIBRARY_DIR", str(tmp_path))
+    rootfs = tmp_path / "rootfs"
+    rootfs.mkdir()
+    env, argv = argv_mod._parse_proot_cmd_line(
+        f"env -i proot -q /app/bin/qemu-aarch64 --rootfs={rootfs} --cwd=/ --bind=/a /bin/sh -l"
+    )
+    _env, hard = argv_mod._harden_session(dict(env), list(argv), "debian")
+
+    assert hard[1:3] == ["-q", "/app/bin/qemu-aarch64"]
+    assert hard[-2:] == ["/bin/sh", "-l"]  # the guest command is untouched
+    assert "--link2symlink" in hard  # hardening still applied
+    assert hard.index("--link2symlink") > hard.index("-q")  # never inside the pair
+
+
+def test_shared_tmp_does_not_need_the_fallback_import(monkeypatch, tmp_path):
+    """When --rootfs is a real dir the fallback branch is skipped; shared_tmp
+    must still build its bind (regression: UnboundLocalError)."""
+    from services.session_service import argv as argv_mod
+
+    monkeypatch.setenv("ANDROID_NATIVE_LIBRARY_DIR", str(tmp_path))
+    rootfs = tmp_path / "rootfs"
+    rootfs.mkdir()
+    env, argv = argv_mod._parse_proot_cmd_line(f"env -i proot --rootfs={rootfs} --cwd=/ /bin/sh -l")
+    _env, hard = argv_mod._harden_session(dict(env), list(argv), "debian", shared_tmp=True)
+    assert any(a.endswith(":/tmp") and "shared-tmp" in a for a in hard)

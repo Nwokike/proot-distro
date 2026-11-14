@@ -26,9 +26,9 @@ from ._common import _reason
 
 logger = logging.getLogger(__name__)
 
-# Xvfb screen for "auto" geometry: long side 1280 keeps JPEG capture + WS
-# streaming sane on phones; the viewer letterboxes any aspect anyway, and a
-# preset/custom resolution bypasses this.
+# Xvnc screen for "auto" geometry: long side 1280 keeps RFB updates sane on
+# phones; the viewer letterboxes any aspect anyway, and a preset/custom
+# resolution bypasses this.
 _AUTO_GEOMETRY_LONG_SIDE = 1280
 
 # In-flight probe dedup (error results are never cached — see probe_display).
@@ -175,7 +175,7 @@ class DisplayActions:
         options: dict | None = None,
     ) -> None:
         """Start one display session (key `container:display`). `app_command`
-        switches to single-app mode (bare Xvfb, no DE). `options` carries the
+        switches to single-app mode (bare Xvnc, no DE). `options` carries the
         advanced login options (user, work_dir, env, bind, shared_tmp,
         shared_home, isolated, fix_low_ports) — everything proot-distro's
         login supports, so a technical user has full control."""

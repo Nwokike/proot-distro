@@ -46,10 +46,10 @@ logger = logging.getLogger(__name__)
 
 MAX_LOG_LINES = 300
 MAX_LOG_BYTES = 2 * 1024 * 1024
-XVFB_READY_TIMEOUT = 60.0  # Xvnc itself is quick; the DE loads in parallel
+XVNC_READY_TIMEOUT = 60.0  # Xvnc itself is quick; the DE loads in parallel
 TUNNEL_RETRIES = 60  # polled on a daemon thread AFTER ready — never blocks start()
 MAX_DISPLAY_NUMBER = 99
-XVFB_TCP_BASE = xvnc_runtime.RFB_PORT_BASE  # the X port IS the RFB port base +N
+XVNC_RFB_BASE = xvnc_runtime.RFB_PORT_BASE  # Xvnc: RFB on 5900+N, X on 6000+N
 # noVNC knobs (0-9) — the session surface maps the launcher's quality preset
 # onto qualityLevel and exposes compression directly.
 DEFAULT_COMPRESSION_LEVEL = 2
@@ -68,7 +68,7 @@ class DeskStatus(StrEnum):
 class DeskSession:
     container: str
     key: str = ""  # "{container}:{display}" — the manager's dict key
-    mode: str = "desktop"  # "desktop" | "app" (single app on a bare Xvfb)
+    mode: str = "desktop"  # "desktop" | "app" (single app on a bare Xvnc)
     app_command: str = ""  # set in app mode
     desktop_env: str = DEFAULT_DESKTOP
     display: int = 0
@@ -146,7 +146,7 @@ def xauth_cookie() -> str:
         return _XAUTH_COOKIE
 
 
-def xvfb_rfb_port(display: int) -> int:
+def xvnc_rfb_port(display: int) -> int:
     """Xvnc serves the X protocol AND RFB from related ports: X on 6000+N
     (what the guest apps use), RFB on 5900+N (what the stream proxy connects
     to). Both are loopback-only from the guest's point of view."""
@@ -184,7 +184,7 @@ def _read_tunnel_url(container: str, display: int) -> str:
 
 def _tcp_open(port: int) -> bool:
     """True when something accepts TCP connections on 127.0.0.1:port — the
-    Xvfb readiness signal (the server's /health lives in-process now)."""
+    Xvnc readiness signal (the stream server's HTTP check follows this)."""
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=1.0):
             return True
@@ -253,9 +253,9 @@ class DeskManager:
     ) -> DeskSession:
         with self._lock:
             if display is None:
-                # Display numbers are GLOBAL: Xvfb binds TCP 6000+N on the host
+                # Display numbers are GLOBAL: Xvnc binds TCP 6000+N on the host
                 # network namespace that proot shares, so two containers must
-                # never claim the same :N — the second Xvfb would fail to bind
+                # never claim the same :N — the second Xvnc would fail to bind
                 # while the readiness probe sees the first one's open port.
                 display = self.next_free_display()
                 if display < 0:
@@ -306,7 +306,7 @@ class DeskManager:
         session._loop = asyncio.get_running_loop()
         try:
             await asyncio.to_thread(self._spawn, session)
-            await asyncio.to_thread(self._wait_xvfb, session, XVFB_READY_TIMEOUT)
+            await asyncio.to_thread(self._wait_xvnc, session, XVNC_READY_TIMEOUT)
         except Exception as exc:
             with self._lock:
                 session.status = DeskStatus.ERROR
@@ -316,7 +316,7 @@ class DeskManager:
         if session.status is DeskStatus.STOPPING:
             return session
         if session.status is DeskStatus.ERROR:
-            # _wait_xvfb does not raise on failure — it marks the session ERROR
+            # _wait_xvnc does not raise on failure — it marks the session ERROR
             # ("the X server exited" / readiness timeout). A failed start must
             # never reach RUNNING: tear the process tree down and surface it
             # (device 2026-11-13: the user got a "running" dead surface with
@@ -329,7 +329,7 @@ class DeskManager:
             server = stream_server.DisplayStreamServer(
                 host,
                 session.port,
-                xvfb_rfb_port(session.display),
+                xvnc_rfb_port(session.display),
                 _generate_code(),
                 quality=_quality_level(quality),
                 compression=compression,
@@ -491,6 +491,12 @@ class DeskManager:
         try:
             # Xvnc FIRST — the guest session connects to its X port the moment
             # it starts. Own process group, own log reader.
+            # Core X fonts: the bundled set first (bare containers have none),
+            # then whatever font dirs the container itself provides.
+            staged_fonts = xvnc_runtime.ensure_font_dir()
+            font_paths = (
+                [str(staged_fonts)] if staged_fonts is not None else []
+            ) + xvnc_runtime.guest_font_dirs(session.container)
             xvnc_argv, xvnc_env = xvnc_runtime.xvnc_command(
                 session.display,
                 session.geometry,
@@ -502,6 +508,7 @@ class DeskManager:
                 clipboard=session.clipboard,
                 disconnect_timeout=session.disconnect_timeout,
                 desktop_name=session.desktop_name or session.key,
+                font_paths=font_paths,
             )
             session._xvnc_process = xvnc_runtime.spawn(xvnc_argv, xvnc_env)
             threading.Thread(
@@ -531,6 +538,7 @@ class DeskManager:
                 geometry=session.geometry,
                 xauth_cookie=xauth_cookie(),
                 tunnel=session.tunnel,
+                pulse=self.pulse_server_alive(),
                 app_command=session.app_command or None,
             )
             guest_script = _write_guest_script(session.container, script, session.display)
@@ -729,9 +737,9 @@ class DeskManager:
         self._pulse_process = None
         self._pulse_config = None
 
-    def _wait_xvfb(self, session: DeskSession, timeout: float) -> None:
+    def _wait_xvnc(self, session: DeskSession, timeout: float) -> None:
         deadline = time.monotonic() + timeout
-        port = XVFB_TCP_BASE + session.display
+        port = XVNC_RFB_BASE + session.display
         while time.monotonic() < deadline:
             if session.status is DeskStatus.STOPPING:
                 return  # user pressed Cancel — not an error

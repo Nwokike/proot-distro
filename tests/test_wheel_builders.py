@@ -244,3 +244,84 @@ def test_qemu_builder_ships_all_four_emulators_per_abi():
     # DT_NEEDED rewrites are same-or-shorter (in-place byte rewriting)
     for old, new in q._NEEDED_REWRITES:
         assert len(new.rstrip(b"\0")) <= len(old.rstrip(b"\0"))
+
+
+# ── PCF FONT-property parsing (fonts.dir must be XLFD-exact) ─────────────────
+
+
+def _make_pcf(font_name: str, *, big_endian: bool = True, decoy: bytes = b"") -> bytes:
+    """A minimal PCF with one PROPERTIES table, byte-for-byte per the PCF spec:
+    table directory (LSB CARD32s), then format word, nprops, 9-byte property
+    entries, 4-byte padding, stringSize and the NUL-separated string block."""
+    import struct
+
+    order = ">" if big_endian else "<"
+    fmt = 0x0000000E if big_endian else 0x0000000F
+    strings = b""
+    offsets: dict[str, int] = {}
+
+    def add(text: str) -> int:
+        nonlocal strings
+        blob = text.encode("ascii") + b"\x00"
+        offsets.setdefault(text, len(strings))
+        if offsets[text] == len(strings):
+            strings += blob
+        return offsets[text]
+
+    props: list[tuple[str, str | int]] = [
+        ("FOUNDRY", "Misc"),
+        ("FONT", font_name),
+        ("POINT_SIZE", 200),
+    ]
+    entries = bytearray()
+    for name, value in props:
+        name_off = add(name)
+        if isinstance(value, int):
+            entries += struct.pack(order + "IBI", name_off, 0, value)
+        else:
+            entries += struct.pack(order + "IBI", name_off, 1, add(value))
+    props_data = struct.pack("<I", fmt) + struct.pack(order + "I", len(props)) + entries
+    props_data += b"\x00" * ((-len(props_data)) % 4)
+    props_data += struct.pack(order + "I", len(strings)) + strings + decoy
+    base = 8 + 16
+    header = b"\x01fcp" + struct.pack("<I", 1)
+    header += struct.pack("<IIII", 1, fmt, len(props_data), base)
+    return header + props_data
+
+
+def test_pcf_font_name_follows_the_properties_table_not_byte_runs():
+    """The old byte scan picked dash runs out of glyph bitmaps — three CJK
+    fonts got control-byte 'names'. The FONT property is authoritative."""
+    xlfd = "-Misc-Fixed-Medium-R-Normal-ja-13-120-75-75-C-120-ISO10646-1"
+    decoy = b"\x00" + b"-" + b"\x01" * 40 + b"-" * 12 + b"\x02" * 8
+    raw = _make_pcf(xlfd, decoy=decoy)
+    assert xv_builder._pcf_font_name(raw) == xlfd
+
+
+def test_pcf_font_name_reads_both_byte_orders_and_rejects_non_pcf():
+    xlfd = "-Misc-Fixed-Medium-R-Normal--20-200-75-75-C-100-ISO8859-1"
+    assert xv_builder._pcf_font_name(_make_pcf(xlfd, big_endian=True)) == xlfd
+    assert xv_builder._pcf_font_name(_make_pcf(xlfd, big_endian=False)) == xlfd
+    assert xv_builder._pcf_font_name(b"\x01fcp" + b"\x00" * 8) is None
+    assert xv_builder._pcf_font_name(b"not a pcf") is None
+
+
+def test_make_fonts_dir_writes_filename_then_xlfd_and_skips_non_text_fonts():
+    import gzip
+
+    blobs: dict[str, bytes] = {}
+    for size in range(6, 16):
+        xlfd = f"-Misc-Fixed-Medium-R-Normal--{size}-{size * 10}-75-75-C-{size * 10}-ISO8859-1"
+        blobs[f"{size}x{size}.pcf.gz"] = gzip.compress(_make_pcf(xlfd))
+    # A cursor font has a FONT property that is not an XLFD: not indexed.
+    blobs["cursor.pcf.gz"] = gzip.compress(_make_pcf("cursor"))
+
+    out = xv_builder._make_fonts_dir(blobs).decode()
+    first, *lines = out.splitlines()
+    assert first == str(len(lines)) == "10"
+    assert all(len(line.split(" ")) == 2 for line in lines)
+    assert "6x6.pcf.gz -Misc-Fixed-Medium-R-Normal--6-60-75-75-C-60-ISO8859-1" in lines
+    assert not any(line.startswith("cursor.pcf.gz") for line in lines)
+
+    with pytest.raises(SystemExit):
+        xv_builder._make_fonts_dir({"cursor.pcf.gz": blobs["cursor.pcf.gz"]})

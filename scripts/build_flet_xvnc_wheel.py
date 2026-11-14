@@ -105,6 +105,14 @@ _ELF_PAYLOADS: dict[str, tuple[str, str, str | None]] = {
 # ships the xkb tree under share/xkeyboard-config-2/ (not share/X11/xkb/); the
 # contents ARE the standard xkb root (compat/ keycodes/ types/ symbols/ rules/…).
 _DATA_PAYLOADS: tuple[tuple[str, str, str], ...] = (
+    # Core X bitmap fonts: Xvnc's font path + xterm need them even in a bare
+    # container (device 2026-11-13: six "Could not init font path" lines and
+    # "xterm: cannot load font").
+    (
+        "xorg-fonts-misc",
+        "data/data/com.termux/files/usr/share/fonts/misc/",
+        "flet_xvnc/data/fonts/misc/",
+    ),
     (
         "xkeyboard-config",
         "data/data/com.termux/files/usr/share/xkeyboard-config-2/",
@@ -177,6 +185,10 @@ _PINNED_SOURCES = {
             "libxkbfile": (
                 "pool/main/libx/libxkbfile/libxkbfile_1.2.0_aarch64.deb",
                 "2456caefcf93f5821f6c7c753eae50ea015864c948e678f3c8e2aec9c3c3dbd5",
+            ),
+            "xorg-fonts-misc": (
+                "pool/main/x/xorg-fonts-misc/xorg-fonts-misc_1.0.4_all.deb",
+                "147796032e94f6dfbdfc71948a95fbaf791e62a5eff9eac8baf3b11d7af6fa0c",
             ),
             "xkeyboard-config": (
                 "pool/main/x/xkeyboard-config/xkeyboard-config_2.49_all.deb",
@@ -312,6 +324,10 @@ _PINNED_SOURCES = {
                 "pool/main/libx/libxkbfile/libxkbfile_1.2.0_x86_64.deb",
                 "676c4294e85a2ca9e3f95f74e0791d0b57b4a31f28a536a5801a2d76d30b8252",
             ),
+            "xorg-fonts-misc": (
+                "pool/main/x/xorg-fonts-misc/xorg-fonts-misc_1.0.4_all.deb",
+                "147796032e94f6dfbdfc71948a95fbaf791e62a5eff9eac8baf3b11d7af6fa0c",
+            ),
             "xkeyboard-config": (
                 "pool/main/x/xkeyboard-config/xkeyboard-config_2.49_all.deb",
                 "9523dbe04fd7fba2218451813041872957dca459d86dfed9c23a3b247e8fa371",
@@ -390,12 +406,104 @@ _EXTERNAL_SONAMES = {"libandroid-shmem.so"}
 # Packages that live in the Termux x11 repo rather than main.
 _X11_PACKAGES = {
     "tigervnc",
+    "xorg-fonts-misc",
     "xorg-xkbcomp",
     "libxfont2",
     "libxkbfile",
     "xkeyboard-config",
     "libfontenc",
 }
+
+
+def _pcf_font_name(raw: bytes) -> str | None:
+    """The FONT property of an uncompressed PCF file, or None.
+
+    Layout (X.Org PCF spec, as implemented by FreeType's
+    `pcf_get_properties`): a little-endian table directory points at the
+    PROPERTIES table, which repeats its format word, then `nprops`, then
+    `nprops` 9-byte entries `(u32 nameOffset, u8 isString, u32 value)`, a
+    `u32 stringSize` and the NUL-separated string block. Every number after
+    the format word uses the format's byte-order bit (bit 0 = 0 → MSB first).
+    Name/value offsets are relative to the string block.
+
+    Reading the property is the only correct way to get the name: a PCF also
+    stores metrics and glyph bitmaps, so a raw byte scan finds dash runs
+    inside binary data (it produced control-byte "names" for the CJK fonts)."""
+    import struct
+
+    if raw[:4] != b"\x01fcp":
+        return None
+    n_tables = struct.unpack_from("<I", raw, 4)[0]
+    base = None
+    for index in range(n_tables):
+        entry = 8 + index * 16
+        if entry + 16 > len(raw):
+            return None
+        if struct.unpack_from("<I", raw, entry)[0] == 1:  # PCF_PROPERTIES
+            base = struct.unpack_from("<I", raw, entry + 12)[0]
+            break
+    if base is None or base + 8 > len(raw):
+        return None
+    fmt = struct.unpack_from("<I", raw, base)[0]  # format word itself is LSB-first
+    order = ">" if fmt & 1 == 0 else "<"
+    nprops = struct.unpack_from(order + "I", raw, base + 4)[0]
+    if not 0 < nprops < 256:  # FreeType's own sanity caps
+        return None
+    entries: list[tuple[int, int, int]] = []
+    pos = base + 8
+    for _ in range(nprops):
+        if pos + 9 > len(raw):
+            return None
+        entries.append(struct.unpack_from(order + "IBI", raw, pos))
+        pos += 9
+    pos += (-pos) % 4  # entries are padded to a 4-byte boundary
+    if pos + 4 > len(raw):
+        return None
+    size = struct.unpack_from(order + "I", raw, pos)[0]
+    strings = raw[pos + 4 : pos + 4 + size]
+
+    def cstr(offset: int) -> str | None:
+        if not 0 <= offset < len(strings):
+            return None
+        end = strings.find(b"\x00", offset)
+        if end < 0:
+            return None
+        try:
+            return strings[offset:end].decode("ascii")
+        except UnicodeDecodeError:
+            return None
+
+    for name_offset, is_string, value in entries:
+        if is_string and cstr(name_offset) == "FONT":
+            return cstr(value)
+    return None
+
+
+def _make_fonts_dir(font_blobs: dict[str, bytes]) -> bytes:
+    """Generate a fonts.dir from the PCF files themselves.
+
+    Xvnc's -fp needs fonts.dir to enumerate a bitmap directory, and Termux's
+    deb only ships the .pcf.gz files (fonts.dir is generated by a postinst).
+    Each PCF's FONT property IS the XLFD line mkfontdir would write. Files
+    without an XLFD FONT property are non-text fonts (cursor, DECW$CURSOR,
+    DECW$SESSION, micro) — Xvnc still loads them by name, so they are not
+    indexed. A build that finds too few text fonts fails instead of shipping
+    a broken font path."""
+    import gzip
+
+    entries: list[str] = []
+    for name, blob in sorted(font_blobs.items()):
+        try:
+            raw = gzip.decompress(blob)
+        except OSError as exc:
+            raise SystemExit(f"{name}: not gzip ({exc})") from exc
+        font = _pcf_font_name(raw)
+        if font is None or not font.startswith("-") or font.count("-") < 10:
+            continue
+        entries.append(f"{name} {font}")
+    if len(entries) < 10:
+        raise SystemExit(f"fonts.dir would list only {len(entries)} fonts — check the payload")
+    return (f"{len(entries)}\n" + "\n".join(entries) + "\n").encode()
 
 
 def _fetch(url: str) -> bytes:
@@ -561,6 +669,11 @@ def main() -> int:
                 raise SystemExit(f"{pkg}: no files under {src_prefix}")
             for name, blob in sorted(members.items()):
                 entries[f"{dest_prefix}{name[len(src_prefix) :]}"] = blob
+            if "data/fonts/misc" in dest_prefix:
+                font_blobs = {
+                    k.rsplit("/", 1)[-1]: v for k, v in members.items() if k.endswith(".pcf.gz")
+                }
+                entries[f"{dest_prefix}fonts.dir"] = _make_fonts_dir(font_blobs)
 
         # ── provenance + licensing ────────────────────────────────────────────
         entries[f"{DIST_NAME}/__init__.py"] = (
@@ -608,7 +721,8 @@ def main() -> int:
             "| GnuTLS / Nettle / Hogweed / GMP | 3.8.13 / 3.10.2 / 6.3.0 | LGPL-2.1-or-later |\n"
             "| libpixman / libXfont2 / libXau / libXdmcp / libxshmfence | — | MIT |\n"
             "| libglvnd | 1.7.0 | MIT |\n"
-            "| xkeyboard-config | 2.49 | MIT |\n\n"
+            "| xkeyboard-config | 2.49 | MIT |\n"
+            "| xorg-fonts-misc (X.Org misc bitmap fonts) | 1.0.4 | X11 / MIT |\n\n"
             "Source offer: see the companion app's LICENSES/ + THIRD-PARTY-SOURCES.md "
             "(github.com/Nwokike/proot-distro) and the upstream projects above.\n"
         ).encode()

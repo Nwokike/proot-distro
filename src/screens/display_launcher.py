@@ -193,7 +193,7 @@ def _advanced_display_controls() -> ft.Control:
                 controls=[
                     ft.Dropdown(
                         label="Viewers",
-                        value=str(settings.get("shared_policy", "auto")),
+                        value=str(settings.get("shared_policy", "always")),
                         options=[
                             # noVNC always asks for shared=1, so upstream's
                             # "auto" is observably identical to "always" —
@@ -1013,7 +1013,7 @@ def _show_new_display_mode_sheet(page: ft.Page, methods, container: str) -> None
 
 def _show_app_sheet(page: ft.Page, methods, container: str) -> None:
     """Second-level sheet: probed guest apps + a custom command — each starts a
-    SINGLE-APP display (bare Xvfb, no desktop) on the next free display number."""
+    SINGLE-APP display (bare Xvnc, no desktop) on the next free display number."""
     results = ft.Column(
         controls=[ft.ProgressRing(width=tokens.PROGRESS_RING_MD, height=tokens.PROGRESS_RING_MD)],
         spacing=tokens.SPACE_XS,

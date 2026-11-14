@@ -185,11 +185,26 @@ def test_xvnc_command_threads_every_real_option(fake_native, tmp_path):
     assert "-MaxDisconnectionTime=1800" in argv
     assert argv[argv.index("-desktop") + 1] == "debian:1"
 
-    # Auto policy keeps upstream defaults (no sharing flags at all).
+    # The app default is shared (several viewers); "auto" leaves the flags off.
     plain, _ = xvnc_runtime.xvnc_command(1, "1280x720", tmp_path / "x", tmp_path / "y")
-    for absent in ("-AlwaysShared=1", "-NeverShared=1", "-MaxDisconnectionTime=1800"):
-        assert absent not in plain
+    assert "-AlwaysShared=1" in plain
+    assert "-NeverShared=1" not in plain
+    assert "-MaxDisconnectionTime=1800" not in plain
     assert "-FrameRate=30" in plain  # the app default
+    auto, _ = xvnc_runtime.xvnc_command(
+        1, "1280x720", tmp_path / "x", tmp_path / "y", shared_policy="auto"
+    )
+    assert "-AlwaysShared=1" not in auto and "-NeverShared=1" not in auto
+
+    # Bundled fonts become -fp (comma-separated; comma-bearing paths dropped).
+    fonts, _ = xvnc_runtime.xvnc_command(
+        1,
+        "1280x720",
+        tmp_path / "x",
+        tmp_path / "y",
+        font_paths=["/fonts", "/bad,path"],
+    )
+    assert fonts[fonts.index("-fp") + 1] == "/fonts"
 
 
 def test_pulse_config_mic_toggle_and_audio_knobs(fake_native, tmp_path, monkeypatch):
@@ -427,3 +442,36 @@ def test_spawn_uses_its_own_process_group(monkeypatch):
     xvnc_runtime.spawn(["/bin/true"], {})
     assert seen["start_new_session"] is True
     assert seen["stdout"] == xvnc_runtime.subprocess.PIPE
+
+
+def test_fonts_are_staged_from_a_zipped_wheel(monkeypatch, tmp_path):
+    """Same zip-safe contract as xkb: the wheel's font tree (PCF + fonts.dir)
+    is read through importlib.resources when packages import from a zip."""
+    import sys
+    import zipfile
+
+    zip_path = tmp_path / "sitepackages.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("flet_xvnc/__init__.py", 'XVNC_VERSION = "1.16.2"\n')
+        zf.writestr("flet_xvnc/data/fonts/misc/10x20-ISO8859-1.pcf.gz", b"pcf")
+        zf.writestr("flet_xvnc/data/fonts/misc/fonts.dir", "1\na.pcf.gz -Misc-Fixed\n")
+    monkeypatch.syspath_prepend(str(zip_path))
+    monkeypatch.delitem(sys.modules, "flet_xvnc", raising=False)
+    monkeypatch.setattr(xvnc_runtime.storage_paths, "support_root", lambda: tmp_path / "support")
+
+    dest = xvnc_runtime.ensure_font_dir()
+    assert dest is not None
+    assert (dest / "fonts.dir").read_text(encoding="utf-8").startswith("1\n")
+    assert (dest / "10x20-ISO8859-1.pcf.gz").is_file()
+
+
+def test_guest_font_dirs_only_lists_dirs_with_fonts_dir(tmp_path, monkeypatch):
+    from core import storage_paths
+
+    monkeypatch.setattr(storage_paths, "containers_dir", lambda: tmp_path / "containers")
+    misc = tmp_path / "containers" / "debian" / "rootfs" / "usr/share/fonts/misc"
+    misc.mkdir(parents=True)
+    (misc / "fonts.dir").write_text("0\n", encoding="utf-8")
+    other = tmp_path / "containers" / "debian" / "rootfs" / "usr/share/fonts/TTF"
+    other.mkdir(parents=True)
+    assert xvnc_runtime.guest_font_dirs("debian") == [str(misc)]

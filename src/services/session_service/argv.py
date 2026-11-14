@@ -9,6 +9,7 @@ import re
 import shlex
 from pathlib import Path
 
+from core import storage_paths
 from services import proot_service
 
 logger = logging.getLogger(__name__)
@@ -51,8 +52,6 @@ def _harden_session(
 
     # If rootfs was relative or missing, query proot_service storage
     if rootfs_path is None or not rootfs_path.is_dir():
-        from core import storage_paths
-
         candidate = storage_paths.containers_dir() / container / "rootfs"
         if candidate.is_dir():
             rootfs_path = candidate
@@ -115,10 +114,19 @@ def _harden_session(
                 except OSError:
                     pass
 
-    # Hardened Android extensions (device-proven in M0 spike)
-    # Only injected before the inner guest command on Android
+    # Hardened Android extensions (device-proven in M0 spike), injected right
+    # before the inner guest command. Every proot flag is one token EXCEPT -q:
+    # upstream emits `-q <absolute emulator path>` (arch.py get_emulator_args),
+    # and that path must not be mistaken for the guest command.
     inner_idx = len(argv)
+    skip_next = False
     for idx, arg in enumerate(argv[1:], start=1):
+        if skip_next:
+            skip_next = False
+            continue
+        if arg in ("-q", "--emulator"):
+            skip_next = True
+            continue
         if not arg.startswith("-"):
             inner_idx = idx
             break

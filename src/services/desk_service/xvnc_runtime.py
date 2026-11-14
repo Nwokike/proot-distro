@@ -6,7 +6,7 @@ display over loopback TCP, the app's stream server proxies RFB over WebSocket to
 the noVNC viewer, and the framebuffer never touches Python. PulseAudio (Termux's
 Android-patched build) plays guest audio straight to the phone's speakers via the
 aaudio module and feeds the mic back through sles-source — guest apps connect with
-PULSE_SERVER=127.0.0.1 (proot shares the host loopback).
+PULSE_SERVER=127.0.0.1:4713 (proot shares the host loopback).
 
 Everything here is device-gated: the payloads ship as jniLibs (libXvnc.so /
 libpulseaudio.so / module-*.so), so this module only works inside the packaged
@@ -194,6 +194,63 @@ def ensure_xkb_dir() -> Path:
     return dest
 
 
+# The core X bitmap font directories a container may provide (with fonts.dir).
+_GUEST_FONT_LAYOUTS = (
+    "usr/share/fonts/misc",
+    "usr/share/fonts/X11/misc",
+    "usr/share/X11/fonts/misc",
+    "usr/share/fonts/TTF",
+    "usr/share/fonts/truetype",
+    "usr/share/fonts/X11/TTF",
+)
+
+
+def ensure_font_dir() -> Path | None:
+    """Stage the wheel's bundled core X fonts (PCF + fonts.dir) for -fp.
+
+    Xvnc's compiled-in font path points at the Termux prefix (absent in the
+    app), so every start logged six "Could not init font path element" lines
+    and xterm could not load a font (device 2026-11-13). The wheel bundles
+    xorg-fonts-misc plus a generated fonts.dir; stage it through the zip-safe
+    Traversable API like the xkb tree."""
+    runtime = storage_paths.support_root() / "runtime"
+    dest = runtime / "fonts"
+    version = _xkb_version()
+    marker = dest / ".version"
+    if marker.is_file() and marker.read_text(encoding="utf-8").strip() == version:
+        return dest
+    try:
+        from importlib import resources
+
+        root = resources.files("flet_xvnc") / "data" / "fonts" / "misc"
+        if not root.is_dir():
+            raise FileNotFoundError("flet_xvnc/data/fonts/misc")
+    except Exception as exc:
+        logger.debug("bundled X fonts unavailable: %s", exc)
+        return None
+    if dest.exists():
+        shutil.rmtree(dest, ignore_errors=True)
+    dest.mkdir(parents=True, exist_ok=True)
+    _copy_tree(root, dest)
+    marker.write_text(version, encoding="utf-8")
+    logger.info("X fonts staged at %s (%s)", dest, version or "unknown version")
+    return dest
+
+
+def guest_font_dirs(container: str) -> list[str]:
+    """Font directories INSIDE the container that Xvnc can read from the host
+    (the rootfs lives on the app's filesystem; read-only is fine)."""
+    from core import storage_paths as sp
+
+    rootfs = sp.containers_dir() / container / "rootfs"
+    dirs: list[str] = []
+    for rel in _GUEST_FONT_LAYOUTS:
+        directory = rootfs / rel
+        if (directory / "fonts.dir").is_file():
+            dirs.append(str(directory))
+    return dirs
+
+
 # ── process commands ─────────────────────────────────────────────────────────
 
 
@@ -305,10 +362,11 @@ def xvnc_command(
     *,
     depth: str = "24",
     frame_rate: int = 30,
-    shared_policy: str = "auto",
+    shared_policy: str = "always",
     clipboard: bool = True,
     disconnect_timeout: int = 0,
     desktop_name: str = "",
+    font_paths: list[str] | None = None,
 ) -> tuple[list[str], dict[str, str]]:
     """The Xvnc argv + env. RFB stays loopback-only (TigerVNC defaults -localhost
     to yes since 1.11 — our stream server is the only client, also local). The
@@ -364,6 +422,12 @@ def xvnc_command(
         argv.append(f"-MaxDisconnectionTime={int(disconnect_timeout)}")
     if desktop_name:
         argv.extend(["-desktop", str(desktop_name)])
+    if font_paths:
+        # -fp is a COMMA-separated list; a path containing a comma would split
+        # the list, so such paths are dropped rather than corrupting it.
+        cleaned = [p for p in font_paths if p and "," not in p]
+        if cleaned:
+            argv.extend(["-fp", ",".join(cleaned)])
     return argv, _payload_env(binary.parent)
 
 
