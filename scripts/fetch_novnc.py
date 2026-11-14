@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Fetch the pinned noVNC release into the vendored viewer directory.
 
-The display viewer is noVNC (MPL-2.0): its core/ + vendor/ JS is vendored into
-`src/services/desk_service/novnc/` and served by our stream server, next to our
-own index.html. Bumping = editing NOVNC_VERSION + TARBALL_SHA256 (one commit),
-then re-running this script and committing the refreshed files. Stdlib only.
+The display viewer IS upstream noVNC (MPL-2.0), vendored VERBATIM — vnc.html
+plus its whole app/ (keyboard/clipboard/extra-keys/reconnect UI), core/ and
+vendor/ — served as-is by the stream server. No viewer code is maintained
+here: bumping = editing NOVNC_VERSION + TARBALL_SHA256 (one commit), then
+re-running this script and committing the refreshed files. Deployment-wide
+defaults ride upstream's own `defaults.json` override (see DEPLOYMENT_DEFAULTS
+below); the access code gate lives in the stream server, not the page.
 
 Usage: uv run python scripts/fetch_novnc.py
 """
@@ -13,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import shutil
 import tarfile
 import urllib.request
@@ -23,9 +27,22 @@ TARBALL_URL = f"https://github.com/novnc/noVNC/archive/refs/tags/v{NOVNC_VERSION
 TARBALL_SHA256 = "b1003a11b6e6e8d8f7f5e5586daae7f8ca651d8aee0aa155ff9ac841c48f52c6"
 
 DEST = Path(__file__).resolve().parent.parent / "src" / "services" / "desk_service" / "novnc"
-# Only the viewer library ships — not noVNC's own app UI (we have index.html).
-VENDORED_PREFIXES = ("core/", "vendor/")
-KEEP = ("LICENSE.txt", "VERSION")
+# The whole upstream viewer ships: vnc.html + app/ (UI, styles, images,
+# locale) + core/ + vendor/ (pako — required by the ES-module import chain).
+# Not runtime: docs/, po/ (gettext sources), tests/, utils/, vnc_lite.html,
+# packaging/CI files.
+VENDORED_PREFIXES = ("core/", "vendor/", "app/")
+# v1.7.0 has no root VERSION file (verified against the pinned tarball), so it
+# is deliberately absent from this list.
+KEEP = ("vnc.html", "defaults.json", "mandatory.json", "package.json", "LICENSE.txt")
+
+# Our deployment defaults, written over upstream's empty `{}` — this file is
+# upstream's own per-deployment override mechanism (vnc.html fetches it
+# document-relative before UI.start). `resize=remote` = resizeSession
+# (the framebuffer follows the viewport, as before); reconnect with a short
+# delay so a dropped socket recovers without user action (upstream's
+# reconnect screen + Cancel button come with it).
+DEPLOYMENT_DEFAULTS = {"resize": "remote", "reconnect": True, "reconnect_delay": 3000}
 
 
 def fetch() -> bytes:
@@ -61,9 +78,14 @@ def main() -> int:
             extracted = tar.extractfile(member)
             if extracted is not None:
                 target.write_bytes(extracted.read())
+    (dest / "defaults.json").write_text(
+        json.dumps(DEPLOYMENT_DEFAULTS, indent=2) + "\n", encoding="utf-8"
+    )
     (dest / "PROVENANCE").write_text(
-        f"noVNC {NOVNC_VERSION} — core/ + vendor/ vendored from {TARBALL_URL}\n"
+        f"noVNC {NOVNC_VERSION} — vendored VERBATIM (vnc.html + app/ + core/ + vendor/) "
+        f"from {TARBALL_URL}\n"
         f"tarball sha256 {TARBALL_SHA256}\n"
+        f"defaults.json carries THIS app's deployment defaults: {DEPLOYMENT_DEFAULTS}\n"
         "License: MPL-2.0 (see LICENSE.txt). Refresh with scripts/fetch_novnc.py.\n",
         encoding="utf-8",
     )

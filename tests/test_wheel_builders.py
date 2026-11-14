@@ -6,6 +6,7 @@ fetch test feeds a synthetic tarball.
 from __future__ import annotations
 
 import io
+import json
 import sys
 import tarfile
 from pathlib import Path
@@ -141,18 +142,25 @@ def test_platform_tags_are_the_underscore_android_form():
 # ── noVNC vendoring (the committed viewer assets) ────────────────────────────
 
 
-def test_fetch_novnc_extracts_only_the_library(monkeypatch, tmp_path):
-    """Only core/ + vendor/ (+ LICENSE/VERSION) are vendored — noVNC's own app
-    UI stays out; our index.html replaces it."""
+def test_fetch_novnc_vendors_the_full_upstream_viewer(monkeypatch, tmp_path):
+    """The viewer is upstream noVNC VERBATIM: vnc.html + app/ + core/ +
+    vendor/ + the runtime-referenced JSON files. Deployment defaults are
+    written over defaults.json (upstream's own override), and our hand-rolled
+    index.html is gone."""
     version = "9.9.9-test"
     files = {
         f"noVNC-{version}/core/rfb.js": b"export default class RFB {}",
-        f"noVNC-{version}/core/util.js": b"export const x = 1;",
-        f"noVNC-{version}/vendor/browser-es-module-loader.js": b"loader",
+        f"noVNC-{version}/vendor/pako/lib/zlib/inflate.js": b"export const x = 1;",
+        f"noVNC-{version}/app/ui.js": b"export default class UI {}",
+        f"noVNC-{version}/app/styles/base.css": b"body{}",
         f"noVNC-{version}/LICENSE.txt": b"MPL-2.0",
-        f"noVNC-{version}/VERSION": version.encode(),
-        f"noVNC-{version}/vnc.html": b"<html>upstream UI - excluded</html>",
-        f"noVNC-{version}/package.json": b"{}",
+        f"noVNC-{version}/vnc.html": b"<html>upstream UI</html>",
+        f"noVNC-{version}/package.json": b'{"version": "x"}',
+        f"noVNC-{version}/defaults.json": b"{}",
+        f"noVNC-{version}/mandatory.json": b"{}",
+        f"noVNC-{version}/docs/EMBEDDING.md": b"not runtime",
+        f"noVNC-{version}/po/noVNC.pot": b"not runtime",
+        f"noVNC-{version}/vnc_lite.html": b"alternate page",
     }
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
@@ -178,10 +186,24 @@ def test_fetch_novnc_extracts_only_the_library(monkeypatch, tmp_path):
 
     assert fetch_novnc.main() == 0
     dest = tmp_path / "novnc"
-    assert (dest / "core" / "rfb.js").read_bytes() == files[f"noVNC-{version}/core/rfb.js"]
-    assert (dest / "LICENSE.txt").read_bytes() == b"MPL-2.0"
-    assert (dest / "VERSION").read_text(encoding="utf-8") == version
+    for rel in (
+        "core/rfb.js",
+        "vendor/pako/lib/zlib/inflate.js",
+        "app/ui.js",
+        "app/styles/base.css",
+        "vnc.html",
+        "package.json",
+        "mandatory.json",
+        "LICENSE.txt",
+    ):
+        assert (dest / rel).is_file(), rel
+    # defaults.json is OUR deployment override, not upstream's empty {}
+    defaults = json.loads((dest / "defaults.json").read_text(encoding="utf-8"))
+    assert defaults["resize"] == "remote"
+    assert defaults["reconnect"] is True
     provenance = (dest / "PROVENANCE").read_text(encoding="utf-8")
     assert version in provenance and "sha256" in provenance
-    assert not (dest / "vnc.html").exists()  # the upstream UI is excluded
-    assert not (dest / "package.json").exists()
+    # Non-runtime upstream payloads stay out.
+    assert not (dest / "docs").exists()
+    assert not (dest / "po").exists()
+    assert not (dest / "vnc_lite.html").exists()

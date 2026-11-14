@@ -244,7 +244,7 @@ def generate_markdown() -> str:
             "",
             "| Asset | Version | License | Upstream |",
             "|---|---|---|---|",
-            "| `noVNC` (core/ + vendor/, served by the display stream server) | 1.7.0 | MPL-2.0 | https://github.com/novnc/noVNC |",
+            "| `noVNC` (vnc.html + app/ + core/ + vendor/, vendored verbatim and served by the display stream server) | 1.7.0 | MPL-2.0 | https://github.com/novnc/noVNC |",
             "",
             "## Python Dependencies",
             "",

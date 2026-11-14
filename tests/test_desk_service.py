@@ -12,7 +12,6 @@ import pytest
 from session_support import GOLDEN_CMD
 
 from core.state import state
-from screens.desktop import key_event_js, paste_js, press_js
 from services import desk_service, session_service
 from services.desk_service import manager as desk_manager
 from services.desk_service import provision as desk_provision
@@ -339,7 +338,7 @@ class _FakeServer:
         self.started = True
 
     def local_url(self):
-        return f"http://127.0.0.1:{self.port}/?code={self.code}"
+        return f"http://127.0.0.1:{self.port}/novnc/vnc.html?code={self.code}"
 
     async def stop(self):
         self.stopped = True
@@ -373,7 +372,9 @@ async def test_start_runs_the_server_in_process_and_stop_closes_it(monkeypatch):
     assert len(created[-1].code) == 6
     assert session.server is created[-1]
     assert session.code == created[-1].code
-    assert session.url == f"http://127.0.0.1:{session.port}/?code={created[-1].code}"
+    assert session.url == (
+        f"http://127.0.0.1:{session.port}/novnc/vnc.html?code={created[-1].code}"
+    )
     assert session.status is desk_manager.DeskStatus.RUNNING
 
     await manager.stop(session.key)
@@ -470,15 +471,16 @@ def test_display_logs_live_in_the_durable_data_root():
 
 def test_the_clipboard_bridge_is_gone_vnc_carries_it():
     """RFB's clipboard channel moves text BOTH ways (ServerCutText) — the old
-    proot'd xclip bridge (and its W^X execve workaround) is deleted."""
+    proot'd xclip bridge (and its W^X execve workaround) is deleted, and the
+    clipboard UI is upstream's own (app/ui.js clipboard pane + paste)."""
     src = (ROOT / "src" / "services" / "desk_service" / "manager.py").read_text(encoding="utf-8")
     assert "_install_clipboard_bridge" not in src
     assert "xclip" not in src
-    novnc = (ROOT / "src" / "services" / "desk_service" / "novnc" / "index.html").read_text(
+    ui = (ROOT / "src" / "services" / "desk_service" / "novnc" / "app" / "ui.js").read_text(
         encoding="utf-8"
     )
-    assert "clipboardPasteFrom" in novnc
-    assert 'addEventListener("clipboard"' in novnc
+    assert "clipboardPasteFrom" in ui
+    assert "noVNC_clipboard_text" in ui
 
 
 def test_guest_log_reaches_the_diagnostic_terminal_and_no_debug_paint():
@@ -692,33 +694,31 @@ async def test_session_argv_with_options_parses_the_upstream_line(monkeypatch):
 # ── host↔guest bridges (screens/desktop JS builders) ─────────────────────────
 
 
-def test_desktop_js_bridges_drive_the_noVNC_surface():
-    """The viewer page exposes sendKeySym/pasteText; the strip sends real X
-    keysyms and the clipboard goes through the VNC channel — no overlay, no
-    synthetic KeyboardEvents, no xclip."""
+def test_desktop_view_adds_no_viewer_js_bridges():
+    """The viewer IS upstream noVNC verbatim — its own toolbar carries the
+    extra keys, the soft-keyboard path and the clipboard pane. The app view
+    must add NO JavaScript bridges and no duplicated key strip (our old page
+    had no editable element, so the Android IME could never open)."""
     src = (ROOT / "src" / "screens" / "desktop" / "__init__.py").read_text(encoding="utf-8")
-    assert "window.sendKeySym(" in press_js("Escape")
-    assert "window.sendKeySym(" in key_event_js("keydown", "Control")
-    assert "false" in key_event_js("keyup", "Control")
-    assert "window.pasteText(" in paste_js("hello")
-    assert '"hello"' in paste_js("hello")
-    # keysym table covers every strip key
-    for key in (
-        "Escape",
-        "Tab",
-        "Control",
-        "Alt",
-        "ArrowLeft",
-        "ArrowUp",
-        "ArrowDown",
-        "ArrowRight",
-        "Enter",
-        "Backspace",
+    for gone in (
+        "window.sendKeySym",
+        "window.pasteText",
+        "_KEYSYMS",
+        "press_js",
+        "paste_js",
+        "keyboard_strip",
+        "_run_js",
     ):
-        assert f'"{key}"' in src
-    assert "auth_js" not in src  # the overlay flow is gone — the code rides the URL
-    # Escape = 0xFF1B, Control_L = 0xFFE3 (real X keysyms, not invented ones)
-    assert "0xFF1B" in src and "0xFFE3" in src
+        assert gone not in src, gone
+    # The toolbar keeps the app-level actions.
+    for kept in ("Reload", "Share", "Logs", "Stop", "FULLSCREEN"):
+        assert kept in src
+    # Upstream's page carries the mobile keyboard mechanism we rely on.
+    ui = (ROOT / "src" / "services" / "desk_service" / "novnc" / "app" / "ui.js").read_text(
+        encoding="utf-8"
+    )
+    assert "noVNC_keyboardinput" in ui
+    assert "showVirtualKeyboard" in ui
 
 
 # ── UI structure pins ────────────────────────────────────────────────────────
@@ -940,7 +940,8 @@ def test_desktop_fullscreen_has_visible_exit_fab():
     assert "if not st.display_fullscreen:" in src
     assert "right=tokens.SPACE_MD" in src
     assert "kb_field" not in src  # bulky TextField input row removed
-    assert "scroll=ft.ScrollMode.AUTO" in src  # one scrollable key row
+    # The custom key strip is GONE — upstream's viewer toolbar owns the keys.
+    assert "keyboard_strip" not in src
     ctrl_src = (ROOT / "src" / "app_controller.py").read_text(encoding="utf-8")
     assert "state.display_fullscreen = False" in ctrl_src
 
@@ -975,28 +976,36 @@ def test_xvnc_wheel_uses_underscore_android_platform_tags():
     assert "module-aaudio-sink.so" in pa_src  # the Android audio modules ship
 
 
-def test_novnc_is_vendored_with_provenance():
-    """The viewer is vendored noVNC (pinned 1.7.0) + OUR index.html — served by
-    the stream server, no CDN, no npm at build time."""
+def test_novnc_is_vendored_verbatim_with_provenance():
+    """The viewer IS upstream noVNC (pinned 1.7.0) vendored verbatim — vnc.html
+    + app/ + core/ + vendor/ — served by the stream server, no CDN, no npm at
+    build time. Deployment defaults ride upstream's own defaults.json."""
+    import json
+
     novnc = ROOT / "src" / "services" / "desk_service" / "novnc"
     provenance = (novnc / "PROVENANCE").read_text(encoding="utf-8")
     assert "noVNC 1.7.0" in provenance
     assert "sha256" in provenance
     assert (novnc / "core" / "rfb.js").is_file()
-    assert (novnc / "index.html").is_file()
-    index = (novnc / "index.html").read_text(encoding="utf-8")
-    assert "resizeSession: true" in index  # the desktop follows the phone screen
-    assert 'import RFB from "./novnc/core/rfb.js"' in index
+    page = (novnc / "vnc.html").read_text(encoding="utf-8")
+    assert "app/ui.js" in page  # upstream's page, unmodified
+    assert (novnc / "app" / "ui.js").is_file()
+    assert (novnc / "vendor" / "pako").is_dir()
+    assert not (novnc / "index.html").exists()  # our hand-rolled page is gone
+    defaults = json.loads((novnc / "defaults.json").read_text(encoding="utf-8"))
+    assert defaults["resize"] == "remote"  # the desktop follows the phone screen
+    assert defaults["reconnect"] is True
 
 
-def test_stream_server_gates_the_websocket_by_code():
-    """The 6-char access code gates the RFB WebSocket (LAN + tunnel clients) —
-    the loopback page gets it in the URL like the old viewer did."""
+def test_stream_server_gates_both_the_page_and_the_websocket():
+    """The 6-char access code gates the ENTRY page (which forwards to upstream
+    vnc.html) and the RFB WebSocket itself (LAN + tunnel clients)."""
     src = (ROOT / "src" / "services" / "desk_service" / "stream_server.py").read_text(
         encoding="utf-8"
     )
     assert 'request.query.get("code", "") != self.code' in src
     assert "4401" in src
+    assert "HTTPFound" in src  # `/` forwards to the upstream viewer
     assert "open_connection" in src  # the transparent RFB byte pump
     assert "send_bytes" in src
 

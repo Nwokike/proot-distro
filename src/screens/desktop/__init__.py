@@ -6,18 +6,15 @@ and stored on the session object (`session.wv`) — rebuilding it per render
 would reload the viewer and, under flet 1.1, mutating mounted controls
 mid-patch raises the frozen-control error.
 
-The WebView loads OUR viewer page (services/desk_service/novnc/index.html),
-which connects to the stream server's RFB WebSocket itself — the access code
-travels in the URL, so there is no auth overlay to inject. The page exposes
-`window.rfb` / `window.sendKeySym` / `window.pasteText`; the keyboard strip
-sends real X keysyms through `sendKeySym` and the host clipboard lands in the
-guest via `clipboardPasteFrom` (the VNC clipboard channel carries it — no
-xclip anywhere).
+The WebView loads UPSTREAM noVNC verbatim (vnc.html + app/, served by the
+stream server): its own toolbar provides the extra-keys panel, the on-screen
+keyboard (the hidden-textarea IME path — typing works), the clipboard pane,
+clip/scale/resize settings and auto-reconnect. This view therefore adds only
+the app chrome around it: back, title, terminal hand-off, fullscreen and the
+session menu. No JavaScript bridges live here.
 """
 
 from __future__ import annotations
-
-import json
 
 import flet as ft
 
@@ -36,51 +33,12 @@ from core.state import state
 from services.desk_service import DeskStatus
 from state.controller_ctx import ControllerMethodsCtx
 
-# The keyboard strip's keys → X keysyms (what RFB's sendKey expects).
-_KEYSYMS = {
-    "Escape": 0xFF1B,
-    "Tab": 0xFF09,
-    "Control": 0xFFE3,  # Control_L
-    "Alt": 0xFFE9,  # Alt_L
-    "ArrowLeft": 0xFF51,
-    "ArrowUp": 0xFF52,
-    "ArrowRight": 0xFF53,
-    "ArrowDown": 0xFF54,
-    "Enter": 0xFF0D,
-    "Backspace": 0xFF08,
-}
-
-
-def press_js(key: str) -> str:
-    """A full key press (down + up) through the viewer's sendKeySym bridge.
-    Sticky modifiers are separate: toggling Ctrl sends only the down of
-    'Control' so the guest sees the modifier held, like a real keyboard."""
-    keysym = _KEYSYMS[key]
-    return f"window.sendKeySym({keysym}, true);window.sendKeySym({keysym}, false);"
-
-
-def key_event_js(event: str, key: str) -> str:
-    """Hold/release one modifier through the same bridge (`event` is only
-    'keydown'/'keyup' shaped for the caller's readability)."""
-    down = "true" if event == "keydown" else "false"
-    keysym = _KEYSYMS[key]
-    return f"window.sendKeySym({keysym}, {down});"
-
-
-def paste_js(text: str) -> str:
-    """Host clipboard → guest through the viewer's paste bridge (VNC clipboard
-    channel → Xvnc sets the X selection)."""
-    return f"window.pasteText({json.dumps(text)});"
-
 
 @ft.component
 def DesktopView(session) -> ft.Control:
     page = ft.context.page
     methods = ft.use_context(ControllerMethodsCtx)
     st, _ = ft.use_state(state)
-    kb_on, set_kb_on = ft.use_state(False)
-    ctrl_on, set_ctrl_on = ft.use_state(False)
-    alt_on, set_alt_on = ft.use_state(False)
     log_open, set_log_open = ft.use_state(False)
     # Subscribe to the guest-log rev so the output panel streams live.
     _ = st.display_log_rev
@@ -169,16 +127,6 @@ def DesktopView(session) -> ft.Control:
             expand=True,
         )
 
-    async def _run_js(js: str) -> None:
-        """run_javascript is async — schedule it where a sync handler can't."""
-        webview = session.wv
-        if webview is None:
-            return
-        try:
-            await webview.run_javascript(js)
-        except Exception:
-            pass
-
     # ── running: toolbar + WebView ───────────────────────────────────────────
     if session.wv is None and _HAS_WEBVIEW:
 
@@ -210,26 +158,6 @@ def DesktopView(session) -> ft.Control:
         await methods.leave_display()
         await methods.open_session(session.container)
 
-    async def _paste_from_host(_e=None) -> None:
-        if clipboard is None or session.wv is None:
-            return
-        try:
-            text = await clipboard.get()
-        except Exception:
-            return
-        if text:
-            await _run_js(paste_js(text))
-
-    def _toggle_modifier(current: bool, setter, key: str):
-        def _handler(_e) -> None:
-            next_on = not current
-            setter(next_on)
-            # Held-modifier semantics: keydown on engage, keyup on release —
-            # the guest then sees Ctrl/Alt held for everything typed after.
-            page.run_task(_run_js, key_event_js("keydown" if next_on else "keyup", key))
-
-        return _handler
-
     toolbar_row = ft.Row(
         controls=[
             ft.IconButton(
@@ -253,14 +181,6 @@ def DesktopView(session) -> ft.Control:
                 icon_size=tokens.ICON_MD,
                 tooltip="Open a terminal for this container",
                 on_click=lambda _e: page.run_task(_open_terminal),
-            ),
-            ft.IconButton(
-                icon=ft.Icons.KEYBOARD_ROUNDED,
-                icon_size=tokens.ICON_MD,
-                selected_icon=ft.Icons.KEYBOARD_HIDE_ROUNDED,
-                selected=kb_on,
-                tooltip="Type with the phone keyboard",
-                on_click=lambda _e, v=not kb_on: set_kb_on(v),
             ),
             ft.IconButton(
                 icon=ft.Icons.FULLSCREEN_EXIT_ROUNDED
@@ -305,58 +225,6 @@ def DesktopView(session) -> ft.Control:
                 await session.wv.reload()
             except Exception:
                 pass
-
-    # ── compact key strip: ONE horizontally scrollable row of small keys ──
-    # (flet-terminal ExtraKeysBar pattern: Row(scroll=AUTO), ~28px keys,
-    # compact density). Text typing is left to the phone keyboard / the
-    # viewer's own inputs — this strip carries only the special keys.
-    def _key_btn(label: str, key: str) -> ft.Control:
-        return ft.Button(
-            content=ft.Text(label, size=tokens.FONT_XS, weight=ft.FontWeight.W_600),
-            height=28,
-            style=ft.ButtonStyle(
-                padding=ft.Padding.symmetric(horizontal=6, vertical=0),
-                visual_density=ft.VisualDensity.COMPACT,
-                shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
-            ),
-            on_click=lambda _e, k=key: page.run_task(_run_js, press_js(k)),
-        )
-
-    def _mod_btn(label: str, current: bool, setter, key: str) -> ft.Control:
-        return ft.Button(
-            content=ft.Text(label, size=tokens.FONT_XS, weight=ft.FontWeight.W_600),
-            height=28,
-            tooltip=f"Hold {label} for the next keys (press again to release)",
-            style=ft.ButtonStyle(
-                padding=ft.Padding.symmetric(horizontal=6, vertical=0),
-                visual_density=ft.VisualDensity.COMPACT,
-                shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
-                side=ft.BorderSide(1, theme.primary() if current else theme.surface_alt()),
-            ),
-            on_click=_toggle_modifier(current, setter, key),
-        )
-
-    keyboard_strip = ft.Container(
-        content=ft.Row(
-            controls=[
-                _key_btn("Esc", "Escape"),
-                _key_btn("Tab", "Tab"),
-                _mod_btn("Ctrl", ctrl_on, set_ctrl_on, "Control"),
-                _mod_btn("Alt", alt_on, set_alt_on, "Alt"),
-                _key_btn("←", "ArrowLeft"),
-                _key_btn("↑", "ArrowUp"),
-                _key_btn("↓", "ArrowDown"),
-                _key_btn("→", "ArrowRight"),
-                _key_btn("↵", "Enter"),
-                _key_btn("⌫", "Backspace"),
-            ],
-            spacing=tokens.SPACE_XS,
-            scroll=ft.ScrollMode.AUTO,
-        ),
-        bgcolor=theme.surface(),
-        padding=ft.Padding(2, 1, 2, 1),
-        visible=kb_on and not st.display_fullscreen,
-    )
 
     # Fresh wrapper each render with visible at construction — the mounted
     # toolbar row itself is never mutated (frozen-control rule).
@@ -465,7 +333,7 @@ def DesktopView(session) -> ft.Control:
     )
 
     body = ft.Column(
-        controls=[toolbar, keyboard_strip, surface, output_panel],
+        controls=[toolbar, surface, output_panel],
         spacing=tokens.SPACE_NONE,
         expand=True,
     )

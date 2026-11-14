@@ -350,9 +350,14 @@ class DisplayActions:
 
             ip = _local_ip()
             if ip:
-                rows.append(_url_row("LAN", f"http://{ip}:{session.port}/"))
+                # `/` gates the access code, so the shared URL must carry it —
+                # the whole point of the Share dialog is a copyable URL.
+                rows.append(_url_row("LAN", f"http://{ip}:{session.port}/?code={session.code}"))
         if session.tunnel_url:
-            rows.append(_url_row("Tunnel", session.tunnel_url))
+            url = session.tunnel_url
+            if "?" not in url:
+                url = f"{url}?code={session.code}"
+            rows.append(_url_row("Tunnel", url))
         elif session.tunnel:
             rows.append(
                 ft.Text(

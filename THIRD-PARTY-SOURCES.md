@@ -56,7 +56,7 @@ closure, repackaged verbatim from the Termux repositories:
 | `libxcb` | 1.17.0-1 | MIT | [libxcb](https://gitlab.freedesktop.org/xorg/lib/libxcb) | [pool/main/libx/libxcb/libxcb_1.17.0-1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libx/libxcb/libxcb_1.17.0-1_aarch64.deb) | `191c3642b6a8c754bc75b69b94a81858ecb5f18766dc085aff55559b8087ad34` |
 | `libandroid-support` | 29-1 | Apache-2.0 | [libandroid-support](https://packages.termux.com) | [pool/main/liba/libandroid-support/libandroid-support_29-1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/liba/libandroid-support/libandroid-support_29-1_aarch64.deb) | `f2f145d6135ad4843ac9670153be3e3944dc1e6f1736d46d2306c28f2b86f517` |
 | `zstd` | 1.5.7-1 | BSD-3-Clause | [zstd](https://github.com/facebook/zstd) | [pool/main/z/zstd/zstd_1.5.7-1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/z/zstd/zstd_1.5.7-1_aarch64.deb) | `e1b4a5113648da8de189620ba1fce74c48b2d0833d9043391b9a1c91fb606fd3` |
-| `p11-kit` | 0.26.5 | BSD-3-Clause | [p11-kit](https://packages.termux.com) | [pool/main/p/p11-kit/p11-kit_0.26.5_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/p/p11-kit/p11-kit_0.26.5_aarch64.deb) | `7911d7427e3c7182cf364e56a45a92307e5e7fddc105dc468f25ae39aa3e0ad7` |
+| `p11-kit` | 0.26.6 | BSD-3-Clause | [p11-kit](https://packages.termux.com) | [pool/main/p/p11-kit/p11-kit_0.26.6_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/p/p11-kit/p11-kit_0.26.6_aarch64.deb) | `e6a305edbfcf6a907bd1f09bedbcbbb06ca7784116300bd297a769c971595424` |
 | `libidn2` | 2.3.8-1 | GPL-2.0-or-later / LGPL-3.0-or-later | [libidn2](https://packages.termux.com) | [pool/main/libi/libidn2/libidn2_2.3.8-1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libi/libidn2/libidn2_2.3.8-1_aarch64.deb) | `a450a1ba25759ebf78738484a3efee316c51a1fe7bafb0b01a68e2c058a91020` |
 | `libunistring` | 1.5 | MIT OR LGPL-3.0-or-later | [libunistring](https://packages.termux.com) | [pool/main/libu/libunistring/libunistring_1.5_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libu/libunistring/libunistring_1.5_aarch64.deb) | `8853ca1421d6472046a0683d53084b26db1caa50a3aa2bf6422a1276c7dba69b` |
 | `libtasn1` | 4.21.0 | LGPL-2.1-or-later | [libtasn1](https://packages.termux.com) | [pool/main/libt/libtasn1/libtasn1_4.21.0_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libt/libtasn1/libtasn1_4.21.0_aarch64.deb) | `1d02de3a7e5ef4ff7d893597091176b8ddf135f1ddfacff951f76c18711a7342` |
@@ -67,6 +67,7 @@ closure, repackaged verbatim from the Termux repositories:
 | `libpng` | 1.6.59 | Libpng | [libpng](http://www.libpng.org) | [pool/main/libp/libpng/libpng_1.6.59_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libp/libpng/libpng_1.6.59_aarch64.deb) | `32d61f0b1a60cf7283aa3a80e288737493df2c6b84c8c749606b77c94a10f2b2` |
 | `brotli` | 1.2.1 | MIT | [brotli](https://packages.termux.com) | [pool/main/b/brotli/brotli_1.2.1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/b/brotli/brotli_1.2.1_aarch64.deb) | `4fba29438b2b44f8470d52173b4548e938542dc2fc632f8699be5a284cbb9485` |
 | `libbz2` | 1.0.8-8 | BSD-4-Clause | [libbz2](https://packages.termux.com) | [pool/main/libb/libbz2/libbz2_1.0.8-8_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libb/libbz2/libbz2_1.0.8-8_aarch64.deb) | `4335d7f060650b0aabef545d1334c2f9f280223d5962e13c24a00ec934b794ba` |
+| `libc++` | 30 | Open Source | [libc++](https://packages.termux.com) | [pool/main/libc/libc++/libc++_30_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libc/libc++/libc++_30_aarch64.deb) | `53d0b84a7ba7459024257cb94d5b136fe13ef858567f65a8064b35950799f2ca` |
 
 ## Native Payloads (Packaged in flet-pulseaudio)
 
@@ -94,7 +95,7 @@ sink/source, native-protocol-tcp) and its runtime closure:
 
 | Asset | Version | License | Upstream |
 |---|---|---|---|
-| `noVNC` (core/ + vendor/, served by the display stream server) | 1.7.0 | MPL-2.0 | https://github.com/novnc/noVNC |
+| `noVNC` (vnc.html + app/ + core/ + vendor/, vendored verbatim and served by the display stream server) | 1.7.0 | MPL-2.0 | https://github.com/novnc/noVNC |
 
 ## Python Dependencies
 

@@ -37,20 +37,36 @@ async def test_health_is_open(client):
     assert (await response.json()) == {"ok": True}
 
 
-async def test_auth_gate_accepts_only_the_session_code(client):
-    good = await client.get("/auth", params={"code": CODE})
-    assert good.status == 200
-    bad = await client.get("/auth", params={"code": "XXXXXX"})
-    assert bad.status == 403
-    missing = await client.get("/auth")
-    assert missing.status == 403
+async def test_index_gates_then_forwards_to_the_upstream_viewer(client):
+    """`/` is the shared entry URL: the code is validated HERE, then the
+    request is forwarded to the upstream vnc.html with the code riding inside
+    the `path` setting (upstream builds the WS URL from `path` verbatim)."""
+    from urllib.parse import parse_qs, urlsplit
+
+    good = await client.get("/", params={"code": CODE}, allow_redirects=False)
+    assert good.status == 302
+    location = good.headers["Location"]
+    split = urlsplit(location)
+    assert split.path == "/novnc/vnc.html"
+    params = parse_qs(split.query)
+    assert params["autoconnect"] == ["1"]
+    assert params["path"] == [f"/websockify?code={CODE}"]
+    assert params["quality"] == ["7"]
+    assert params["compression"] == ["3"]
+    for bad in ({"code": "XXXXXX"}, {}):
+        response = await client.get("/", params=bad, allow_redirects=False)
+        assert response.status == 403
 
 
-async def test_index_serves_our_viewer_page(client):
-    response = await client.get("/")
+async def test_upstream_viewer_is_served_verbatim_with_no_cache(client):
+    response = await client.get("/novnc/vnc.html")
     assert response.status == 200
-    body = await response.text()
-    assert "novnc/core/rfb.js" in body  # the vendored library, our page around it
+    assert response.headers.get("Cache-Control") == "no-cache"
+    body = await response.read()
+    assert b"./app/ui.js" in body  # upstream's page, unmodified
+    defaults = await client.get("/novnc/defaults.json")
+    assert defaults.status == 200
+    assert b'"resize": "remote"' in await defaults.read()
 
 
 async def test_vendored_novnc_files_serve(client):
@@ -158,9 +174,14 @@ async def test_websockify_closes_the_rfb_side_with_the_client(server):
         await fake.stop()
 
 
-def test_local_url_carries_the_code_and_knobs(server):
-    url = server.local_url()
-    assert url.startswith("http://127.0.0.1:0/")
-    assert f"code={CODE}" in url
-    assert "quality=7" in url
-    assert "compression=3" in url
+def test_local_url_points_at_the_upstream_viewer():
+    from urllib.parse import parse_qs, urlsplit
+
+    server = DisplayStreamServer("127.0.0.1", 0, 5900, CODE, quality=7, compression=3)
+    split = urlsplit(server.local_url())
+    assert split.path == "/novnc/vnc.html"
+    params = parse_qs(split.query)
+    assert params["autoconnect"] == ["1"]
+    assert params["path"] == [f"/websockify?code={CODE}"]
+    assert params["quality"] == ["7"]
+    assert params["compression"] == ["3"]

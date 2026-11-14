@@ -1,0 +1,5 @@
+{
+  "resize": "remote",
+  "reconnect": true,
+  "reconnect_delay": 3000
+}

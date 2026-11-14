@@ -1,3 +1,4 @@
-noVNC 1.7.0 — core/ + vendor/ vendored from https://github.com/novnc/noVNC/archive/refs/tags/v1.7.0.tar.gz
+noVNC 1.7.0 — vendored VERBATIM (vnc.html + app/ + core/ + vendor/) from https://github.com/novnc/noVNC/archive/refs/tags/v1.7.0.tar.gz
 tarball sha256 b1003a11b6e6e8d8f7f5e5586daae7f8ca651d8aee0aa155ff9ac841c48f52c6
+defaults.json carries THIS app's deployment defaults: {'resize': 'remote', 'reconnect': True, 'reconnect_delay': 3000}
 License: MPL-2.0 (see LICENSE.txt). Refresh with scripts/fetch_novnc.py.
