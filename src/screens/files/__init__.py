@@ -369,16 +369,19 @@ def FilesView(
 
     return ft.Column(
         controls=[
+            # Banner at the TOP (like Terminal) so the file list expands to the
+            # bottom edge — the owner's ruling: "the space to show the current
+            # files and folders can expand to the edge of the screen".
+            page_tail(AD_SLOT_FILES, page),
             ft.Row(controls=container_chips, scroll=ft.ScrollMode.AUTO, spacing=tokens.SPACE_SM),
             nav_row,
             action_bar,
             filter_field,
             ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
             ft.Container(
-                content=card(file_list_content, padding=tokens.SPACE_SM),
+                content=file_list_content,
                 expand=True,
             ),
-            page_tail(AD_SLOT_FILES, page),
         ],
         spacing=tokens.SPACE_SM,
         expand=True,

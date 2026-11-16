@@ -48,7 +48,7 @@ async def handle_paste_image(page: ft.Page, container: str, guest_dir: str, refr
     refresh()
 
 
-def preview_file(page: ft.Page, container: str, file_path: str) -> None:
+def preview_file(page: ft.Page, container: str, file_path: str, methods=None) -> None:
     async def _read() -> None:
         try:
             data = await asyncio.to_thread(
@@ -70,15 +70,57 @@ def preview_file(page: ft.Page, container: str, file_path: str) -> None:
                     height=tokens.FILE_LIST_HEIGHT,
                     border=ft.NoInputBorder(),
                 )
+
+            actions = [ft.TextButton("Close", on_click=lambda _e: page.pop_dialog())]
+
+            # Run-in-display affordance for non-directory files (owner ruling
+            # 2026-11-16): pre-fill `./<name>` and let the user edit the command.
+            name = posixpath.basename(file_path)
+            run_cmd = house_field(
+                label="Run in display",
+                hint=f"./{name}",
+                value=f"./{name}",
+                expand=True,
+                dense=True,
+                text_size=tokens.FONT_XS,
+            )
+
+            def _run(_e) -> None:
+                cmd = (run_cmd.value or "").strip()
+                if not cmd:
+                    return
+                page.pop_dialog()
+                controller = getattr(page, "_controller", None)
+                if controller is not None:
+                    page.run_task(controller.start_display, container, None, cmd, None, None)
+
+            actions.append(
+                ft.FilledButton(
+                    "Run in display",
+                    icon=ft.Icons.PLAY_CIRCLE_ROUNDED,
+                    on_click=_run,
+                )
+            )
+
             page.show_dialog(
                 ft.AlertDialog(
                     title=ft.Text(
-                        posixpath.basename(file_path),
+                        name,
                         size=tokens.FONT_MD,
                         weight=ft.FontWeight.BOLD,
                     ),
-                    content=ft.Container(content=dialog_content, width=tokens.DIALOG_WIDTH_LG),
-                    actions=[ft.TextButton("Close", on_click=lambda _e: page.pop_dialog())],
+                    content=ft.Container(
+                        content=ft.Column(
+                            controls=[
+                                dialog_content,
+                                run_cmd,
+                            ],
+                            spacing=tokens.SPACE_SM,
+                            tight=True,
+                        ),
+                        width=tokens.DIALOG_WIDTH_LG,
+                    ),
+                    actions=actions,
                 )
             )
         except Exception as exc:
