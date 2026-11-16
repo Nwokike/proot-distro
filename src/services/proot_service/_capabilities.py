@@ -85,3 +85,31 @@ def guest_capabilities(name: str) -> dict:
             for key, starters in DESKTOP_STARTERS.items()
         },
     }
+
+
+def arch_choices() -> tuple[str, ...]:
+    """Every architecture spelling upstream's `normalize_arch` accepts.
+
+    Derived from `proot_distro.arch`, never hardcoded: the native names, the
+    bare Docker names and the `linux/`-prefixed platform strings, every one
+    checked through `normalize_arch`. "host" is our sentinel (pass no `-a`)."""
+    arch = _imp("proot_distro.arch")
+    normalized = arch.normalize_arch
+    native = sorted(arch._KNOWN_ARCHS)
+    docker = sorted(arch._DOCKER_TO_PROOT)
+    choices = ["host"]
+    for name in native:
+        if normalized(name) and name not in choices:
+            choices.append(name)
+    for name in docker:
+        if normalized(name) and name not in choices:
+            choices.append(name)
+        prefixed = f"linux/{name}"
+        if normalized(prefixed) and prefixed not in choices:
+            choices.append(prefixed)
+    return tuple(choices)
+
+
+def host_arch() -> str:
+    """The host CPU architecture in proot-distro's naming (e.g. aarch64)."""
+    return _imp("proot_distro.arch").get_device_cpu_arch()

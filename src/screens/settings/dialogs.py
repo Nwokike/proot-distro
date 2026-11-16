@@ -7,12 +7,10 @@ component in __init__.py stays a thin assembly of cards + rows.
 from __future__ import annotations
 
 import contextlib
-import os
 
 import flet as ft
 
 from core import theme, tokens
-from core.changelog import notes_for
 from core.constants import APP_NAME, APP_VERSION
 from core.state import state
 from screens.license_view import licenses_view
@@ -20,9 +18,9 @@ from screens.license_view import licenses_view
 _TERMINAL_DISPLAY_LINES = 500
 
 
-def open_live_activity_terminal(page: ft.Page) -> None:
-    """The diagnostic terminal (Sherlock pattern): live app logs in a green
-    on-dark monospace box, with Copy / Clear / Close."""
+def open_debugging_output(page: ft.Page) -> None:
+    """The full diagnostic log (Settings shows the last 20 lines inline): app
+    logs in a green on-dark monospace box, with Copy / Clear / Close."""
     from core.logger_handler import in_memory_log_handler
     from core.shared_services import launch_url  # noqa: F401  (parity import)
 
@@ -53,12 +51,12 @@ def open_live_activity_terminal(page: ft.Page) -> None:
         page.run_task(_do_copy)
 
     def _clear_logs(_e):
-        # Reopen the dialog so the terminal re-renders fresh (the house guard
+        # Reopen the dialog so the log re-renders fresh (the house guard
         # forbids imperative control mutations in screens/).
         in_memory_log_handler.clear_logs()
         with contextlib.suppress(Exception):
             page.pop_dialog()
-        open_live_activity_terminal(page)
+        open_debugging_output(page)
 
     terminal_dlg = ft.AlertDialog(
         modal=False,
@@ -66,7 +64,7 @@ def open_live_activity_terminal(page: ft.Page) -> None:
             controls=[
                 ft.Icon(ft.Icons.TERMINAL_ROUNDED, color=theme.primary(), size=tokens.ICON_MD),
                 ft.Text(
-                    "Live Activity Terminal",
+                    "Debugging output",
                     size=tokens.FONT_MD,
                     weight=ft.FontWeight.BOLD,
                     color=theme.primary(),
@@ -80,7 +78,7 @@ def open_live_activity_terminal(page: ft.Page) -> None:
             content=ft.Column(
                 controls=[
                     ft.Text(
-                        "Real-time app diagnostics: sessions, installs, ads, errors.",
+                        "App diagnostics: sessions, installs, ads, errors.",
                         size=tokens.FONT_XS,
                         color=theme.text_dim(),
                     ),
@@ -115,6 +113,8 @@ def open_live_activity_terminal(page: ft.Page) -> None:
 
 
 def open_changelog(page: ft.Page) -> None:
+    from components.ui import changelog_rows
+
     page.show_dialog(
         ft.AlertDialog(
             title=ft.Text(
@@ -123,7 +123,8 @@ def open_changelog(page: ft.Page) -> None:
                 weight=ft.FontWeight.BOLD,
             ),
             content=ft.Column(
-                controls=[ft.Text(notes_for(APP_VERSION), size=tokens.FONT_SM)],
+                controls=changelog_rows(APP_VERSION),
+                spacing=tokens.SPACE_SM,
                 tight=True,
                 scroll=ft.ScrollMode.AUTO,
             ),
@@ -216,43 +217,6 @@ def open_storage_detail(page: ft.Page, methods) -> None:
         show_storage_dialog(page, state.storage_detail or {})
 
     page.run_task(_load)
-
-
-def open_env_dialog(page: ft.Page) -> None:
-    def _row(k: str, v: str) -> ft.Control:
-        return ft.Text(f"{k} = {v}", size=tokens.FONT_XS, color=theme.text_dim(), selectable=True)
-
-    page.show_dialog(
-        ft.AlertDialog(
-            title=ft.Text("Environment", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
-            content=ft.Column(
-                controls=[
-                    _row("PD_PROOT_BIN", os.environ.get("PD_PROOT_BIN", "(unset)")),
-                    _row(
-                        "FLET_APP_STORAGE_DATA", os.environ.get("FLET_APP_STORAGE_DATA", "(unset)")
-                    ),
-                    _row(
-                        "FLET_APP_STORAGE_CACHE",
-                        os.environ.get("FLET_APP_STORAGE_CACHE", "(unset)"),
-                    ),
-                    _row(
-                        "FLET_APP_STORAGE_TEMP", os.environ.get("FLET_APP_STORAGE_TEMP", "(unset)")
-                    ),
-                    _row("PD_FORCE_NO_COLORS", os.environ.get("PD_FORCE_NO_COLORS", "(unset)")),
-                    _row(
-                        "PD_DOCKER_AUTH",
-                        "(set — see Registry Authentication)"
-                        if os.environ.get("PD_DOCKER_AUTH")
-                        else "(unset)",
-                    ),
-                ],
-                spacing=tokens.SPACE_XS,
-                tight=True,
-                scroll=ft.ScrollMode.AUTO,
-            ),
-            actions=[ft.TextButton("Close", on_click=lambda _e: page.pop_dialog())],
-        )
-    )
 
 
 def open_probe_dialog(page: ft.Page, probe_passed: bool, probe_summary: str, check_probe) -> None:
@@ -374,9 +338,6 @@ def confirm_remove_cached(page: ft.Page, identifier: str, on_yes) -> None:
             ],
         )
     )
-
-
-from .defaults_dialogs import open_display_defaults, open_terminal_defaults  # noqa: E402,F401
 
 
 def confirm_simple(page: ft.Page, title: str, body: str, label: str, on_yes) -> None:

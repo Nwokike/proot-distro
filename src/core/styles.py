@@ -164,8 +164,17 @@ def loading_state(label: str = "Loading…") -> ft.Control:
 
 
 def pill_button_style() -> ft.ButtonStyle:
-    """The house pill shape for Filled/FilledTonal buttons."""
-    return ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL))
+    """The ONE button style: house pill shape at house density.
+
+    Every Filled/Outlined/Text button inherits it through the page theme, and
+    buttons that set `style=pill_button_style()` get exactly the same thing.
+    The size lives in tokens: `BUTTON_PADDING_H` and `BUTTON_ICON_SIZE`."""
+    return ft.ButtonStyle(
+        shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
+        padding=ft.Padding(tokens.BUTTON_PADDING_H, 0, tokens.BUTTON_PADDING_H, 0),
+        visual_density=ft.VisualDensity.COMPACT,
+        icon_size=tokens.BUTTON_ICON_SIZE,
+    )
 
 
 def dialog_title(text: str) -> ft.Text:

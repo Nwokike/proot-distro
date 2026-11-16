@@ -54,11 +54,11 @@ def _call_get_proot_cmd(module_name: str, fn_name: str, namespace, _retry: bool 
                     from core import proot_probe
 
                     if proot_probe.ensure_proot_env(force=True):
-                        logger.info("proot payload resolved on retry — retrying %s", fn_name)
+                        logger.info("proot payload resolved on retry, retrying %s", fn_name)
                         sys.stdout = stdout_backup
                         sys.stderr = stderr_backup
                         return _call_get_proot_cmd(module_name, fn_name, namespace, _retry=False)
-                raise RuntimeError(f"{fn_name} --get-proot-cmd exited {code} — {detail}") from exc
+                raise RuntimeError(f"{fn_name} --get-proot-cmd exited {code}: {detail}") from exc
         finally:
             sys.stdout = stdout_backup
             sys.stderr = stderr_backup

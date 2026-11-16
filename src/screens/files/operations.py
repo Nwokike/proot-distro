@@ -11,6 +11,7 @@ from pathlib import Path
 
 import flet as ft
 
+from components.ui import house_field
 from core import theme, tokens
 from services import container_files_service
 
@@ -55,7 +56,7 @@ def preview_file(page: ft.Page, container: str, file_path: str) -> None:
             )
             if data["type"] == "image":
                 dialog_content = ft.Image(
-                    src_base64=data["base64"],
+                    src=data["base64"],
                     fit=ft.BoxFit.CONTAIN,
                     width=tokens.DIALOG_WIDTH_LG,
                 )
@@ -65,7 +66,7 @@ def preview_file(page: ft.Page, container: str, file_path: str) -> None:
                     read_only=True,
                     multiline=True,
                     text_size=tokens.FONT_XS,
-                    font_family=tokens.MONO_FONT,
+                    text_style=ft.TextStyle(size=tokens.FONT_XS, font_family=tokens.MONO_FONT),
                     height=tokens.FILE_LIST_HEIGHT,
                     border=ft.NoInputBorder(),
                 )
@@ -95,12 +96,7 @@ def open_new_folder_dialog(
     load_dir: Callable[[], None],
     _e=None,
 ) -> None:
-    folder_field = ft.TextField(
-        label="Folder Name",
-        hint_text="e.g. scripts",
-        text_size=tokens.FONT_SM,
-        autofocus=True,
-    )
+    folder_field = house_field(label="Folder Name", hint="e.g. scripts", autofocus=True)
 
     def _create(_e=None) -> None:
         name = (folder_field.value or "").strip()
@@ -246,6 +242,17 @@ async def handle_upload(
     load_dir()
 
 
+async def _remove_later(path: Path, delay: float = 30.0) -> None:
+    """Delete a staged export after the hand-off; a no-op if it is gone."""
+    import asyncio
+
+    try:
+        await asyncio.sleep(delay)
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 async def handle_download(
     page: ft.Page,
     container: str,
@@ -335,7 +342,11 @@ async def handle_download(
                             [ft.ShareFile.from_path(str(local_path))],
                             title=f"{container}: {default_name}",
                         )
-                        show_snack(page, "ready — choose where to save it")
+                        show_snack(page, "ready: choose where to save it")
+                        # The staged copy has done its job; remove it after the
+                        # receiving app has had time to read it (no more orphan
+                        # exports sitting in temp until the 24h sweep).
+                        page.run_task(_remove_later, local_path)
                     except Exception as exc:
                         show_snack(page, f"export staged at {local_path} ({exc})")
                 else:

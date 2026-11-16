@@ -937,32 +937,31 @@ def test_fab_has_copy_full_output_and_no_select_all():
     assert '"Select All"' not in src
 
 
-def test_display_tab_has_a_new_display_plus():
+def test_display_tab_lists_presets_globally_then_open_display():
+    """Owner ruling 2026-11-15: presets are listed GLOBALLY (one list, each row
+    naming its container), and every container keeps Home's single "Open
+    display" button. No per-distro preset grouping, no "Install desktop"."""
     src = (ROOT / "src" / "screens" / "display_view.py").read_text(encoding="utf-8")
-    assert "show_new_display_sheet" in src
-    assert "ADD_ROUNDED" in src
-
-
-def test_display_tab_groups_desktop_and_single_app():
-    """The two sections a display IS — GUI application (first) and Desktop
-    (one app alone on :N) — with the starting card driven by observable state."""
-    src = (ROOT / "src" / "screens" / "display_view.py").read_text(encoding="utf-8")
-    assert '"Desktop"' in src
-    assert '"GUI application"' in src
-    # The starting card reads display_status (observable), not manager state.
+    assert "st.app_presets" in src
+    assert "def _run_preset" in src and "def _display_card" in src
+    assert '_section("Presets"' in src and '_section("Displays"' in src
+    assert '"Open display"' in src
+    assert '"Install desktop"' not in src
+    # Each preset row says which container it runs in.
+    assert 'preset.get("container"' in src
+    # No dead hero card and no duplicated entry point.
+    assert "GUI application" not in src
+    assert "Icons.ADD_ROUNDED" not in src
     assert 'st.display_status == "starting"' in src
 
 
 def test_display_tab_running_section_is_mode_agnostic():
     """Running displays (desktop OR single app) surface in ONE 'Running'
-    section — not split into 'Desktops'/'Apps' — and the per-container
-    desktop action is right-aligned via the expanding details column
-    (matching distro screen)."""
+    section, never split by mode."""
     src = (ROOT / "src" / "screens" / "display_view.py").read_text(encoding="utf-8")
-    assert '"Running"' in src
+    assert 'sections.append(_section("Running", None, _session_rows(running)))' in src
+    assert '_section("Apps"' not in src
     assert '"Desktops"' not in src
-    assert '"Apps"' not in src
-    assert "controls=[name_text, distro_text]" in src
 
 
 def test_display_stop_is_reactive_with_stopping_spinner():
@@ -1048,7 +1047,7 @@ def test_novnc_is_vendored_verbatim_with_provenance():
     assert (novnc / "vendor" / "pako").is_dir()
     assert not (novnc / "index.html").exists()  # our hand-rolled page is gone
     defaults = json.loads((novnc / "defaults.json").read_text(encoding="utf-8"))
-    assert defaults["resize"] == "remote"  # the desktop follows the phone screen
+    assert defaults["resize"] == "scale"  # the whole desktop fits the phone screen
     assert defaults["reconnect"] is True
 
 
@@ -1065,13 +1064,15 @@ def test_stream_server_gates_both_the_page_and_the_websocket():
     assert "send_bytes" in src
 
 
-def test_distro_banner_between_install_and_containers():
-    """One banner between the install area and the Containers header; none
-    inside the container list; search keeps its empty-state banner."""
+def test_home_containers_before_install_with_one_banner():
+    """Owner ruling 2026-11-15: the container list comes FIRST, then one banner,
+    then the install/search area exactly as before. Search keeps its
+    empty-state banner; the search bar still has no leading icon."""
     src = (ROOT / "src" / "screens" / "distro" / "__init__.py").read_text(encoding="utf-8")
-    banner = src.index("pooled_banner_ad(AD_SLOT_CONTAINERS, page)")
     header = src.index('section_header("Containers")')
-    assert banner < header
+    banner = src.index("pooled_banner_ad(AD_SLOT_CONTAINERS, page)")
+    install = src.index('section_header("Install" if mode == "install"')
+    assert header < banner < install
     assert '"containers-empty"' not in src
     assert "AD_SLOT_SEARCH_EMPTY" in src
     # Search bar: no leading icon; the trailing action is the mode icon.
@@ -1079,11 +1080,37 @@ def test_distro_banner_between_install_and_containers():
     assert "ft.Icons.SEARCH_ROUNDED," in src
 
 
-def test_app_sheet_launches_single_app_displays():
-    """The custom command must reach start_display as app_command (was dropped)."""
-    src = module_text("screens/display_launcher.py", "screens/display_sheets")
-    assert "methods.start_display, container, None, cmd.strip(), None" in src
-    assert "asyncio.gather" in src  # probes run in parallel now
+def test_one_display_sheet_switches_desktop_and_app():
+    """One sheet, one mode switch (owner ruling 2026-11-15): the command must
+    reach start_display as app_command, the probe runs in parallel, and every
+    shared option is built ONCE outside the mode branches."""
+    sheet_dir = ROOT / "src" / "screens" / "display_sheets"
+    src = (sheet_dir / "launcher_sheet.py").read_text(encoding="utf-8")
+    parts = (sheet_dir / "sheet_parts.py").read_text(encoding="utf-8")
+    assert "methods.start_display" in src
+    assert "app_command if mode" in src
+    # The app probe lives in ONE place (the controller) and the sheet reads it.
+    assert "methods.probe_apps" in src
+    controller = (ROOT / "src" / "controller_actions" / "display_session.py").read_text(
+        encoding="utf-8"
+    )
+    assert "asyncio.gather" in controller
+    # The App | Desktop switch.
+    assert "def mode_pill" in parts and '"Desktop"' in src and '"App"' in src
+    # The merged app sheet is gone; the unified sheet owns the command field.
+    assert not (sheet_dir / "app_sheet.py").exists()
+    # Shared surface: display number, image/viewer pills, advanced Xvnc and the
+    # login flags — built in sheet_parts, called once, outside the branches.
+    assert "def add_display_options" in parts
+    assert "def run_as_block" in parts
+    for marker in (
+        "add_display_options(display_no)",
+        "_advanced_display_controls()",
+        "run_as_block(fields)",
+        "parse_env_bind",
+        "option_error",
+    ):
+        assert marker in src
 
 
 def test_glycin_bwrap_gets_fake_overflow_ids():
@@ -1096,19 +1123,22 @@ def test_glycin_bwrap_gets_fake_overflow_ids():
     assert 'write_text("65534\\n"' in src
 
 
-def test_launcher_is_app_first_with_display_and_advanced_options():
-    """The launcher leads with the app command (not the desktop), exposes an
-    explicit display number, and keeps the full option set collapsed by default
-    so non-technical users get a simple Start."""
+def test_launcher_is_one_sheet_with_a_mode_switch_and_every_option():
+    """ONE sheet: a Desktop | App switch, an explicit display number, the image
+    and viewer pills shared by both modes, and the login/run flags collapsed by
+    default so a non-technical user still gets one obvious Start button."""
     src = module_text("screens/display_launcher.py", "screens/display_sheets")
-    assert 'mode = {"value": "app"}' in src
+    assert 'mode = {"value": start_mode}' in src
     assert '"App"' in src and '"Desktop"' in src
-    assert "ft.Dropdown(" in src and 'label="Display"' in src
-    assert "def _collect_options(" in src
+    # The display number is a house pill (no Material Dropdown anywhere).
+    assert "pill_dropdown(" in src and '"Display"' in src
+    assert "MAX_DISPLAY_NUMBER" in src
+    assert "def _options(" in src
     assert '"fix_low_ports"' in src and '"shared_home"' in src
-    assert "Advanced options" in src
-    # the advanced section is collapsed by default
-    assert "visible=False" in src
+    # The login flags and the Xvnc/audio surface are collapsed by default.
+    assert "def run_as_block" in src
+    assert "expanded=False" in src
+    assert "add_display_options(" in src
 
 
 def test_display_toolbar_has_terminal_not_paste_and_inline_output_panel():
@@ -1132,15 +1162,30 @@ def test_settings_offer_custom_values_and_portrait():
     assert '"Compression"' in src
 
 
-def test_naming_says_open_display_and_install_display_support():
-    launcher = module_text("screens/display_launcher.py", "screens/display_sheets")
+def test_naming_and_no_duplicate_single_app_entry():
+    """Cards open a display; the install cell installs DESKTOP support; single
+    apps are reached only through the sheet's App mode (owner ruling
+    2026-11-15: the old sheet had three paths to the same thing)."""
+    sheet_dir = ROOT / "src" / "screens" / "display_sheets"
+    launcher = (sheet_dir / "launcher_sheet.py").read_text(encoding="utf-8")
+    parts = (sheet_dir / "sheet_parts.py").read_text(encoding="utf-8")
     card = (ROOT / "src" / "screens" / "container_card.py").read_text(encoding="utf-8")
     view = (ROOT / "src" / "screens" / "display_view.py").read_text(encoding="utf-8")
-    # The install CELL keeps its name; cards always open a display (the app
-    # path needs nothing installed).
-    assert '"Install display support"' in launcher
-    assert '"Open display"' in card and '"Open display"' in view
-    assert "Install desktop" not in launcher + card + view
+    assert '"Install desktop"' in launcher
+    assert '"Open display"' in card
+    # The tab lists presets globally, then one Open display card per container.
+    assert '"Presets"' in view and '"Displays"' in view
+    # One app entry: the mode switch, never a second "run one app" button.
+    assert '"App"' in launcher and '"Run one app' not in launcher
+    assert "Open an app on a new display" not in launcher
+    # The app command is the CollabShell cell (input + OUTPUT), and saving a
+    # preset sits UNDER it rather than beside Start on a narrow screen.
+    assert launcher.count("build_command_cell(") == 2
+    assert "Save as preset…" in launcher
+    # An unknown distro still gets a path: the editable install cell starts as
+    # a placeholder instead of vanishing.
+    assert "def install_cell_placeholder" in parts
+    assert "No supported package manager was detected" in parts
 
 
 def test_cache_invalidation_on_remove_reset_rename():
@@ -1249,7 +1294,9 @@ async def test_start_x_display_injects_the_env_into_the_live_shell():
     await controller.start_x_display("debian")
 
     assert controller.desk_manager.started["bare"] is True
-    written = b"".join(entry.session.writes).decode()
-    assert "export DISPLAY=127.0.0.1:3" in written
-    assert "export XAUTHORITY=/tmp/x11/xauth-3" in written
+    written = b"".join(entry.session.writes)
+    # Ctrl-U clears any half-typed line; the source-file injection replaces the
+    # old blind `export …; export …` line (which a busy shell could swallow).
+    assert written.startswith(b"\x15. ")
+    assert b"/tmp/x11/env" in written
     assert snacks and "attached to this shell" in snacks[-1]

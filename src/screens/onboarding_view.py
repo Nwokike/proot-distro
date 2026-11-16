@@ -97,7 +97,7 @@ def _build_slide_1() -> ft.Column:
     """Slide 1: Brand welcome and core capabilities."""
     return ft.Column(
         controls=[
-            build_brand_hero("Linux on Android — no root"),
+            build_brand_hero("Linux on Android, no root"),
             ft.Container(height=tokens.SPACE_MD),
             _feature_row(
                 ft.Icons.SECURITY_ROUNDED,
@@ -112,7 +112,7 @@ def _build_slide_1() -> ft.Column:
             _feature_row(
                 ft.Icons.DESKTOP_WINDOWS_ROUNDED,
                 "Desktop & Apps (X11)",
-                "Run a full X11 desktop or one app, streamed in the app. X11 only — "
+                "Run a full X11 desktop or one app, streamed in the app. X11 only: "
                 "Wayland-only apps cannot render yet.",
             ),
             _feature_row(

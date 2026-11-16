@@ -64,11 +64,11 @@ class AdService:
         not silently disable ads there.
         """
         if not _HAS_ADS:
-            logger.debug("AdService: flet_ads not available — ads disabled this build")
+            logger.debug("AdService: flet_ads not available, ads disabled this build")
             self._can_request_ads = False
             return
         if not self._is_mobile():
-            logger.debug("AdService: non-mobile platform — consent flow skipped")
+            logger.debug("AdService: non-mobile platform, consent flow skipped")
             self._can_request_ads = True
             return
         try:
@@ -121,7 +121,7 @@ class AdService:
         """Pre-load an interstitial ad for later display."""
         self._on_close = on_close
         if not _HAS_ADS or not self._is_mobile():
-            logger.debug("AdService: preload skipped — flet_ads missing or non-mobile")
+            logger.debug("AdService: preload skipped, flet_ads missing or non-mobile")
             return
         try:
             ad = fta.InterstitialAd(
@@ -157,13 +157,13 @@ class AdService:
 
     async def show_interstitial(self) -> bool:
         if not _HAS_ADS or not self._is_mobile():
-            logger.debug("AdService: interstitial skipped — ads unavailable or non-mobile")
+            logger.debug("AdService: interstitial skipped, ads unavailable or non-mobile")
             return False
         if self._last_interstitial_at is not None:
             elapsed = time.monotonic() - self._last_interstitial_at
             if elapsed < self.INTERSTITIAL_MIN_INTERVAL_SEC:
                 logger.debug(
-                    "AdService: interstitial skipped — %.0fs since the last one (min interval %.0fs)",
+                    "AdService: interstitial skipped, %.0fs since the last one (min interval %.0fs)",
                     elapsed,
                     self.INTERSTITIAL_MIN_INTERVAL_SEC,
                 )
@@ -219,7 +219,7 @@ class AdService:
             logger.debug("AdService: could not register fresh interstitial: %s", exc)
             self._shown_interstitial = None
             return False
-        logger.debug("AdService: fresh interstitial queued — it will show on load")
+        logger.debug("AdService: fresh interstitial queued, it will show on load")
         return True
 
     async def close(self) -> None:

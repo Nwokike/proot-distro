@@ -22,54 +22,54 @@ import flet as ft
 
 from components import card, pill_dropdown, section_header
 from components.banner_ad import pooled_banner_ad
+from components.ui import house_field
 from core import layout, styles, theme, tokens
-from core.constants import AD_SLOT_BUILD, UPSTREAM_ARCH_CHOICES
+from core.constants import AD_SLOT_BUILD
 from core.state import state
 from screens.settings_components import _setting_row, _settings_card
+from services import proot_service
 from state.controller_ctx import ControllerMethodsCtx
-
-# Upstream accepts both plain proot-distro archs AND Docker platform strings
-# (build's -a passthrough) — expose only the ones its arch map knows.
-_ARCH_CHOICES = UPSTREAM_ARCH_CHOICES
 
 
 def _field(
     label: str, value: str, on_change, *, multiline: bool = False, width: int | None = None
 ) -> ft.TextField:
-    return ft.TextField(
+    return house_field(
         label=label,
-        hint_text=label,
+        hint=label,
         value=value,
         on_change=lambda e: on_change(e.control.value),
-        text_size=tokens.FONT_SM,
         multiline=multiline,
         min_lines=2 if multiline else None,
         max_lines=6 if multiline else None,
         expand=width is None,
         width=width,
-        height=None if multiline else tokens.CONTROL_INPUT,
-        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
     )
 
 
 def _arch_dropdown(value: str, on_select):
-    """Tiny pill dropdown (CollabShell model-pill style), not a big rectangle."""
+    """Tiny pill dropdown (CollabShell model-pill style), not a big rectangle.
+    The choices are queried here, so importing this module never touches
+    proot-distro's storage."""
     return pill_dropdown(
         "Arch (-a)",
         ft.Icons.MEMORY_ROUNDED,
-        list(_ARCH_CHOICES),
+        list(proot_service.arch_choices()),
         value,
         on_select,
         tooltip="Target CPU architecture (-a/--architecture; default: host)",
     )
 
 
-def _switch(label: str, value: bool, on_change, tooltip: str = "") -> ft.Switch:
-    return ft.Switch(
-        label=label,
-        value=value,
-        on_change=lambda e: on_change(bool(e.control.value)),
-        tooltip=tooltip or None,
+def _switch(label: str, value: bool, on_change, tooltip: str = "") -> ft.Control:
+    """House toggle (scaled switch + compact label)."""
+    from components.ui import switch_row
+
+    return switch_row(
+        label,
+        value,
+        lambda e: on_change(bool(e.control.value)),
+        tooltip=tooltip,
     )
 
 

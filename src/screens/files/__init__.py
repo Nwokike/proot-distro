@@ -14,6 +14,7 @@ import flet as ft
 from components import card, containers_required_empty_state
 from components.banner_ad import page_tail
 from components.file_item import build_file_item
+from components.ui import search_field
 from core import theme, tokens
 from core.constants import AD_SLOT_FILES, AD_SLOT_FILES_EMPTY, GUEST_HOME
 from core.state import state
@@ -359,13 +360,9 @@ def FilesView(
             expand=True,
         )
 
-    filter_field = ft.TextField(
-        hint_text="Filter this folder",
-        prefix_icon=ft.Icons.SEARCH_ROUNDED,
+    filter_field = search_field(
+        hint="Filter this folder",
         value=filter_text,
-        text_size=tokens.FONT_SM,
-        dense=True,
-        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
         on_change=lambda e: set_filter_text((e.control.value or "").strip().lower()),
     )
 

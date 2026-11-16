@@ -66,7 +66,7 @@ def licenses_view() -> ft.Control:
         ft.Text(
             "Source code offer (GPL-2.0 §3(b) / GPL-3.0 §6(b)). The complete "
             "machine-readable Corresponding Source for the GPL-licensed "
-            "components above — including this application — is available "
+            "components above, including this application, is available "
             "at https://github.com/Nwokike/proot-distro and will remain "
             "available for at least three (3) years from the date of each "
             "release. Upstream: github.com/termux/proot, "
@@ -115,22 +115,8 @@ def licenses_view() -> ft.Control:
                 subtitle=ft.Text(f"License: {lic}", size=tokens.FONT_XS, color=theme.text_dim()),
             )
         )
-    rows.append(ft.Divider())
-    rows.append(ft.Text("Python Dependencies", size=tokens.FONT_MD, weight=ft.FontWeight.BOLD))
-    for dist in _PY_DISTS:
-        ver, lic = _dist_license(dist)
-        rows.append(
-            ft.ListTile(
-                title=ft.Text(
-                    f"{dist} {ver}".strip(), size=tokens.FONT_SM, weight=ft.FontWeight.BOLD
-                ),
-                subtitle=ft.Text(
-                    f"License: {lic or 'See license text'}",
-                    size=tokens.FONT_XS,
-                    color=theme.text_dim(),
-                ),
-            )
-        )
+    # License TEXTS before the dependency inventory (owner ruling 2026-11-15):
+    # the full notices are the substance; the Python list is an index.
     rows.append(ft.Divider())
     rows.append(ft.Text("License Texts", size=tokens.FONT_MD, weight=ft.FontWeight.BOLD))
     for fname, label in _TEXT_FILES:
@@ -149,6 +135,22 @@ def licenses_view() -> ft.Control:
                         padding=tokens.SPACE_SM,
                     )
                 ],
+            )
+        )
+    rows.append(ft.Divider())
+    rows.append(ft.Text("Python Dependencies", size=tokens.FONT_MD, weight=ft.FontWeight.BOLD))
+    for dist in _PY_DISTS:
+        ver, lic = _dist_license(dist)
+        rows.append(
+            ft.ListTile(
+                title=ft.Text(
+                    f"{dist} {ver}".strip(), size=tokens.FONT_SM, weight=ft.FontWeight.BOLD
+                ),
+                subtitle=ft.Text(
+                    f"License: {lic or 'See license text'}",
+                    size=tokens.FONT_XS,
+                    color=theme.text_dim(),
+                ),
             )
         )
     return ft.Column(controls=rows, scroll=ft.ScrollMode.AUTO, expand=True)

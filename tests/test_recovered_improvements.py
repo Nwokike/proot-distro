@@ -100,7 +100,7 @@ async def test_install_progress_refreshes_the_open_dialog(fake_page):
 
 
 @pytest.mark.asyncio
-async def test_open_session_logs_and_reraises_the_original_error(caplog):
+async def test_open_session_reports_the_error_without_re_raising(caplog):
     error = RuntimeError("session startup failed")
     # The shell preflight runs before the manager: give the container a shell
     from core import storage_paths
@@ -117,10 +117,11 @@ async def test_open_session_logs_and_reraises_the_original_error(caplog):
     controller.session_manager = SessionManagerStub()
     controller.show_snack = snacks.append
 
-    with pytest.raises(RuntimeError, match="session startup failed") as raised:
-        await controller.open_session("debian")
+    # An exception escaping a page.run_task handler lands in Flet's future
+    # callback and becomes a page-error storm (device 2026-11-15) — the
+    # controller reports through the snack and returns instead.
+    await controller.open_session("debian")
 
-    assert raised.value is error
     assert state.session_error == "could not open debian: session startup failed"
     assert snacks == [state.session_error]
     assert any(record.exc_info for record in caplog.records)

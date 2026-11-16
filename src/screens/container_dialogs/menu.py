@@ -23,6 +23,11 @@ def container_menu_items(page: ft.Page, methods, cname: str) -> list[ft.PopupMen
             on_click=lambda _e: ask_shell_options(page, methods, cname),
         ),
         ft.PopupMenuItem(
+            icon=ft.Icons.APPS_ROUNDED,
+            content=ft.Text("Apps on display…", size=tokens.FONT_SM),
+            on_click=lambda _e: page.run_task(methods.open_display, cname),
+        ),
+        ft.PopupMenuItem(
             icon=ft.Icons.EDIT_ROUNDED,
             content=ft.Text("Rename", size=tokens.FONT_SM),
             on_click=lambda _e: ask_rename(page, methods, cname),

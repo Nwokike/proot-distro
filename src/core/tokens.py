@@ -52,6 +52,14 @@ STATUS_DOT = 12
 STATUS_DOT_SM = 10
 CHIP_PADDING_H = 10
 CHIP_PADDING_V = 4
+# Material's Switch is ~60x40 dp — at this scale it reads as a normal toggle
+# next to a pill instead of dominating the row (owner ruling 2026-11-15).
+SWITCH_SCALE = 0.6
+# A compact inline field aligned with a pill's box (pills are ~30 high).
+CONTROL_CHIP = 32
+FIELD_COMPACT_WIDTH = 80
+# Filled house input: no outline box, one tinted rounded surface.
+FIELD_FILL_OPACITY = 0.06
 NAV_BAR_CLEARANCE = 88
 MESSAGE_MAX_WIDTH = 320
 DIALOG_WIDTH = 380
@@ -76,11 +84,19 @@ SNACK_DURATION_MS = 3000
 
 # Control heights — the touch-target scale
 CONTROL_XS = 26  # numbered step badge
-CONTROL_SM = 44  # compact buttons inside cards (>=44dp touch target)
-CONTROL_MD = 44  # standard buttons / icon backdrops (>=44dp)
-CONTROL_LG = 44  # distro tile icon backdrop (>=44dp)
+# Buttons inside cards and rows: compact, but still a 36dp tap target. The
+# Material default (44dp + 24dp side padding) is what made every button read
+# as a big blue box; one style helper now owns the density.
+CONTROL_SM = 36
+CONTROL_MD = 40  # primary actions / icon backdrops
+CONTROL_LG = 44  # distro tile icon backdrop
 CONTROL_XL = 42  # feature-card icon backdrop
 CONTROL_INPUT = 44  # text fields and search bars
+# Button density: horizontal padding + icon size. Tune THESE two numbers to
+# resize every pill button in the app. Material's visual_density lives in
+# styles.pill_button_style (it is an enum, not a number).
+BUTTON_PADDING_H = 12
+BUTTON_ICON_SIZE = 18
 
 # Fixed field/dropdown widths (rows never overflow; narrow screens wrap under)
 FIELD_NAME_WIDTH = 190
@@ -172,7 +188,6 @@ HTTP_MAX_ATTEMPTS = 2
 FIELD_PATH_WIDTH = 220
 FIELD_BUILD_ARGS_WIDTH = 260
 FIELD_DISPLAY_WIDTH = 140
-SWITCH_SCALE = 0.9
 DIALOG_LOG_HEIGHT = 260
 AUTO_GEOMETRY_LONG_SIDE = 1280
 PROGRESS_RING_STROKE_THICK = 3

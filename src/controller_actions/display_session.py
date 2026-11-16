@@ -19,9 +19,78 @@ logger = logging.getLogger(__name__)
 
 
 class DisplaySessionMixin:
+    async def probe_apps(self, container: str) -> None:
+        """Detect the preset GUI apps this container actually has.
+
+        Primary source: the container's own .desktop files, read host-side (no
+        proot spawn, real application names). Fallback for minimal images that
+        register nothing: a `command -v` probe of the bundled preset list.
+        Cached on `state.detected_apps` so the Display tab and the sheet can
+        offer one-tap apps."""
+        import asyncio
+
+        from core import probe_cache
+        from core.constants import APP_PRESETS
+        from services import proot_service, session_service
+
+        detected = dict(state.detected_apps or {})
+        if container in detected:
+            return
+        disk = probe_cache.load("apps", container)
+        if isinstance(disk, list):
+            detected[container] = disk
+            state.detected_apps = detected
+            return
+
+        scan_failed = False
+        try:
+            found = await asyncio.to_thread(proot_service.guest_desktop_apps, container)
+        except Exception as exc:
+            logger.debug("desktop-app scan failed for %s: %s", container, exc)
+            found = []
+            scan_failed = True
+
+        if not found:
+            errors = {"count": 0}
+
+            async def _one(label: str, cmd: str) -> dict | None:
+                try:
+                    result = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            session_service.command_capture,
+                            container,
+                            ["/bin/sh", "-c", f"command -v {cmd}"],
+                            timeout=10.0,
+                        ),
+                        timeout=12.0,
+                    )
+                except Exception as exc:
+                    logger.debug("app probe for %s/%s failed: %s", container, cmd, exc)
+                    errors["count"] += 1
+                    return None
+                if result.get("ok") and result.get("output", "").strip():
+                    return {"label": label, "cmd": cmd}
+                return None
+
+            found = [
+                item
+                for item in await asyncio.gather(*(_one(label, cmd) for label, cmd in APP_PRESETS))
+                if item is not None
+            ]
+            # Every probe ERRORED (as opposed to a clean "not installed"): the
+            # answer is unknown, so do not pin "no apps" in the cache for an
+            # hour.
+            if errors["count"] == len(APP_PRESETS) or (scan_failed and errors["count"]):
+                detected[container] = found
+                state.detected_apps = detected
+                return
+        probe_cache.store("apps", container, found)
+        detected[container] = found
+        state.detected_apps = detected
+
     async def open_display(self, container: str) -> None:
         """Card/tab entry point: resume a running display, else open the launch
-        sheet (Start / app / desktop / options). Never auto-starts."""
+        sheet (App first / Desktop / options). Never auto-starts."""
         state.display_error = ""
         await self.probe_display(container)
         caps = self._display_caps(container)
@@ -62,7 +131,7 @@ class DisplaySessionMixin:
         ) or any(
             s.status is desk_service.DeskStatus.STARTING for s in manager.for_container(container)
         ):
-            self.show_snack("a display is already starting — wait a moment")
+            self.show_snack("a display is already starting. Wait a moment")
             return
         await self.ad_service.show_interstitial()
         caps = self._display_caps(container)
@@ -75,7 +144,7 @@ class DisplaySessionMixin:
         tunnel_enabled = bool(settings.get("tunnel"))
         if tunnel_enabled and not await self._guest_has_ssh(container):
             self.show_snack(
-                "the tunnel needs ssh in the container — installing desktop support "
+                "the tunnel needs ssh in the container. Installing desktop support "
                 "adds openssh-client"
             )
             tunnel_enabled = False
@@ -93,9 +162,7 @@ class DisplaySessionMixin:
         if settings.get("mic", True):
             mic_allowed = await self._ensure_mic_permission()
             if not mic_allowed:
-                self.show_snack(
-                    "microphone permission not granted — display audio is playback-only"
-                )
+                self.show_snack("microphone permission not granted. Display audio is playback-only")
         # Every value below is clamped/validated here, then threads straight
         # into the Xvnc argv / PulseAudio module lines (no dead knobs).
         depth = str(settings.get("depth", "24"))
@@ -320,7 +387,7 @@ class DisplaySessionMixin:
         )
         rows.append(
             ft.Text(
-                "Any device opening a URL above must enter this access code — "
+                "Any device opening a URL above must enter this access code. "
                 "localhost.run's free URLs rotate after a few hours.",
                 size=tokens.FONT_XXS,
                 color=theme.text_dim(),
@@ -330,12 +397,12 @@ class DisplaySessionMixin:
         share_url = session.tunnel_url
         if not share_url:
             self.page.pop_dialog()
-            self.show_snack("no public URL yet — turn on the tunnel for this display to share it")
+            self.show_snack("no public URL yet. Turn on the tunnel to share this display")
             return
         self.page.show_dialog(
             ft.AlertDialog(
                 title=ft.Text(
-                    f"Share display — {key}",
+                    f"Share display: {key}",
                     size=tokens.FONT_LG,
                     weight=ft.FontWeight.BOLD,
                 ),

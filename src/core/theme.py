@@ -156,6 +156,13 @@ def build_theme() -> tuple[ft.Theme, ft.Theme]:
             outline=on_surface_variant_c,
         )
 
+    # ONE button density for the whole app. Every Filled/Outlined/Text button
+    # inherits it; per-button styles only override colors. The style lives in
+    # core.styles (imported here lazily: styles imports theme for colors).
+    from core.styles import pill_button_style
+
+    button_style = pill_button_style()
+
     light = ft.Theme(
         color_scheme=scheme(
             AppColors.LIGHT_PRIMARY,
@@ -165,6 +172,9 @@ def build_theme() -> tuple[ft.Theme, ft.Theme]:
             AppColors.LIGHT_WARN,
         ),
         font_family=FONT_FAMILY,
+        filled_button_theme=ft.FilledButtonTheme(style=button_style),
+        outlined_button_theme=ft.OutlinedButtonTheme(style=button_style),
+        text_button_theme=ft.TextButtonTheme(style=button_style),
     )
     dark = ft.Theme(
         color_scheme=scheme(
@@ -175,6 +185,9 @@ def build_theme() -> tuple[ft.Theme, ft.Theme]:
             AppColors.WARN,
         ),
         font_family=FONT_FAMILY,
+        filled_button_theme=ft.FilledButtonTheme(style=button_style),
+        outlined_button_theme=ft.OutlinedButtonTheme(style=button_style),
+        text_button_theme=ft.TextButtonTheme(style=button_style),
     )
     return light, dark
 

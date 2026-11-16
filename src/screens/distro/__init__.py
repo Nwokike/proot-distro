@@ -7,16 +7,17 @@ import flet as ft
 from components import card, empty_state, pill_dropdown, probe_banner, section_header
 from components.banner_ad import pooled_banner_ad
 from components.brand_hero import build_brand_hero
+from components.ui import house_field, search_field
 from core import layout, theme, tokens
 from core.constants import (
     AD_EVERY_ROWS,
     AD_SLOT_CONTAINERS,
     AD_SLOT_SEARCH_EMPTY,
     SEARCH_LIMIT_DEFAULT,
-    UPSTREAM_ARCH_CHOICES,
 )
 from core.state import state
 from screens.container_card import build_container_card
+from services import proot_service
 from state.controller_ctx import ControllerMethodsCtx
 
 from . import sections
@@ -35,11 +36,10 @@ def DistroView() -> ft.Control:
     # Sherlock's email/username swap: one bar, two modes.
     mode, set_mode = ft.use_state("install")  # "install" | "search"
 
-    # Upstream accepts both plain proot-distro archs AND Docker platform
-    # strings (install's --architecture passthrough) — expose only the ones
-    # upstream's arch map actually knows (linux/arm64/v8 and linux/arm/v6 are
-    # NOT in it → "unknown architecture").
-    _ARCH_CHOICES = UPSTREAM_ARCH_CHOICES
+    # Upstream's own accepted architectures: the list is DERIVED from
+    # proot_distro.arch (native names, Docker names and linux/ platform
+    # strings, each validated through normalize_arch), never hardcoded here.
+    _ARCH_CHOICES = proot_service.arch_choices()
 
     is_narrow = layout.is_mobile_layout(page)
 
@@ -171,14 +171,14 @@ def DistroView() -> ft.Control:
         [str(n) for n in (25, 50, 100)],
         search_limit if search_limit in ("25", "50", "100") else str(SEARCH_LIMIT_DEFAULT),
         set_search_limit,
-        tooltip="Max results (limit) — Docker Hub pages of 100",
+        tooltip="Max results (limit), up to Docker Hub page size",
     )
     # Tiny insecure toggle inside the bar (shield icon; lit when on).
     insecure_switch = ft.IconButton(
         icon=ft.Icons.SHIELD_ROUNDED if insecure else ft.Icons.SHIELD_OUTLINED,
         icon_size=tokens.ICON_SM,
         icon_color=theme.warn() if insecure else theme.text_dim(),
-        tooltip="Allow insecure registry (--allow-insecure) — ON"
+        tooltip="Allow insecure registry (--allow-insecure): ON"
         if insecure
         else "Allow insecure registry (--allow-insecure)",
         on_click=lambda _e: set_insecure(not insecure),
@@ -234,16 +234,16 @@ def DistroView() -> ft.Control:
     )
     main_bar = ft.Container(
         alignment=ft.Alignment.CENTER,  # centered like Sherlock's search bar
-        content=ft.SearchBar(
-            value=query,
-            bar_hint_text=(
+        content=search_field(
+            hint=(
                 "docker image ref (e.g. debian)"
                 if mode == "install"
                 else "search Docker Hub (e.g. archlinux)"
             ),
+            value=query,
             # No leading icon (owner ruling) — the action icon at the end IS
             # the mode: big Download in install, Search in search.
-            bar_trailing=[
+            trailing=[
                 insecure_switch if mode == "install" else limit_dropdown,
                 ft.IconButton(
                     icon=ft.Icons.CONTENT_PASTE_ROUNDED,
@@ -261,12 +261,6 @@ def DistroView() -> ft.Control:
                     on_click=lambda _e: _consent_install() if mode == "install" else _on_search(),
                 ),
             ],
-            bar_bgcolor=theme.glass_bg(),
-            bar_border_side=ft.BorderSide(tokens.HAIRLINE, theme.glass_border()),
-            bar_shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_MD),
-            bar_text_style=ft.TextStyle(size=tokens.FONT_SM, weight=ft.FontWeight.W_500),
-            bar_hint_text_style=ft.TextStyle(size=tokens.FONT_SM, color=theme.text_dim()),
-            full_screen=False,
             on_submit=lambda _e: _consent_install() if mode == "install" else _on_search(),
             on_change=lambda e: set_query(e.control.value),
         ),
@@ -288,8 +282,10 @@ def DistroView() -> ft.Control:
         ("Debian", "debian"),
     )
 
+    # Containers first (owner ruling): what you have, then ONE banner, then the
+    # install/search area exactly as before underneath it.
     controls: list[ft.Control] = [
-        build_brand_hero("Linux on Android — no root"),
+        build_brand_hero("Linux on Android, no root"),
     ]
     if not st.probe_passed:
         controls.append(probe_banner(st.probe_summary))
@@ -299,6 +295,26 @@ def DistroView() -> ft.Control:
     active_banner = build_active_install_banner(page)
     if active_banner:
         controls.append(active_banner)
+
+    controls.append(section_header("Containers"))
+    if st.containers:
+        controls.extend(
+            build_container_card(row, page, methods, is_narrow) for row in st.containers
+        )
+    else:
+        controls.append(
+            empty_state(
+                "No containers yet",
+                "Install any Docker image to begin.",
+                icon=ft.Icons.INVENTORY_2_OUTLINED,
+            )
+        )
+    if st.data_note:
+        controls.append(
+            ft.Text(st.data_note, size=tokens.FONT_XS, color=theme.warn(), selectable=True)
+        )
+    # One banner between the container list and the install area (owner ruling).
+    controls.append(pooled_banner_ad(AD_SLOT_CONTAINERS, page))
 
     # Install options — Sherlock pattern: an options row UNDER the install bar,
     # single horizontal track that scrolls on narrow screens (START-aligned so
@@ -314,15 +330,15 @@ def DistroView() -> ft.Control:
                     arch_choice,
                     set_arch_choice,
                     tooltip="Target CPU architecture (-a/--architecture; default: host)",
+                    labels={"host": f"host ({proot_service.host_arch()})"},
                 ),
-                ft.TextField(
-                    hint_text="container name (-n, optional)",
+                house_field(
+                    hint="container name (-n, optional)",
                     value=name,
                     on_change=lambda e: set_name(e.control.value),
                     height=tokens.CONTROL_SM,
                     text_size=tokens.FONT_XS,
                     width=tokens.FIELD_NAME_WIDTH,
-                    border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
                     tooltip="Custom container name (-n); blank = derived from the image",
                 ),
             ],
@@ -346,7 +362,7 @@ def DistroView() -> ft.Control:
     # Install logs — the live stage line under the install section.
     if mode == "install" and (st.installing or st.busy_note):
         progress = (
-            f"installing {st.installing} — {st.install_stage}" if st.installing else st.busy_note
+            f"installing {st.installing}: {st.install_stage}" if st.installing else st.busy_note
         )
         controls.append(ft.Text(progress, size=tokens.FONT_SM, color=theme.accent()))
 
@@ -365,28 +381,6 @@ def DistroView() -> ft.Control:
         # No results yet — including the fresh search screen before the first
         # query — keeps one sticky banner (owner ruling).
         controls.append(pooled_banner_ad(AD_SLOT_SEARCH_EMPTY, page))
-
-    if mode == "install":
-        # One banner between the install area and the Containers section
-        # (owner ruling) — none inside the container list.
-        controls.append(pooled_banner_ad(AD_SLOT_CONTAINERS, page))
-        controls.append(section_header("Containers"))
-        if st.containers:
-            controls.extend(
-                build_container_card(row, page, methods, is_narrow) for row in st.containers
-            )
-        else:
-            controls.append(
-                empty_state(
-                    "No containers yet",
-                    "Install any Docker image to begin.",
-                    icon=ft.Icons.INVENTORY_2_OUTLINED,
-                )
-            )
-        if st.data_note:
-            controls.append(
-                ft.Text(st.data_note, size=tokens.FONT_XS, color=theme.warn(), selectable=True)
-            )
 
     # No banner after the last section — banners live between sections only.
     controls.append(ft.Container(height=tokens.NAV_BAR_CLEARANCE))

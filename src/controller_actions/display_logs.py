@@ -30,7 +30,7 @@ class DisplayLogsMixin:
         self.page.show_dialog(
             ft.AlertDialog(
                 title=ft.Text(
-                    f"Display logs — {key}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
+                    f"Display logs: {key}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD
                 ),
                 content=ft.Container(
                     content=ft.Text(

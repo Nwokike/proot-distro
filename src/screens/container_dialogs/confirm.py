@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import flet as ft
 
+from components.ui import house_field
 from core import theme, tokens
 
 
@@ -121,16 +122,7 @@ def _confirm_restore(page: ft.Page, methods) -> None:
 
 
 def ask_rename(page: ft.Page, methods, container: str) -> None:
-    new_name = ft.TextField(
-        label="New name",
-        value=container,
-        text_size=tokens.FONT_SM,
-        height=tokens.CONTROL_INPUT,
-        border=ft.OutlineInputBorder(
-            border_radius=tokens.RADIUS_MD,
-            side=ft.BorderSide(1, theme.surface_alt()),
-        ),
-    )
+    new_name = house_field(label="New name", value=container)
 
     def _save(_e) -> None:
         page.pop_dialog()

@@ -1,12 +1,13 @@
-"""Display tab — the two things a display IS, as obvious sections:
+"""Display tab.
 
-**Desktop** — a full desktop streamed from an installed container (the
-per-container cards: Open display / Install display support), and **GUI application** — one
-app alone on its own :N (pywebview-style). Running displays surface at the top
-grouped the same way. The + on a section header starts a NEW display.
+Running and failed displays on top. Then one card per container: the apps that
+container actually has (its .desktop entries, detected once), a "Preset apps"
+button for the full list and a command box, and the Desktop action. One app and
+a desktop are different sessions, but they share every option, so both start
+from the same sheet.
 
 The starting card is driven by the OBSERVABLE state (state.display_status), so
-it appears the instant start_display begins — no tab switch needed.
+it appears the instant start_display begins, with no tab switch needed.
 """
 
 from __future__ import annotations
@@ -34,38 +35,23 @@ def _section(title: str, action, rows: list[ft.Control]) -> ft.Control:
 
 @ft.component
 def DisplayView() -> ft.Control:
-    """The Display tab: GUI application first, then Desktop; running displays on top."""
+    """The Display tab: running sessions on top, then one card per container."""
     st, _ = ft.use_state(state)
     methods = ft.use_context(ControllerMethodsCtx)
     page = ft.context.page
     controller = getattr(page, "_controller", None)
     manager = getattr(controller, "desk_manager", None)
 
-    # Probe every installed container once per mount (rootfs reads only — fast).
+    # Probe every installed container once per mount: desktop facts (rootfs
+    # reads) and the preset GUI apps it actually has (one `command -v` each).
     for row in st.containers or []:
         name = row.get("name", "")
-        if name and name not in (st.display_support or {}):
+        if not name:
+            continue
+        if name not in (st.display_support or {}):
             page.run_task(methods.probe_display, name)
-
-    def _new_display(_e) -> None:
-        from screens.display_launcher import show_new_display_sheet
-
-        show_new_display_sheet(page, methods)
-
-    def _plus_button() -> ft.IconButton:
-        # A control can only have ONE parent: each section header gets its
-        # own instance (one shared IconButton mounted twice is undefined).
-        return ft.IconButton(
-            icon=ft.Icons.ADD_ROUNDED,
-            icon_size=tokens.ICON_MD,
-            tooltip="New display — GUI app or desktop",
-            on_click=_new_display,
-        )
-
-    def _single_app(_e) -> None:
-        from screens.display_launcher import show_new_display_sheet
-
-        show_new_display_sheet(page, methods)
+        if st.detected_apps is None or name not in st.detected_apps:
+            page.run_task(methods.probe_apps, name)
 
     sections: list[ft.Control] = []
     # Reading display_sessions_rev subscribes this view to DeskManager
@@ -155,7 +141,9 @@ def DisplayView() -> ft.Control:
                 card(
                     ft.Container(
                         content=ft.Row(
-                            wrap=True,
+                            # No wrap: a Row with an expand child inside a Wrap
+                            # is the Expanded-in-Wrap layout bug (the row
+                            # scattered its actions). The title flexes instead.
                             controls=row_controls,
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
                             spacing=tokens.SPACE_SM,
@@ -188,7 +176,6 @@ def DisplayView() -> ft.Control:
                 card(
                     ft.Container(
                         content=ft.Row(
-                            wrap=True,
                             controls=[
                                 ft.Icon(
                                     ft.Icons.ERROR_OUTLINE,
@@ -295,7 +282,7 @@ def DisplayView() -> ft.Control:
     # argument; its mutations re-render this card reactively (that is the part
     # that makes CollabShell's notebook output move constantly). Includes the
     # owner-requested collapse/expand chevrons.
-    if progress.is_running or progress.logs:
+    if progress.is_running:
 
         def _cancel_install(_e) -> None:
             # The install runs as a PTY capture; Stop kills that session.
@@ -306,117 +293,132 @@ def DisplayView() -> ft.Control:
             DisplayProgressCard(progress, on_cancel=_cancel_install),
         )
 
-    # ── GUI application section (first — the app-first design): one app alone
-    # on its own :N. The desktop is the secondary option, not the headline.
-    sections.append(
-        _section(
-            "GUI application",
-            _plus_button(),
-            [
-                card(
-                    ft.Container(
-                        content=ft.Row(
+    # ── Presets first, then the containers ────────────────────────────────────
+    # Presets are listed GLOBALLY, not per distro: one list, and each row says
+    # which container it runs in. Below it, each container gets the same card
+    # Home shows, with the one "Open display" button.
+    def _run_preset(preset: dict):
+        def _handler(_e) -> None:
+            opts = None
+            if preset.get("work_dir") or preset.get("env"):
+                opts = {}
+                if preset.get("work_dir"):
+                    opts["work_dir"] = preset["work_dir"]
+                if preset.get("env"):
+                    opts["env"] = list(preset["env"])
+            page.run_task(
+                methods.start_display,
+                str(preset.get("container") or (containers[0] if containers else "")),
+                None,
+                str(preset.get("cmd", "")),
+                None,
+                opts,
+            )
+
+        return _handler
+
+    def _delete_preset(name: str):
+        def _handler(_e) -> None:
+            page.run_task(methods.delete_app_preset, name)
+
+        return _handler
+
+    presets = st.app_presets or []
+    preset_rows: list[ft.Control] = [
+        ft.ListTile(
+            leading=ft.Icon(ft.Icons.BOOKMARK_ROUNDED, color=theme.primary()),
+            title=ft.Text(
+                str(preset.get("name", "")),
+                size=tokens.FONT_SM,
+                weight=ft.FontWeight.W_600,
+                color=theme.text(),
+            ),
+            subtitle=ft.Text(
+                " · ".join(
+                    part
+                    for part in (
+                        str(preset.get("cmd", "")),
+                        str(preset.get("container", "")),
+                    )
+                    if part
+                ),
+                size=tokens.FONT_XS,
+                color=theme.text_dim(),
+            ),
+            on_click=_run_preset(preset),
+            trailing=ft.IconButton(
+                icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
+                icon_size=tokens.ICON_SM,
+                tooltip="Delete preset",
+                on_click=_delete_preset(str(preset.get("name", ""))),
+            ),
+        )
+        for preset in presets
+    ]
+    preset_content: ft.Control = (
+        ft.Column(controls=preset_rows, spacing=tokens.SPACE_XXS)
+        if preset_rows
+        else ft.Text(
+            "No presets yet. Open a display, type a command and use Save as preset.",
+            size=tokens.FONT_XS,
+            color=theme.text_dim(),
+        )
+    )
+    sections.append(_section("Presets", None, [card(preset_content, padding=tokens.SPACE_SM)]))
+
+    def _display_card(name: str) -> ft.Control:
+        caps = (st.display_support or {}).get(name) or {}
+        installing_this = progress.is_running and progress.container == name
+
+        def _open(_e) -> None:
+            page.run_task(methods.open_display, name)
+
+        return card(
+            ft.Container(
+                content=ft.Row(
+                    controls=[
+                        ft.Icon(
+                            ft.Icons.DESKTOP_WINDOWS,
+                            size=tokens.ICON_MD,
+                            color=theme.primary(),
+                        ),
+                        ft.Column(
                             controls=[
-                                ft.Icon(
-                                    ft.Icons.WINDOW_ROUNDED,
-                                    size=tokens.ICON_MD,
-                                    color=theme.primary(),
+                                ft.Text(
+                                    name,
+                                    size=tokens.FONT_LG,
+                                    weight=ft.FontWeight.W_600,
+                                    color=theme.text(),
                                 ),
-                                ft.Column(
-                                    controls=[
-                                        ft.Text(
-                                            "Run one app on its own display",
-                                            size=tokens.FONT_MD,
-                                            weight=ft.FontWeight.W_600,
-                                            color=theme.text(),
-                                        ),
-                                        ft.Text(
-                                            "One app — browser, editor, pywebview — alone on "
-                                            "its own display.",
-                                            size=tokens.FONT_XS,
-                                            color=theme.text_dim(),
-                                        ),
-                                    ],
-                                    spacing=tokens.SPACE_XXS,
-                                    expand=True,
-                                ),
-                                ft.Icon(
-                                    ft.Icons.CHEVRON_RIGHT_ROUNDED,
-                                    size=tokens.ICON_MD,
+                                ft.Text(
+                                    caps.get("os", {}).get("pretty_name", ""),
+                                    size=tokens.FONT_XS,
                                     color=theme.text_dim(),
                                 ),
                             ],
-                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                            spacing=tokens.SPACE_SM,
+                            spacing=tokens.SPACE_XXS,
+                            expand=True,
                         ),
-                        on_click=_single_app,
-                        ink=True,
-                    ),
-                    padding=tokens.SPACE_SM,
-                )
-            ],
-        )
-    )
-
-    # ── Desktop section: per-container desktop cards ─────────────────────────
-    if containers:
-        rows = []
-        for name in containers:
-            caps = (st.display_support or {}).get(name) or {}
-            # The display runs IN THE APP — the card always opens one (the
-            # launcher sheet leads with GUI applications); only a full desktop
-            # session depends on the probed desktop facts.
-            installing_this = progress.is_running and progress.container == name
-            label = "Installing…" if installing_this else "Open display"
-
-            def _open(_e, container=name) -> None:
-                page.run_task(methods.open_display, container)
-
-            icon = ft.Icon(ft.Icons.DESKTOP_WINDOWS, size=tokens.ICON_MD, color=theme.primary())
-            name_text = ft.Text(
-                name,
-                size=tokens.FONT_LG,
-                weight=ft.FontWeight.W_600,
-                color=theme.text(),
-            )
-            distro_text = ft.Text(
-                caps.get("os", {}).get("pretty_name", "") if caps else "probing…",
-                size=tokens.FONT_XS,
-                color=theme.text_dim(),
-            )
-            action = ft.FilledButton(
-                label,
-                icon=ft.Icons.DESKTOP_WINDOWS,
+                        ft.FilledButton(
+                            "Installing…" if installing_this else "Open display",
+                            icon=ft.Icons.DESKTOP_WINDOWS,
+                            on_click=_open,
+                            disabled=installing_this,
+                            height=tokens.CONTROL_SM,
+                            style=styles.pill_button_style(),
+                        ),
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=tokens.SPACE_SM,
+                ),
                 on_click=_open,
-                height=tokens.CONTROL_SM,
-                style=styles.pill_button_style(),
-            )
-            # Matching distro screen card layout: icon + expanding text column + right-aligned action
-            content = ft.Row(
-                controls=[
-                    icon,
-                    ft.Column(
-                        controls=[name_text, distro_text],
-                        spacing=tokens.SPACE_XXS,
-                        expand=True,
-                    ),
-                    action,
-                ],
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=tokens.SPACE_SM,
-            )
-            rows.append(
-                card(
-                    ft.Container(
-                        content=content,
-                        on_click=_open,
-                        ink=True,
-                    ),
-                    padding=tokens.SPACE_SM,
-                )
-            )
+                ink=True,
+            ),
+            padding=tokens.SPACE_SM,
+        )
 
-        sections.append(_section("Desktop", None, rows))
+    if containers:
+        sections.append(_section("Displays", None, [_display_card(n) for n in containers]))
 
     # Banner at the very bottom — same position as the Terminal tab.
     sections.append(pooled_banner_ad(AD_SLOT_DISPLAY, page))

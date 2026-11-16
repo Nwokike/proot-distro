@@ -23,7 +23,7 @@ from services.proot_namespaces import (
 )
 
 from . import _core as _core_module
-from ._capabilities import DESKTOP_STARTERS, guest_capabilities
+from ._capabilities import DESKTOP_STARTERS, arch_choices, guest_capabilities, host_arch
 from ._commands import (
     _call_get_proot_cmd,
     fake_sysdata_bindings,
@@ -62,11 +62,16 @@ from ._queries import (
     active_sessions,
     busy_locks,
     cached_images,
+    container_rootfs,
+    container_users,
+    guest_desktop_apps,
+    guest_path_exists,
     inspect_container,
     list_containers,
     search_images,
     storage_bytes,
     storage_detail,
+    storage_split,
 )
 
 
@@ -101,6 +106,7 @@ __all__ = [
     "_ns_sync",
     "_run_command",
     "active_sessions",
+    "arch_choices",
     "available",
     "backup_container",
     "bootstrap",
@@ -108,12 +114,17 @@ __all__ = [
     "busy_locks",
     "cached_images",
     "clear_cache",
+    "container_rootfs",
+    "container_users",
     "copy_path",
     "fake_sysdata_bindings",
     "friendly_job_error",
     "get_proot_cmd",
     "get_proot_cmd_with_options",
     "guest_capabilities",
+    "guest_desktop_apps",
+    "guest_path_exists",
+    "host_arch",
     "inspect_container",
     "install",
     "is_pull_limit",
@@ -130,5 +141,6 @@ __all__ = [
     "setup_fake_sysdata",
     "storage_bytes",
     "storage_detail",
+    "storage_split",
     "sync_path",
 ]

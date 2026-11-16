@@ -38,8 +38,8 @@ jobs:
         run: uv sync --frozen --group dev
       - name: Ruff
         run: |
-          uv run ruff check src tests scripts/build_flet_proot_wheel.py scripts/build_flet_xvnc_wheel.py scripts/build_flet_pulseaudio_wheel.py scripts/build_flet_qemu_wheel.py scripts/fetch_novnc.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
-          uv run ruff format --check src tests scripts/build_flet_proot_wheel.py scripts/build_flet_xvnc_wheel.py scripts/build_flet_pulseaudio_wheel.py scripts/build_flet_qemu_wheel.py scripts/fetch_novnc.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py
+          uv run ruff check src tests scripts/build_flet_proot_wheel.py scripts/build_flet_xvnc_wheel.py scripts/build_flet_pulseaudio_wheel.py scripts/build_flet_qemu_wheel.py scripts/fetch_novnc.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py scripts/generate_release_notes.py
+          uv run ruff format --check src tests scripts/build_flet_proot_wheel.py scripts/build_flet_xvnc_wheel.py scripts/build_flet_pulseaudio_wheel.py scripts/build_flet_qemu_wheel.py scripts/fetch_novnc.py scripts/check_elf_alignment.py scripts/generate_third_party_sources.py scripts/generate_release_notes.py
       - name: Flet API guard (AST, installed flet)
         run: |
           for f in $(find src -name "*.py"); do
@@ -141,16 +141,25 @@ jobs:
             echo "IS_PRERELEASE=true" >> $GITHUB_OUTPUT
             echo "MAKE_LATEST=false" >> $GITHUB_OUTPUT
           fi
-      - name: Create Release Placeholder
+      - uses: astral-sh/setup-uv@v10.0.1
+      - name: Generate release notes from the changelog
+        if: github.event_name != 'pull_request'
+        run: |
+          # Notes come from src/core/changelog.py — the SAME entry the app's
+          # What's New shows (lm-router pattern). Never a placeholder again.
+          uv sync --frozen
+          uv run --frozen python scripts/generate_release_notes.py \
+            --version "${BUILD_VERSION}" \
+            --build "${BUILD_NUMBER}" \
+            --output release_notes.md
+          cat release_notes.md
+      - name: Create GitHub Release
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.tag_info.outputs.TAG_NAME }}
           name: ${{ steps.tag_info.outputs.RELEASE_NAME }}
-          body: |
-            Automated multi-platform build generated from commit `${{ github.sha }}`.
-
-            *Proot Distro: Linux on Android without root or Termux.*
+          body_path: release_notes.md
           prerelease: ${{ steps.tag_info.outputs.IS_PRERELEASE }}
           make_latest: ${{ steps.tag_info.outputs.MAKE_LATEST }}
         env:

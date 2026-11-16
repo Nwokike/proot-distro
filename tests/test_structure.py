@@ -57,7 +57,7 @@ def test_no_stale_architecture_names():
 def test_split_packages_keep_public_facades():
     """The modules that were split must still re-export their entry points."""
     checks = {
-        "screens/display_launcher.py": ("show_display_sheet", "show_new_display_sheet"),
+        "screens/display_launcher.py": ("show_display_sheet", "rebuild_display_sheet"),
         "screens/container_actions.py": ("ask_shell_options", "container_menu_items"),
         "controller_actions/display_actions.py": ("DisplayActions",),
         "controller_actions/session_actions.py": ("SessionActions",),

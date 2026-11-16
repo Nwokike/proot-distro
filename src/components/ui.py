@@ -26,6 +26,161 @@ def empty_state(title: str, message: str = "", icon: str = ft.Icons.INBOX) -> ft
     return styles.empty_state(icon, title, message)
 
 
+def house_field(
+    *,
+    label: str | None = None,
+    hint: str = "",
+    value: str = "",
+    on_change=None,
+    on_submit=None,
+    on_blur=None,
+    password: bool = False,
+    can_reveal_password: bool = False,
+    multiline: bool = False,
+    prefix_icon: ft.IconData | None = None,
+    suffix: ft.Control | None = None,
+    width: float | None = None,
+    expand: bool = False,
+    height: float | None = tokens.CONTROL_INPUT,
+    text_size: int = tokens.FONT_SM,
+    dense: bool = False,
+    keyboard_type=None,
+    tooltip: str = "",
+    read_only: bool = False,
+    autofocus: bool = False,
+    min_lines: int | None = None,
+    max_lines: int | None = None,
+    visible: bool = True,
+    font_family: str | None = None,
+    bgcolor: str | None = None,
+) -> ft.TextField:
+    """The ONE house input: a filled, borderless rounded surface.
+
+    Material 3's filled field instead of the outlined box the owner rejected
+    everywhere — same visual family as the SearchBar the app already uses
+    (bar_bgcolor = glass). No outline, one tinted fill, house radius.
+    """
+    return ft.TextField(
+        label=label,
+        hint_text=hint,
+        value=value,
+        on_change=on_change,
+        on_submit=on_submit,
+        on_blur=on_blur,
+        password=password,
+        can_reveal_password=can_reveal_password,
+        multiline=multiline,
+        prefix_icon=prefix_icon,
+        suffix=suffix,
+        width=width,
+        expand=expand,
+        height=height if not multiline else None,
+        text_size=text_size,
+        dense=dense,
+        keyboard_type=keyboard_type,
+        tooltip=tooltip or None,
+        read_only=read_only,
+        autofocus=autofocus,
+        min_lines=min_lines,
+        max_lines=max_lines,
+        visible=visible,
+        filled=True,
+        bgcolor=bgcolor,
+        fill_color=ft.Colors.with_opacity(tokens.FIELD_FILL_OPACITY, theme.text()),
+        # Rounded fill, no visible outline: a zero-width side on an outline
+        # border. (`border_radius=` alone is deprecated in Flet 1.1.)
+        border=ft.OutlineInputBorder(
+            border_radius=tokens.RADIUS_MD,
+            side=ft.BorderSide(0),
+        ),
+        content_padding=ft.Padding(
+            tokens.SPACE_MD, tokens.SPACE_XS, tokens.SPACE_MD, tokens.SPACE_XS
+        ),
+        hint_style=ft.TextStyle(size=text_size, color=theme.text_dim()),
+        text_style=ft.TextStyle(size=text_size, color=theme.text(), font_family=font_family),
+    )
+
+
+def switch_row(label: str, value: bool, on_change, *, tooltip: str = "") -> ft.Control:
+    """The ONE house toggle: Material's Switch at house scale + a compact label.
+
+    Material's default Switch is ~60x40 dp and dominated every row (owner
+    ruling 2026-11-15); `scale` is a real property, so nothing is faked.
+    """
+    return ft.Row(
+        controls=[
+            ft.Switch(
+                value=value,
+                scale=tokens.SWITCH_SCALE,
+                on_change=on_change,
+                tooltip=tooltip or label,
+            ),
+            ft.Text(label, size=tokens.FONT_XS, color=theme.text()),
+        ],
+        spacing=tokens.SPACE_XXS,
+        tight=True,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+
+
+def search_field(
+    *,
+    hint: str,
+    value: str = "",
+    on_change=None,
+    on_submit=None,
+    trailing: list[ft.Control] | None = None,
+    expand: bool = True,
+    autofocus: bool = False,
+) -> ft.SearchBar:
+    """The ONE search input — Flet's SearchBar in the home bar's shape.
+
+    The owner's ruling: search is NOT a text field. Wherever the app searches
+    (Home install/search, Files filter, Help) it uses this control: glass fill,
+    house border, no leading icon, compact text.
+    """
+    return ft.SearchBar(
+        value=value,
+        bar_hint_text=hint,
+        bar_trailing=trailing or [],
+        bar_bgcolor=theme.glass_bg(),
+        bar_border_side=ft.BorderSide(tokens.HAIRLINE, theme.glass_border()),
+        bar_shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_MD),
+        bar_text_style=ft.TextStyle(size=tokens.FONT_SM, weight=ft.FontWeight.W_500),
+        bar_hint_text_style=ft.TextStyle(size=tokens.FONT_SM, color=theme.text_dim()),
+        full_screen=False,
+        expand=expand,
+        autofocus=autofocus,
+        on_change=on_change,
+        on_submit=on_submit,
+    )
+
+
+def changelog_rows(version: str) -> list[ft.Control]:
+    """One row per changelog bullet, so each note sits on its own line.
+
+    A single Text with "•" bullets and newlines collapses into a paragraph
+    when it goes through Markdown (and wraps badly on a phone)."""
+    from core.changelog import notes_for
+
+    rows: list[ft.Control] = []
+    for raw in notes_for(version).splitlines():
+        line = raw.strip().lstrip("•").strip()
+        if not line:
+            continue
+        rows.append(
+            ft.Row(
+                controls=[
+                    ft.Icon(ft.Icons.CIRCLE, size=tokens.ICON_MICRO, color=theme.primary()),
+                    ft.Text(line, size=tokens.FONT_SM, color=theme.text(), expand=True),
+                ],
+                spacing=tokens.SPACE_SM,
+                vertical_alignment=ft.CrossAxisAlignment.START,
+            )
+        )
+    return rows
+
+
 def no_containers_empty_state() -> ft.Control:
     """The shared empty state for screens that require an installed container."""
     return empty_state(
@@ -62,17 +217,27 @@ def pill_dropdown(
     value: str,
     on_select,
     tooltip: str = "",
+    labels: dict[str, str] | None = None,
 ) -> ft.Control:
     """A tiny pill dropdown — CollabShell's model_pill pattern
     (components/model_pill.py): PopupMenuButton whose face is a small pill
-    (icon + elided label + chevron), not a big rectangle."""
+    (icon + elided label + chevron), not a big rectangle.
+
+    `labels` maps an option value to the text shown for it (the value itself is
+    still what `on_select` receives), so real option keys stay exact while the
+    face stays readable."""
+    text_for = labels or {}
+
+    def _text(opt: str) -> str:
+        return text_for.get(opt, opt)
+
     return ft.PopupMenuButton(
         content=ft.Container(
             content=ft.Row(
                 controls=[
                     ft.Icon(icon, size=tokens.ICON_SM, color=theme.primary()),
                     ft.Text(
-                        value or label,
+                        _text(value) if value else label,
                         size=tokens.FONT_XS,
                         weight=ft.FontWeight.W_600,
                         color=theme.primary(),
@@ -97,7 +262,7 @@ def pill_dropdown(
                 content=ft.Row(
                     controls=[
                         ft.Text(
-                            opt,
+                            _text(opt),
                             size=tokens.FONT_XS,
                             weight=ft.FontWeight.W_600 if opt == value else ft.FontWeight.W_400,
                             color=theme.text(),

@@ -82,7 +82,7 @@ def is_newer(remote_build, remote_version=None) -> bool:
         if int(remote_build) > APP_BUILD_NUMBER:
             return True
     except TypeError, ValueError:
-        logger.debug("unparseable remote build number %r — comparing versions", remote_build)
+        logger.debug("unparseable remote build number %r, comparing versions", remote_build)
     remote = _release_tuple(remote_version)
     local = _release_tuple(APP_VERSION)
     return bool(remote and local and remote > local)

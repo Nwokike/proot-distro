@@ -125,8 +125,7 @@ class DisplayStreamServer:
         code = request.query.get("code", "")
         if code != self.code:
             raise web.HTTPForbidden(
-                text="missing or invalid access code — open the full URL from "
-                "the app's Share dialog"
+                text="missing or invalid access code. Open the full URL from the app's Share dialog"
             )
         raise web.HTTPFound(f"{self.viewer_path()}?{self.viewer_query()}")
 

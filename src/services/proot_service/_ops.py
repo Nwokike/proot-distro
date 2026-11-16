@@ -292,12 +292,12 @@ def friendly_job_error(outcome: Outcome) -> str:
             outcome.output.strip().splitlines()[-1] if outcome.output.strip() else "unknown error"
         )
     tail = outcome.output.strip().splitlines()[-3:]
-    return f"{detail}" + (f" — {tail[-1]}" if tail and tail[-1] != detail else "")
+    return f"{detail}" + (f" ({tail[-1]})" if tail and tail[-1] != detail else "")
 
 
 PULL_LIMIT_COPY = (
     "Docker Hub pull limit reached. This is a Docker Hub rate limit, not an app "
-    "error — wait a few hours and retry, or add an optional Docker Hub token in "
+    "error. Wait a few hours and retry, or add an optional Docker Hub token in "
     "Settings to raise your limit."
 )
 

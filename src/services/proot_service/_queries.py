@@ -69,6 +69,96 @@ def list_containers() -> list[dict]:
     return _container_rows()
 
 
+def container_rootfs(container: str) -> Path:
+    """Host-side rootfs path of an installed container."""
+    return storage_paths.containers_dir() / container / "rootfs"
+
+
+def container_users(container: str) -> list[dict]:
+    """Accounts from the container's own /etc/passwd.
+
+    This is the SAME file upstream's `--user` resolves against, so the shell
+    options can only offer users that actually exist (device 2026-11-15:
+    a free-text `-u kiri` died with "no user 'kiri' defined in /etc/passwd")."""
+    passwd = container_rootfs(container) / "etc" / "passwd"
+    users: list[dict] = []
+    try:
+        text = passwd.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        logger.debug("passwd unreadable for %s: %r", container, exc)
+        return users
+    for line in text.splitlines():
+        fields = line.split(":")
+        if len(fields) < 7 or not fields[0]:
+            continue
+        users.append(
+            {
+                "name": fields[0],
+                "uid": fields[2],
+                "gid": fields[3],
+                "home": fields[5] or "/",
+                "shell": fields[6] or "/bin/sh",
+            }
+        )
+    return users
+
+
+def guest_desktop_apps(container: str) -> list[dict]:
+    """GUI applications registered in the container, read from its .desktop
+    files on the host filesystem (no proot spawn).
+
+    This is how Linux itself lists applications: `/usr/share/applications`
+    plus `/usr/local/share/applications`. Only `Type=Application` entries with
+    an `Exec=` are kept, hidden ones (`NoDisplay=true`) are skipped, and field
+    codes such as `%U` or `%F` are stripped."""
+    apps: dict[str, str] = {}
+    for base in ("usr/share/applications", "usr/local/share/applications"):
+        folder = container_rootfs(container) / base
+        if not folder.is_dir():
+            continue
+        for entry in sorted(folder.glob("*.desktop")):
+            try:
+                text = entry.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            fields: dict[str, str] = {}
+            in_main = False
+            for line in text.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("["):
+                    in_main = stripped == "[Desktop Entry]"
+                    continue
+                if not in_main or "=" not in stripped:
+                    continue
+                key, _, value = stripped.partition("=")
+                fields.setdefault(key.strip(), value.strip())
+            if fields.get("Type") != "Application":
+                continue
+            if fields.get("NoDisplay", "").lower() == "true":
+                continue
+            exec_line = fields.get("Exec", "").strip()
+            label = fields.get("Name", "").strip()
+            if not exec_line or not label:
+                continue
+            cmd = " ".join(token for token in exec_line.split() if not token.startswith("%"))
+            if not cmd:
+                continue
+            apps.setdefault(label, cmd)
+    return [{"label": label, "cmd": cmd} for label, cmd in sorted(apps.items())]
+
+
+def guest_path_exists(container: str, guest_path: str) -> bool:
+    """True when an absolute guest path exists inside the container rootfs."""
+    import posixpath
+
+    if not guest_path.startswith("/"):
+        return False
+    normal = posixpath.normpath(guest_path)
+    if normal.startswith(".."):
+        return False
+    return (container_rootfs(container) / normal.lstrip("/")).exists()
+
+
 def search_images(query: str, limit: int = 25) -> list[dict]:
     """Docker Hub search — upstream's own normalized hits (plain dicts)."""
     docker_search = _imp("proot_distro.helpers.docker.search")
@@ -120,6 +210,17 @@ def storage_bytes() -> int:
         except OSError as exc:
             raise ProotUnavailable(f"storage size unavailable: {exc}") from exc
     return total
+
+
+def storage_split() -> tuple[int, int]:
+    """(data root bytes, cache root bytes) — the same two walks as
+    storage_bytes, split so Settings can say where the space actually is."""
+    try:
+        data = _tree_bytes(storage_paths.xdg_data_home() / "proot-distro")
+        cache = _tree_bytes(storage_paths.xdg_cache_home() / "proot-distro")
+    except OSError as exc:
+        raise ProotUnavailable(f"storage size unavailable: {exc}") from exc
+    return data, cache
 
 
 def _area(path) -> dict:

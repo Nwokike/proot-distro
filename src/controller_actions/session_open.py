@@ -42,6 +42,17 @@ class SessionOpenMixin:
             logger.debug("display env lookup failed for %s: %s", container, exc)
             return {}
 
+    def _shell_env_for(self, container: str) -> dict[str, str]:
+        """Environment for a NEW shell: the user's guest defaults (Settings ->
+        Environment) plus a running display's env. The display's DISPLAY/
+        XAUTHORITY/PULSE_SERVER must win over a stale user default."""
+        user = {
+            str(k): str(v)
+            for k, v in (getattr(state, "env_defaults", None) or {}).items()
+            if str(k).strip()
+        }
+        return {**user, **self._display_env_for(container)}
+
     async def _open_session_impl(self, container: str) -> None:
         state.session_error = ""
         # If an image ref was passed instead of a container name (e.g.
@@ -56,13 +67,13 @@ class SessionOpenMixin:
         try:
             entry = await self.session_manager.open(
                 container,
-                extra_env=self._display_env_for(container),
+                extra_env=self._shell_env_for(container),
             )
         except Exception as exc:
             state.session_error = f"could not open {container}: {_reason(exc)}"
             self.show_snack(state.session_error)
             logger.exception("Could not open shell for %s", container)
-            raise
+            return
         state.active_session = entry.key
         await self._update_fgs()
         # Interstitial at the natural break of opening a shell (allowed by
@@ -76,13 +87,15 @@ class SessionOpenMixin:
         state.session_error = ""
         try:
             entry = await self.session_manager.open(
-                container, options=opts, extra_env=self._display_env_for(container)
+                container, options=opts, extra_env=self._shell_env_for(container)
             )
         except Exception as exc:
             state.session_error = f"could not open {container}: {_reason(exc)}"
             self.show_snack(state.session_error)
+            # Never re-raise: an exception out of a page.run_task handler lands
+            # in Flet's future callback and becomes a page-error storm.
             logger.exception("Could not open shell (options) for %s", container)
-            raise
+            return
         state.active_session = entry.key
         await self._update_fgs()
         await self.ad_service.show_interstitial()

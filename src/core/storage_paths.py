@@ -39,7 +39,7 @@ def _env_path(var: str, what: str) -> Path:
     if not env:
         raise RuntimeError(
             f"{var} is not set; proot-distro {what} must live in the Flet "
-            "app-storage locations (run via `flet run` — the packaged app "
+            "app-storage locations (run via `flet run`; the packaged app "
             "sets them automatically)."
         )
     p = Path(env)
@@ -96,6 +96,66 @@ def exports_root() -> Path:
     return p
 
 
+def prune_display_logs(keep_per_container: int = 3, keep_days: int = 7) -> int:
+    """Bound the durable display logs; returns the count removed.
+
+    Logs live in the data root on purpose (clear-cache must not destroy crash
+    evidence), so they need their own reaper: keep the newest generations per
+    container and drop anything older than `keep_days`."""
+    import time
+
+    folder = data_root() / "display-logs"
+    if not folder.is_dir():
+        return 0
+    cutoff = time.time() - keep_days * 86400
+    by_container: dict[str, list] = {}
+    removed = 0
+    for path in folder.glob("*.log*"):
+        try:
+            if path.stat().st_mtime < cutoff:
+                path.unlink(missing_ok=True)
+                removed += 1
+                continue
+        except OSError:
+            continue
+        name = path.name.split(".log", 1)[0]
+        by_container.setdefault(name, []).append(path)
+    for paths in by_container.values():
+        for path in sorted(paths, key=lambda p: p.stat().st_mtime, reverse=True)[
+            keep_per_container:
+        ]:
+            try:
+                path.unlink(missing_ok=True)
+                removed += 1
+            except OSError:
+                continue
+    if removed:
+        logger.info("display-log prune removed %d old file(s)", removed)
+    return removed
+
+
+def sweep_temp(max_age_hours: int = 24) -> int:
+    """Delete stale files under the temp root; returns the count removed.
+
+    The README calls temp throwaway: a failed export or an aborted archive must
+    not sit there forever. Called once at startup, never at runtime."""
+    import time
+
+    cutoff = time.time() - max_age_hours * 3600
+    removed = 0
+    root = temp_root()
+    for path in root.rglob("*"):
+        try:
+            if path.is_file() and path.stat().st_mtime < cutoff:
+                path.unlink(missing_ok=True)
+                removed += 1
+        except OSError as exc:
+            logger.debug("temp sweep skipped %s: %s", path, exc)
+    if removed:
+        logger.info("temp sweep removed %d stale file(s)", removed)
+    return removed
+
+
 def app_root() -> Path:
     """The app's private root, RESOLVED.
 
@@ -129,7 +189,7 @@ def env_contract() -> dict[str, str]:
         contract["SSL_CERT_FILE"] = certifi.where()
     except Exception as exc:
         logger.warning(
-            "certifi unavailable — OCI layer pulls will not validate registry certificates: %r",
+            "certifi unavailable; OCI layer pulls will not validate registry certificates: %r",
             exc,
         )
     # Upstream's --shared-home binds TERMUX__HOME; it must EXIST or the bind

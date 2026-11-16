@@ -66,7 +66,7 @@ async def test_upstream_viewer_is_served_verbatim_with_no_cache(client):
     assert b"./app/ui.js" in body  # upstream's page, unmodified
     defaults = await client.get("/novnc/defaults.json")
     assert defaults.status == 200
-    assert b'"resize": "remote"' in await defaults.read()
+    assert b'"resize": "scale"' in await defaults.read()
 
 
 async def test_vendored_novnc_files_serve(client):

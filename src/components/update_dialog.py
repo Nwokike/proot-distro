@@ -11,8 +11,8 @@ import logging
 
 import flet as ft
 
+from components.ui import changelog_rows
 from core import layout, theme, tokens
-from core.changelog import notes_for
 from core.constants import APP_NAME, APP_VERSION, GITHUB_RELEASES_URL, PLAY_STORE_URL
 from core.shared_services import launch_url
 from services.update_service import is_allowed_launch_url
@@ -77,17 +77,9 @@ def show_update_dialog(page: ft.Page, update_data: dict | None = None) -> None:
         title_text = "You're up to date"
         icon = ft.Icons.VERIFIED_ROUNDED
         body = ft.Column(
-            controls=[
-                ft.Container(
-                    content=ft.Markdown(
-                        notes_for(APP_VERSION),
-                        selectable=True,
-                        extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
-                        on_tap_link=lambda e: _launch(page, e.data),
-                    ),
-                    width=width,
-                ),
-            ],
+            # One row per note: Markdown collapsed the "•" lines into a single
+            # paragraph, so the notes had no line structure at all.
+            controls=changelog_rows(APP_VERSION),
             spacing=tokens.SPACE_SM,
             scroll=ft.ScrollMode.AUTO,
             tight=True,

@@ -268,7 +268,7 @@ def show_run_dialog(page: ft.Page, container: str, args_text: str) -> None:
             controls=[
                 ft.Icon(ft.Icons.PLAY_CIRCLE_ROUNDED, color=theme.primary(), size=tokens.ICON_MD),
                 ft.Text(
-                    f"Run in {container}" + (f" — {args_text}" if args_text else ""),
+                    f"Run in {container}" + (f" · {args_text}" if args_text else ""),
                     size=tokens.FONT_LG,
                     weight=ft.FontWeight.BOLD,
                 ),

@@ -14,22 +14,26 @@ from core.constants import GUEST_X11_DIR
 from .xvnc_runtime import PULSE_TCP_PORT
 
 
-def guest_display_env(display: int, *, pulse: bool = True) -> dict[str, str]:
-    """DISPLAY / XAUTHORITY (+ PULSE_SERVER) for guest processes on `display`.
+def guest_display_env(display: int, *, pulse: bool = True, bus: bool = True) -> dict[str, str]:
+    """DISPLAY / XAUTHORITY (+ PULSE_SERVER, DBUS) for guest processes on `display`.
 
     Xvnc runs `-nolisten unix`, so the display address is loopback TCP (proot
     shares the host network namespace); the xauth file is written by the app
     into the rootfs at `/tmp/x11/xauth-<display>` (guest-absolute path).
     `pulse` reflects whether the app-wide PulseAudio daemon is actually alive —
-    pointing apps at a dead socket would fail more confusingly than unset."""
+    pointing apps at a dead socket would fail more confusingly than unset.
+    `bus` is False for a bare display: only the session script creates the
+    per-display bus, so advertising it there would name a socket that does not
+    exist."""
     env = {
         "DISPLAY": f"127.0.0.1:{display}",
         "XAUTHORITY": f"{GUEST_X11_DIR}/xauth-{display}",
+    }
+    if bus:
         # The display script starts one session bus per display; shells (and
         # the apps they launch) must see the SAME bus, or Chromium's dbus
         # probes fail with "Failed to connect" (device 2026-11-13).
-        "DBUS_SESSION_BUS_ADDRESS": f"unix:path={GUEST_X11_DIR}/bus-{display}",
-    }
+        env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={GUEST_X11_DIR}/bus-{display}"
     if pulse:
         env["PULSE_SERVER"] = f"127.0.0.1:{PULSE_TCP_PORT}"
     return env

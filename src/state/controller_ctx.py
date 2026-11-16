@@ -35,11 +35,16 @@ class ControllerMethods:
     save_terminal_settings: Callable[[], Awaitable[None]] = field(default=_noop_async)
     check_updates_now: Callable[[], Awaitable[None]] = field(default=_noop_async)
     replay_onboarding: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    save_env_defaults: Callable[..., Awaitable[None]] = field(default=_noop_async)
+    save_app_preset: Callable[..., Awaitable[None]] = field(default=_noop_async)
+    delete_app_preset: Callable[..., Awaitable[None]] = field(default=_noop_async)
+    open_settings_section: Callable[..., Awaitable[None]] = field(default=_noop_async)
     # One-shot command inside a container (Entrypoint/Cmd + args), PTY-captured
     run_container: Callable[[str, str], Awaitable[None]] = field(default=_noop_async)
 
     # Settings
     clear_cache: Callable[[], Awaitable[None]] = field(default=_noop_async)
+    clear_app_cache: Callable[[], Awaitable[None]] = field(default=_noop_async)
     clear_orphan_layers: Callable[[], Awaitable[None]] = field(default=_noop_async)
     clear_build_cache: Callable[[], Awaitable[None]] = field(default=_noop_async)
     remove_cached_image: Callable[[str], Awaitable[None]] = field(default=_noop_async)
@@ -81,9 +86,10 @@ class ControllerMethods:
     # (start_display takes the container and picks a display number).
     open_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     probe_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
-    start_display: Callable[[str, str | None, str | None, int | None], Awaitable[None]] = field(
-        default=_noop_async
-    )
+    probe_apps: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    start_display: Callable[
+        [str, str | None, str | None, int | None, dict | None], Awaitable[None]
+    ] = field(default=_noop_async)
     stop_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     start_x_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     retry_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)

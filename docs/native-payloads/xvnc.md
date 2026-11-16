@@ -27,7 +27,7 @@ build time.
 - `data/fonts/misc` is staged and passed as the first `-fp` entry; guest font
   dirs that contain a `fonts.dir` follow.
 
-## Fonts rule (owner ruling 2026-11-14)
+## Fonts rule
 
 Only the **core Latin** families ship (base sizes + ISO8859-1, clR/clB, fixed —
 78 files). CJK, Syriac and the other charsets are excluded; they were 6.4 MB of

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import flet as ft
 
+from components.ui import search_field
 from core import theme, tokens
 from core.constants import (
     APP_BUILD_NUMBER,
@@ -104,9 +105,9 @@ def _link_row(icon: ft.IconData, title: str, url: str) -> ft.Control:
 def _diagnostics_text() -> str:
     lines = [
         f"{APP_NAME} {APP_VERSION} (build {APP_BUILD_NUMBER})",
-        f"probe: passed={state.probe_passed} — {state.probe_summary or 'n/a'}",
+        f"probe: passed={state.probe_passed} · {state.probe_summary or 'n/a'}",
         f"orientation: {state.device_orientation} · keyboard inset: {state.keyboard_inset:.0f} px",
-        "— recent logs —",
+        "recent logs:",
     ]
     lines.extend(MemoryLogHandler.get_logs()[-tokens.DIAGNOSTIC_LOG_TAIL :])
     return "\n".join(lines)
@@ -179,7 +180,7 @@ def show_help_sheet(page: ft.Page, methods=None) -> None:
                     _row(
                         ft.Icons.TERMINAL_ROUNDED,
                         "3 · Launch",
-                        "Open shell for a terminal. Open display for one app — or a full desktop.",
+                        "Open shell for a terminal. Open display for one app or a full desktop.",
                     ),
                 ),
             ],
@@ -191,7 +192,7 @@ def show_help_sheet(page: ft.Page, methods=None) -> None:
                     "extra keys ctrl alt escape tab arrows",
                     _key_row(
                         "ESC  TAB  CTRL  ALT  ← ↑ ↓ →  ↵  ⌫",
-                        "Extra keys row. CTRL/ALT are sticky — tap to hold for the next keys.",
+                        "Extra keys row. CTRL/ALT are sticky: tap to hold for the next keys.",
                     ),
                 ),
                 (
@@ -271,7 +272,7 @@ def show_help_sheet(page: ft.Page, methods=None) -> None:
                         ft.Icons.UNARCHIVE_ROUNDED,
                         "Restore replaces the container",
                         "A restore wipes the container's filesystem and extracts the "
-                        "archive over it — it asks for confirmation first.",
+                        "archive over it. It asks for confirmation first.",
                     ),
                 ),
                 (
@@ -348,11 +349,11 @@ def show_help_sheet(page: ft.Page, methods=None) -> None:
                     ),
                 ),
                 (
-                    "live logs activity terminal",
+                    "debugging output live logs activity terminal",
                     ft.TextButton(
-                        "Live activity terminal",
+                        "Debugging output",
                         icon=ft.Icons.TERMINAL_ROUNDED,
-                        on_click=_settings_dialog("open_live_activity_terminal"),
+                        on_click=_settings_dialog("open_debugging_output"),
                     ),
                 ),
                 (
@@ -413,7 +414,7 @@ def show_help_sheet(page: ft.Page, methods=None) -> None:
                     "proot distro license",
                     _row(
                         ft.Icons.FAVORITE_ROUNDED,
-                        f"{APP_NAME} — Linux on Android, no root",
+                        f"{APP_NAME}: Linux on Android, no root",
                         "PRoot user-space, GPL corresponding source in the repo and licenses.",
                     ),
                 ),
@@ -454,13 +455,9 @@ def show_help_sheet(page: ft.Page, methods=None) -> None:
         except Exception:
             pass
 
-    search = ft.TextField(
-        hint_text="Search help",
-        prefix_icon=ft.Icons.SEARCH_ROUNDED,
+    search = search_field(
+        hint="Search help",
         on_change=lambda e: _render(e.control.value or ""),
-        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-        text_size=tokens.FONT_SM,
-        dense=True,
     )
 
     dlg = ft.AlertDialog(

@@ -338,7 +338,13 @@ class DeskManager(SpawnMixin, AudioMixin, ProcessMixin):
         if not candidates:
             return {}
         chosen = min(candidates, key=lambda s: (s.mode != "desktop", s.display))
-        return _env(chosen.display, pulse=self.pulse_server_alive())
+        # A bare "display" session never starts the per-display bus, so it must
+        # not advertise a socket that does not exist.
+        return _env(
+            chosen.display,
+            pulse=self.pulse_server_alive(),
+            bus=chosen.mode != "display",
+        )
 
     # ── sync implementation (worker threads) ─────────────────────────────────
 

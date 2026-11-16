@@ -112,14 +112,18 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
         # the same process while the foreground service keeps it alive).
         entry.loop = getattr(page, "loop", None)
 
-    # The terminal theme follows the app's light/dark mode (CollabShell's
-    # _active_theme_name pattern): re-apply to every open shell on theme flips.
+    # The app's light/dark mode is only the DEFAULT: an explicit theme (per
+    # shell, or the saved Terminal-defaults theme) must never be overwritten.
     def _apply_app_theme() -> None:
-        name = _theme_name()
-        if manager:
-            for e in manager.entries.values():
-                if e.mt is not None:
-                    e.mt.set_theme(name)
+        if not manager:
+            return
+        saved = str((getattr(state, "terminal_settings", None) or {}).get("theme") or "")
+        for e in manager.entries.values():
+            if e.mt is None:
+                continue
+            if getattr(e, "terminal_theme", "") or saved:
+                continue
+            e.mt.set_theme(_theme_name())
 
     ft.use_effect(_apply_app_theme, [state.theme_revision])
 
@@ -176,7 +180,9 @@ def TerminalView(entry: SessionEntry) -> ft.Control:
 
         return _cleanup
 
-    ft.use_effect(_sync_fab, [fullscreen, entry.key])
+    # terminal_theme_rev is a dependency so the menu's check mark follows a
+    # theme picked in the FAB without reopening the screen.
+    ft.use_effect(_sync_fab, [fullscreen, entry.key, state.terminal_theme_rev])
 
     status_indicators: list[ft.Control] = [status_dot(entry.ready)]
     if not entry.ready:

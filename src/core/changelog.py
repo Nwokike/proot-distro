@@ -4,19 +4,32 @@ from __future__ import annotations
 
 CHANGELOG: dict[str, str] = {
     "1.2.0": (
-        "• Display rebuilt: the X server now runs INSIDE the app\n"
-        "• Zero installs: single apps run on any container instantly\n"
-        "• Damage-driven streaming — a still screen costs nothing\n"
-        "• Audio output and microphone support for guest apps\n"
-        "• Clipboard over the stream itself — no guest tools needed\n"
-        "• Heavier capture machinery removed; the app got leaner"
+        "• Display engine rebuilt: TigerVNC's X server (Xvnc) runs INSIDE the app\n"
+        "• Audio out and microphone for guest apps (PulseAudio, per-display bus)\n"
+        "• The viewer is upstream noVNC, verbatim: the keyboard really opens\n"
+        "• Fit-to-screen letterboxing; the whole desktop stays visible\n"
+        "• Any CPU architecture: QEMU user-mode bundled for foreign-arch images\n"
+        "• Desktop-aware shells: Start X display exports DISPLAY into your shell\n"
+        "• Every Xvnc/PulseAudio option exposed: depth, fps, quality, viewers,\n"
+        "  privacy, timeouts, clipboard cap, audio rate/latency/mode, mic format\n"
+        "• Saved presets: name any app command and start it in one tap\n"
+        "• App detection reads the container's own application entries\n"
+        "• Failures tell the truth (Failed rows, whole-tree Stop, orphan sweep)\n"
+        "• Storage shows containers vs OCI cache, real image sizes and sweeps\n"
+        "• Core X fonts ship inside the APK, so text needs no guest install\n"
+        "• Settings hub, Help screen, bundled license texts and docs"
     ),
     "1.1.0": (
-        "• Proot Distro X11: native X11 desktop on your phone\n"
+        "• X11 display: GUI apps and full desktops streamed inside the app\n"
         "• One tap from the Display tab: install desktop support, start, use\n"
-        "• Full input — tap, drag, scroll, keyboard — plus clipboard sync\n"
-        "• Access-code protected, loopback-only: nothing leaves the device\n"
-        "• Works on Alpine, Debian, Ubuntu, Fedora and Arch containers\n"
+        "• Single-app mode: any command alone on its own :N display\n"
+        "• Multi-display sessions with globally unique display numbers\n"
+        "• Full input (tap, drag, scroll, keyboard) plus clipboard sync\n"
+        "• Share on your Wi-Fi (LAN) or through a public tunnel, access-code protected\n"
+        "• Pillow built with XCB in CI, so screen capture actually works\n"
+        "• Minimal desktop install: only what a session needs, DE extras apart\n"
+        "• Display toolbar: shell for the container, live output panel, fullscreen\n"
+        "• Fixed: black desktops (TCP listen, guest XAUTHORITY, glycin sandbox)\n"
         "• Flet family moved to 1.1.0"
     ),
     "1.0.1": (
@@ -29,7 +42,7 @@ CHANGELOG: dict[str, str] = {
         "• Terminal: real Clear, Select All, FAB in non-fullscreen"
     ),
     "1.0.0": (
-        "• Real Linux containers on Android — no root, no Termux\n"
+        "• Real Linux containers on Android, no root, no Termux\n"
         "• Install any Docker image: type a reference or search Docker Hub\n"
         "• Interactive shells in every container, with the extra-keys bar\n"
         "• Manage containers: rename, back up, restore, copy, reset, remove\n"

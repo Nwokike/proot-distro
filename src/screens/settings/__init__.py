@@ -4,11 +4,17 @@ import flet as ft
 
 from components import section_header
 from components.banner_ad import pooled_banner_ad
+from components.ui import house_field, pill_dropdown, switch_row
 from core import layout, theme, tokens
-from core.constants import AD_SLOT_SETTINGS_1, AD_SLOT_SETTINGS_2, PRIVACY_POLICY_URL
+from core.constants import (
+    AD_SLOT_SETTINGS_1,
+    AD_SLOT_SETTINGS_2,
+    AD_SLOT_SETTINGS_3,
+    PRIVACY_POLICY_URL,
+    TERMS_OF_SERVICE_URL,
+)
 from core.shared_services import launch_url
-from core.state import state
-from screens.formatting import format_size as _fmt_size
+from core.state import DEFAULT_TERMINAL_SETTINGS, state
 from screens.settings_components import _setting_row, _settings_card
 from state.controller_ctx import ControllerMethodsCtx
 
@@ -22,14 +28,20 @@ def SettingsView() -> ft.Control:
     methods = ft.use_context(ControllerMethodsCtx)
     page = ft.context.page
     token, set_token = ft.use_state(st.docker_token)
-
+    # Terminal defaults render inline, so their live values are component state
+    # (a saved value must show immediately, not after reopening Settings).
+    term, set_term = ft.use_state({**DEFAULT_TERMINAL_SETTINGS, **(state.terminal_settings or {})})
+    # Side-by-side values stack UNDER the title on small screens (owner ruling
+    # 2026-11-16: never squeeze a value and a button onto one narrow line).
     is_narrow = layout.is_narrow(page)
+    # Clearing the log needs a re-render; a counter is the declarative trigger.
+    _debug_rev, set_debug_rev = ft.use_state(0)
 
     if st.settings_section == "build":
         from screens.build_view import BuildView
 
         def _back(_e=None) -> None:
-            page.run_task(methods.open_developer_tools, False)
+            page.run_task(methods.open_settings_section, "")
 
         return ft.Column(
             controls=[
@@ -48,44 +60,6 @@ def SettingsView() -> ft.Control:
             ],
             spacing=tokens.SPACE_SM,
             expand=True,
-        )
-
-    def _theme_card(mode: str, label: str, icon: ft.IconData) -> ft.Container:
-        """Compact icon+label selector card — CollabShell's preferences pattern:
-        one row, centered, PRIMARY tint + border when selected, 150ms animate."""
-        selected = st.theme_mode == mode
-        return ft.Container(
-            content=ft.Row(
-                controls=[
-                    ft.Icon(
-                        icon,
-                        size=tokens.ICON_MD,
-                        color=theme.primary() if selected else theme.text_dim(),
-                    ),
-                    ft.Text(
-                        label,
-                        size=tokens.FONT_SM,
-                        weight=ft.FontWeight.W_600 if selected else ft.FontWeight.W_400,
-                        color=theme.primary() if selected else theme.text(),
-                    ),
-                ],
-                alignment=ft.MainAxisAlignment.CENTER,
-                spacing=tokens.SPACE_XS,
-                tight=True,
-            ),
-            expand=True,
-            padding=ft.Padding(tokens.SPACE_MD, tokens.SPACE_SM, tokens.SPACE_MD, tokens.SPACE_SM),
-            border_radius=tokens.RADIUS_MD,
-            border=ft.Border.all(
-                tokens.BORDER_WIDTH_EMPHASIS if selected else tokens.HAIRLINE,
-                theme.primary() if selected else theme.glass_border(),
-            ),
-            bgcolor=ft.Colors.with_opacity(tokens.OPACITY_TINT, theme.primary())
-            if selected
-            else ft.Colors.with_opacity(tokens.OPACITY_SUBTLE, theme.text()),
-            animate=ft.Animation(tokens.ANIM_FAST_MS, ft.AnimationCurve.EASE_OUT),
-            on_click=lambda _e, m=mode: page.run_task(methods.set_theme_mode, m),
-            ink=True,
         )
 
     def _save_token() -> None:
@@ -128,11 +102,8 @@ def SettingsView() -> ft.Control:
     def _open_storage_detail(_e=None) -> None:
         dialogs.open_storage_detail(page, methods)
 
-    def _open_env_dialog(_e=None) -> None:
-        dialogs.open_env_dialog(page)
-
     def _open_live_terminal(_e=None) -> None:
-        dialogs.open_live_activity_terminal(page)
+        dialogs.open_debugging_output(page)
 
     def _open_probe_dialog(_e=None) -> None:
         dialogs.open_probe_dialog(page, st.probe_passed, st.probe_summary, methods.check_probe)
@@ -141,94 +112,25 @@ def SettingsView() -> ft.Control:
         dialogs.open_licenses(page)
 
     # 1. Appearance & Theme Card
-    appearance_card = _settings_card(
-        [
-            ft.Container(
-                content=ft.Column(
-                    controls=[
-                        ft.Text("Theme", size=tokens.FONT_MD, weight=ft.FontWeight.W_500),
-                        ft.Row(
-                            controls=[
-                                _theme_card("light", "Light", ft.Icons.LIGHT_MODE_ROUNDED),
-                                _theme_card("dark", "Dark", ft.Icons.DARK_MODE_ROUNDED),
-                                _theme_card("system", "System", ft.Icons.BRIGHTNESS_AUTO_ROUNDED),
-                            ],
-                            spacing=tokens.SPACE_SM,
-                        ),
-                    ],
-                    spacing=tokens.SPACE_MD,
-                ),
-                padding=tokens.SPACE_LG,
-            ),
-        ]
+    from .appearance_card import build_appearance_card
+
+    appearance_card = build_appearance_card(
+        st.theme_mode,
+        lambda mode: page.run_task(methods.set_theme_mode, mode),
     )
 
     # 2. Container Storage & Cache Card
-    cached_rows = []
-    if st.cached_images:
-        for img in st.cached_images:
-            ident = str(img.get("identifier", ""))
-            if not ident or ident == "?":
-                continue
-            arch = str(img.get("arch", ""))
-            size = _fmt_size(img.get("size_bytes", 0))
-            cached_rows.append(
-                ft.Container(
-                    content=ft.Row(
-                        controls=[
-                            ft.Icon(
-                                ft.Icons.LAYERS_ROUNDED, size=tokens.ICON_XS, color=theme.primary()
-                            ),
-                            ft.Text(f"{ident} ({arch}) · {size}", size=tokens.FONT_XS, expand=True),
-                            ft.IconButton(
-                                icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
-                                icon_size=tokens.ICON_SM,
-                                tooltip=f"Remove cached {ident}",
-                                on_click=lambda _e, i=ident: _confirm_remove_cached(i),
-                            ),
-                        ],
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                    padding=ft.Padding(tokens.SPACE_LG, 0, tokens.SPACE_LG, 0),
-                )
-            )
+    from .storage_card import build_storage_card
 
-    storage_card = _settings_card(
-        [
-            _setting_row(
-                ft.Icons.STORAGE_ROUNDED,
-                "Storage Footprint",
-                f"Containers and cache: {_fmt_size(st.storage_bytes)}"
-                + (f" · {st.cached_count} cached image(s)" if st.cached_count else ""),
-                ft.TextButton("Clear all cache", on_click=lambda _e: _clear_cache()),
-                stacked=is_narrow,
-            ),
-            ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
-            _setting_row(
-                ft.Icons.CLEANING_SERVICES_ROUNDED,
-                "Sweep Orphan Layers",
-                "Reclaim storage from interrupted pulls or untagged OCI blobs",
-                ft.TextButton("Sweep", on_click=lambda _e: _sweep_orphans()),
-                stacked=is_narrow,
-            ),
-            ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
-            _setting_row(
-                ft.Icons.BUILD_ROUNDED,
-                "Clear Build Cache",
-                "Drop build_cache_index.json and the layer blobs only it pins (clear-cache --build-cache)",
-                ft.TextButton("Clear", on_click=lambda _e: _clear_build_cache()),
-                stacked=is_narrow,
-            ),
-            ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
-            _setting_row(
-                ft.Icons.FOLDER_SPECIAL_ROUNDED,
-                "Storage Layout",
-                "Flet storage roots (data/cache/temp) and every proot-distro area under them",
-                ft.TextButton("Inspect", on_click=_open_storage_detail),
-                stacked=is_narrow,
-            ),
-            *cached_rows,
-        ]
+    storage_card = build_storage_card(
+        st,
+        narrow=is_narrow,
+        on_layout=_open_storage_detail,
+        on_sweep=_sweep_orphans,
+        on_build_cache=_clear_build_cache,
+        on_clear_app=lambda: page.run_task(methods.clear_app_cache),
+        on_clear_all=_clear_cache,
+        on_remove_cached=_confirm_remove_cached,
     )
 
     # 3. Registry Authentication Card (matching Sherlock custom manifest card layout)
@@ -280,17 +182,12 @@ def SettingsView() -> ft.Control:
             ft.Container(
                 content=ft.Row(
                     controls=[
-                        ft.TextField(
+                        house_field(
                             value=token,
-                            hint_text="username:token (optional)",
+                            hint="username:token (optional)",
                             password=True,
                             can_reveal_password=True,
-                            text_size=tokens.FONT_SM,
                             expand=True,
-                            border=ft.OutlineInputBorder(
-                                border_radius=tokens.RADIUS_SM,
-                                side=ft.BorderSide(1, theme.surface_alt()),
-                            ),
                             on_change=lambda e: set_token(e.control.value),
                             on_submit=lambda _e: _save_token(),
                         ),
@@ -315,11 +212,10 @@ def SettingsView() -> ft.Control:
         ]
     )
 
-    def _open_display_defaults(_e=None) -> None:
-        dialogs.open_display_defaults(page, methods)
+    def _open_environment(_e=None) -> None:
+        from .env_dialog import open_env_dialog
 
-    def _open_terminal_defaults(_e=None) -> None:
-        dialogs.open_terminal_defaults(page, methods)
+        open_env_dialog(page, methods)
 
     def _open_running(_e=None) -> None:
         page.run_task(methods.list_sessions)
@@ -339,23 +235,146 @@ def SettingsView() -> ft.Control:
     def _open_build(_e=None) -> None:
         page.run_task(methods.open_developer_tools, True)
 
+    def _set_term(key: str, value: object) -> None:
+        """Terminal defaults save on change (no hidden second step)."""
+        updated = {**term, key: value}
+        set_term(updated)
+        state.terminal_settings = updated
+        state.terminal_theme_rev += 1
+        page.run_task(methods.save_terminal_settings)
+
+    def _set_term_size(text: str) -> None:
+        try:
+            size = float((text or "").strip() or 0)
+        except ValueError:
+            return
+        term["font_size"] = max(0.0, min(32.0, size))
+        _set_term("font_size", term["font_size"])
+
+    # ── value helpers ─────────────────────────────────────────────────────────
+    def _terminal_summary() -> str:
+        size = float(term.get("font_size") or 0)
+        return " · ".join(
+            [
+                str(term.get("theme") or DEFAULT_TERMINAL_SETTINGS["theme"]),
+                f"{size:g}pt" if size else "default size",
+                "blink on" if term.get("cursor_blink", True) else "blink off",
+            ]
+        )
+
+    def _notifications_value() -> str:
+        if st.notifications_enabled is None:
+            return "tap to check"
+        return "Allowed" if st.notifications_enabled else "Blocked: tap to allow"
+
+    def _privacy_value() -> str:
+        return "Personalized" if st.can_request_ads else "Non-personalized"
+
+    def _running_value() -> str:
+        if st.running_sessions is None:
+            return "tap to list"
+        count = len(st.running_sessions)
+        return "No running processes" if count == 0 else f"{count} running"
+
+    def _env_value() -> str:
+        from .env_dialog import env_rows_summary
+
+        return env_rows_summary()
+
+    def _debug_lines() -> list[str]:
+        from core.logger_handler import in_memory_log_handler
+
+        return in_memory_log_handler.get_logs()[-20:]
+
+    def _copy_debug(_e=None) -> None:
+        from components.snack import show_snack
+        from core.logger_handler import in_memory_log_handler
+
+        async def _do() -> None:
+            clipboard = getattr(page, "clipboard", None)
+            if clipboard is None:
+                return
+            await clipboard.set("\n".join(in_memory_log_handler.get_logs()))
+            show_snack(page, "debugging output copied")
+
+        page.run_task(_do)
+
+    def _clear_debug(_e=None) -> None:
+        from core.logger_handler import in_memory_log_handler
+
+        in_memory_log_handler.clear_logs()
+        set_debug_rev(_debug_rev + 1)
+
+    from screens.terminal_controls import _THEME_PRESETS
+
+    from .display_defaults import build_display_defaults
+
+    def _persist_display() -> None:
+        page.run_task(methods.save_display_settings)
+
+    terminal_controls_row = ft.Container(
+        content=ft.Row(
+            controls=[
+                pill_dropdown(
+                    "Theme",
+                    ft.Icons.PALETTE_ROUNDED,
+                    list(_THEME_PRESETS),
+                    str(term.get("theme") or DEFAULT_TERMINAL_SETTINGS["theme"]),
+                    lambda value: _set_term("theme", value),
+                    tooltip="Terminal theme for new shells",
+                ),
+                house_field(
+                    value=(
+                        f"{float(term['font_size']):g}" if float(term.get("font_size") or 0) else ""
+                    ),
+                    hint="size",
+                    width=tokens.FIELD_COMPACT_WIDTH,
+                    height=tokens.CONTROL_CHIP,
+                    dense=True,
+                    text_size=tokens.FONT_XS,
+                    keyboard_type=ft.KeyboardType.NUMBER,
+                    suffix=ft.Text("pt", size=tokens.FONT_XS, color=theme.text_dim()),
+                    tooltip="Font size in pt (empty = widget default)",
+                    on_blur=lambda e: _set_term_size(e.control.value),
+                    on_submit=lambda e: _set_term_size(e.control.value),
+                ),
+                switch_row(
+                    "Cursor blink",
+                    bool(term.get("cursor_blink", True)),
+                    lambda e: _set_term("cursor_blink", bool(e.control.value)),
+                ),
+            ],
+            spacing=tokens.SPACE_MD,
+            # NEVER wrap=True here: a TextField inside a Wrap is the
+            # "WrapParentData is not a subtype of FlexParentData" crash
+            # (proven by rendering it alone, 2026-11-15).
+            wrap=False,
+            scroll=ft.ScrollMode.AUTO,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        padding=ft.Padding(tokens.SPACE_LG, 0, tokens.SPACE_LG, tokens.SPACE_SM),
+    )
+
     experience_card = _settings_card(
         [
             _setting_row(
                 ft.Icons.DESKTOP_WINDOWS_ROUNDED,
                 "Display defaults",
-                "Every Xvnc, audio and viewer option used by new displays",
-                ft.TextButton("Open", on_click=_open_display_defaults),
-                stacked=is_narrow,
+                "Applied to every new desktop and app display",
+            ),
+            ft.Container(
+                content=build_display_defaults(_persist_display),
+                padding=ft.Padding(tokens.SPACE_LG, 0, tokens.SPACE_LG, tokens.SPACE_SM),
             ),
             ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
             _setting_row(
                 ft.Icons.TERMINAL_ROUNDED,
                 "Terminal defaults",
-                "Theme, font size and cursor for new shells",
-                ft.TextButton("Open", on_click=_open_terminal_defaults),
+                "Theme, size and cursor used by new shells",
+                value=_terminal_summary(),
                 stacked=is_narrow,
             ),
+            terminal_controls_row,
         ]
     )
 
@@ -364,99 +383,87 @@ def SettingsView() -> ft.Control:
             _setting_row(
                 ft.Icons.NOTIFICATIONS_ROUNDED,
                 "Notifications",
-                "Permission state and Android notification settings",
-                ft.TextButton("Open", on_click=_open_notifications),
+                "The persistent notification keeps your work alive in the background",
+                value=_notifications_value(),
+                on_tap=_open_notifications,
                 stacked=is_narrow,
             ),
             ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
             _setting_row(
                 ft.Icons.PRIVACY_TIP_ROUNDED,
                 "Privacy & Ads",
-                "Ad consent and privacy options (when required in your region)",
-                ft.TextButton("Open", on_click=_open_privacy_ads),
+                "Ads always serve; this is the personalization verdict",
+                value=_privacy_value(),
+                on_tap=_open_privacy_ads,
                 stacked=is_narrow,
             ),
             ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
             _setting_row(
                 ft.Icons.MEMORY_ROUNDED,
                 "Running processes",
-                "Every live guest session: stop one, choose the signal, or stop all",
-                ft.TextButton("Open", on_click=_open_running),
+                "Every live guest session: stop one or stop all",
+                value=_running_value(),
+                on_tap=_open_running,
                 stacked=is_narrow,
             ),
         ]
     )
 
-    developer_card = _settings_card(
-        [
-            _setting_row(
-                ft.Icons.BUILD_ROUNDED,
-                "Build & push",
-                "Dockerfile images: build stages, tags, outputs and registry push",
-                ft.TextButton("Open", on_click=_open_build),
-                stacked=is_narrow,
-            ),
-            ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
-            _setting_row(
-                ft.Icons.CHECK_CIRCLE_OUTLINE_ROUNDED
-                if st.probe_passed
-                else ft.Icons.WARNING_ROUNDED,
-                "Environment Probe",
-                st.probe_summary or "Native library directory and proot payload ready",
-                ft.TextButton("Inspect", on_click=_open_probe_dialog),
-                stacked=is_narrow,
-            ),
-            ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
-            _setting_row(
-                ft.Icons.TERMINAL_ROUNDED,
-                "Environment Variables",
-                "PD_PROOT_BIN, FLET_APP_STORAGE_*, PD_DOCKER_AUTH, PD_FORCE_NO_COLORS",
-                ft.TextButton("View", on_click=_open_env_dialog),
-                stacked=is_narrow,
-            ),
-            ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
-            _setting_row(
-                ft.Icons.NEWSPAPER_ROUNDED,
-                "Live Activity Terminal",
-                "Real-time app diagnostics: sessions, installs, ads, errors",
-                ft.TextButton("Open Terminal", on_click=_open_live_terminal),
-                stacked=is_narrow,
-            ),
-        ]
+    from .developer_card import build_developer_card
+
+    developer_card = build_developer_card(
+        st,
+        narrow=is_narrow,
+        lines=_debug_lines(),
+        env_value=_env_value(),
+        on_build=_open_build,
+        on_probe=_open_probe_dialog,
+        on_environment=_open_environment,
+        on_copy=_copy_debug,
+        on_clear=_clear_debug,
+        on_full_log=_open_live_terminal,
     )
 
     about_card = build_about_card(
-        is_narrow=is_narrow,
+        page,
         on_help=_open_help,
         on_changelog=_open_changelog,
         on_licenses=_licenses,
         on_privacy=lambda _e: page.run_task(launch_url, PRIVACY_POLICY_URL, page),
+        on_terms=lambda _e: page.run_task(launch_url, TERMS_OF_SERVICE_URL, page),
         on_update=_check_updates,
         on_intro=_replay_intro,
         on_exit=lambda _e: dialogs.confirm_exit(page, lambda: page.run_task(methods.exit_app)),
+        on_link=lambda url: page.run_task(launch_url, url, page),
+        on_debug=_open_live_terminal,
+        probe_summary=st.probe_summary,
+        update_available=st.update_available,
     )
 
     return ft.Column(
         controls=[
             section_header("Appearance & Theme"),
             appearance_card,
-            # Banner 1: after Appearance & Theme.
-            pooled_banner_ad(AD_SLOT_SETTINGS_1, page),
             section_header("Display & Terminal"),
             experience_card,
+            # Banner 1: after the display/terminal surface (owner: banners sit
+            # BETWEEN every two major sections, three across Settings).
+            pooled_banner_ad(AD_SLOT_SETTINGS_1, page),
             section_header("System"),
             system_card,
             section_header("Developer tools"),
             developer_card,
+            # Banner 2.
+            pooled_banner_ad(AD_SLOT_SETTINGS_2, page),
             section_header("Storage & Cache"),
             storage_card,
             section_header("Registry Authentication"),
             auth_card,
-            # Banner 2: after Registry Authentication.
-            pooled_banner_ad(AD_SLOT_SETTINGS_2, page),
+            # Banner 3.
+            pooled_banner_ad(AD_SLOT_SETTINGS_3, page),
             section_header("About & System Status"),
             about_card,
-            # Banners live BETWEEN sections only — never as the last element.
+            # Banners live BETWEEN sections only, never as the last element.
             ft.Container(height=tokens.NAV_BAR_CLEARANCE),
         ],
         spacing=tokens.SPACE_SM,

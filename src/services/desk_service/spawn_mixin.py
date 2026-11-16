@@ -177,7 +177,9 @@ class SpawnMixin:
             lines = [
                 f"export {key}={value}"
                 for key, value in guest_display_env(
-                    session.display, pulse=self.pulse_server_alive()
+                    session.display,
+                    pulse=self.pulse_server_alive(),
+                    bus=session.mode != "display",
                 ).items()
             ]
             target.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -187,8 +189,11 @@ class SpawnMixin:
     def _read_logs(self, session: DeskSession, process: subprocess.Popen, kind: str) -> None:
         if process.stdout is None:
             return
-        log_file = session._log_file
         while True:
+            # Two reader threads share one handle and either may rotate it, so
+            # re-read it each iteration instead of capturing a stale (closed)
+            # object at thread start.
+            log_file = session._log_file
             line = process.stdout.readline()
             if not line:
                 break  # EOF: the process closed its stdout (usually dead)
@@ -214,9 +219,25 @@ class SpawnMixin:
                     if log_file.tell() < MAX_LOG_BYTES:
                         log_file.write(line)
                     else:
-                        log_file.seek(0)
-                        log_file.truncate()
-                except OSError:
+                        # Rotate instead of rewinding in place: the old write
+                        # path truncated and lost the newest context exactly
+                        # when a crash was being explained.
+                        from pathlib import Path
+
+                        current = Path(log_file.name)
+                        log_file.close()
+                        rotated = current.with_suffix(current.suffix + ".1")
+                        try:
+                            rotated.unlink(missing_ok=True)
+                            current.replace(rotated)
+                        except OSError:
+                            pass
+                        log_file = open(current, "wb", buffering=0)  # noqa: SIM115
+                        session._log_file = log_file
+                        log_file.write(line)
+                except OSError, ValueError:
+                    # ValueError: the other reader rotated and closed this
+                    # handle between our re-read and the write.
                     pass
         cb = self.on_log_line  # trailing notify so the last lines are painted
         if cb is not None:

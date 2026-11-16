@@ -7,6 +7,7 @@ import logging
 
 import flet as ft
 
+from components.ui import house_field
 from core import layout, theme, tokens
 from core.state import state
 
@@ -89,15 +90,14 @@ def _picker_with_custom(
     settings = state.display_settings or {}
     current = str(settings.get(key, options[0][0]))
     is_custom = current not in {v for v, _t in options}
-    custom_field = ft.TextField(
+    custom_field = house_field(
         label=f"{label} (custom)",
-        hint_text=hint,
+        hint=hint,
         value=current if is_custom else "",
         width=tokens.DROPDOWN_WIDTH,
         height=tokens.CONTROL_SM,
         text_size=tokens.FONT_XS,
         visible=is_custom,
-        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
         on_change=lambda e: _set_setting(key, e.control.value or ""),
     )
     dropdown = ft.Dropdown(
@@ -115,9 +115,12 @@ def _picker_with_custom(
     return ft.Column(controls=[dropdown, custom_field], spacing=tokens.SPACE_XXS, tight=True)
 
 
-def _switch_row(label: str, key: str, default: bool) -> ft.Switch:
-    return ft.Switch(
-        label=label,
-        value=bool((state.display_settings or {}).get(key, default)),
-        on_change=lambda e: _set_setting(key, bool(e.control.value)),
+def _switch_row(label: str, key: str, default: bool) -> ft.Control:
+    """House toggle (house scale + compact label) bound to a display setting."""
+    from components.ui import switch_row
+
+    return switch_row(
+        label,
+        bool((state.display_settings or {}).get(key, default)),
+        lambda e: _set_setting(key, bool(e.control.value)),
     )

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from core import probe_cache
 from core.state import state
 from services import proot_service
 
@@ -16,15 +17,22 @@ logger = logging.getLogger(__name__)
 class DisplayProbeMixin:
     async def probe_display(self, container: str) -> None:
         """Cache the container's rootfs capability probe in state.display_support.
-        Failures are NOT cached — the next mount re-probes (a transient failure
-        must not pin an error until app restart). In-flight probes dedup via a
-        set so a render loop never spawns parallel proot commands."""
+
+        Two layers: the in-memory observable for this page session, and a
+        short-TTL copy under the regenerable cache root so a cold start paints
+        the cards instantly instead of walking the rootfs again. Failures are
+        NOT cached — the next mount re-probes. In-flight probes dedup via a set
+        so a render loop never spawns parallel proot commands."""
         if state.display_support is None:
             state.display_support = {}
         cached = state.display_support.get(container)
         if cached is not None and "error" not in cached:
             return
         if container in _probing:
+            return
+        disk = probe_cache.load("caps", container)
+        if isinstance(disk, dict) and "error" not in disk:
+            state.display_support = {**(state.display_support or {}), container: disk}
             return
         _probing.add(container)
         try:
@@ -34,6 +42,7 @@ class DisplayProbeMixin:
             return  # not cached — retried next mount
         finally:
             _probing.discard(container)
+        probe_cache.store("caps", container, caps)
         # REASSIGN: nested dict-item mutation does not notify the observable,
         # so card labels ("Open display"/"Install display support") never flipped.
         state.display_support = {**(state.display_support or {}), container: caps}

@@ -63,7 +63,7 @@ class DisplayInstallMixin:
         self.show_snack(f"installing desktop in {container}…")
         await self._notify_install(
             "Installing desktop",
-            f"{container} — installing desktop support…",
+            f"{container}: installing desktop support…",
             ongoing=True,
         )
         cell = getattr(self.page, "_display_install_cell", None)
@@ -124,7 +124,7 @@ class DisplayInstallMixin:
         if result.get("ok"):
             self.show_snack(f"desktop installed in {container}")
             await self._notify_install(
-                "Desktop installed", f"{container} — open it from the Display tab"
+                "Desktop installed", f"{container}: open it from the Display tab"
             )
             # Re-probe without the cache guard: the container changed on disk.
             try:
@@ -143,7 +143,7 @@ class DisplayInstallMixin:
             except Exception:
                 pass
         else:
-            state.display_error = f"install exited {result.get('returncode')} — see the log tail"
+            state.display_error = f"install exited {result.get('returncode')}, see the log tail"
             self.show_snack(f"display install failed in {container}")
             if cell is not None:
                 cell.append_output(state.display_error)

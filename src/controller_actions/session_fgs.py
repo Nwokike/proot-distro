@@ -11,6 +11,7 @@ from core.constants import (
     NOTIFICATION_CHANNEL_SESSIONS_NAME,
     NOTIFICATION_ID_FGS,
 )
+from core.state import state
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +144,9 @@ class SessionFgsMixin:
         if notifications is None:
             return
         try:
-            if await notifications.are_notifications_enabled():
+            enabled = await notifications.are_notifications_enabled()
+            state.notifications_enabled = bool(enabled)
+            if enabled:
                 self.show_snack("notifications are enabled")
             else:
                 await notifications.open_settings()

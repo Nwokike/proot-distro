@@ -27,7 +27,7 @@ def theme_button(on_cycle: Callable[[], None]) -> ft.Control:
     return ft.IconButton(
         icon=icon,
         icon_size=tokens.ICON_SM,
-        tooltip=f"{tooltip} — tap to switch",
+        tooltip=f"{tooltip} · tap to switch",
         on_click=lambda _e: on_cycle(),
     )
 
@@ -71,7 +71,7 @@ def version_chip(page: ft.Page | None) -> ft.Control:
             bgcolor=ft.Colors.with_opacity(tokens.OPACITY_CHIP, theme.primary()),
             border=ft.Border.all(tokens.BORDER_WIDTH_EMPHASIS, theme.primary()),
             ink=True,
-            tooltip="New update available — tap to view",
+            tooltip="New update available · tap to view",
             on_click=lambda _e: _open_update_dialog(page),
         )
     return ft.Container(
@@ -91,7 +91,7 @@ def version_chip(page: ft.Page | None) -> ft.Control:
         border_radius=tokens.HEADER_RADIUS,
         bgcolor=ft.Colors.with_opacity(tokens.OPACITY_LIGHT, theme.text_dim()),
         ink=True,
-        tooltip="What's New — version & changelog",
+        tooltip="What's New · version and changelog",
         on_click=lambda _e: _open_update_dialog(page),
     )
 

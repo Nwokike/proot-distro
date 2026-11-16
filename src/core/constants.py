@@ -16,8 +16,14 @@ REPO_NAME = "proot-distro"
 GITHUB_RELEASES_URL = f"https://github.com/{REPO_OWNER}/{REPO_NAME}/releases/latest"
 UPDATE_CONFIG_URL = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/main/version.json"
 PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=ng.kiri.prootdistro"
+GITHUB_REPO_URL = f"https://github.com/{REPO_OWNER}/{REPO_NAME}"
 PRIVACY_POLICY_URL = "https://kiri.ng/privacy"
 TERMS_OF_SERVICE_URL = "https://kiri.ng/terms"
+# The owner's About rows are identical in every Kiri app (DDGS/ktv-player):
+# Play devices rate on the store, desktop rates on GitHub.
+CONTACT_EMAIL = "hello@kiri.ng"
+KIRI_APPS_PLAY_URL = "https://play.google.com/store/apps/dev?id=5797833969564243342"
+KIRI_APPS_URL = "https://kiri.ng/projects"
 
 STORAGE_ONBOARDING_DONE = "proot_onboarding_done"
 
@@ -27,6 +33,9 @@ PREF_DOCKER_TOKEN = "docker_token"  # noqa: S105 - a preference key, not a secre
 PREF_DISPLAY_SETTINGS = "display_settings"
 PREF_TERMINAL_SETTINGS = "terminal_settings"
 PREF_UPDATE_CHECKED_AT = "update_checked_at"
+PREF_ENV_DEFAULTS = "env_defaults"
+# User-made launch presets for the display sheet: name, command, work dir, env.
+PREF_APP_PRESETS = "app_presets"
 
 # ── Android notifications ───────────────────────────────────────────────────
 NOTIFICATION_ICON = "ic_stat_prootdistro"
@@ -49,6 +58,7 @@ AD_SLOT_DISPLAY = "display-1"
 AD_SLOT_BUILD = "build-1"
 AD_SLOT_SETTINGS_1 = "settings-1"
 AD_SLOT_SETTINGS_2 = "settings-2"
+AD_SLOT_SETTINGS_3 = "settings-3"
 AD_EVERY_ROWS = 5  # banner cadence in long lists (owner rule)
 
 # ── Guest paths ────────────────────────────────────────────────────────────
@@ -65,20 +75,6 @@ COMPRESS_EXT = {
 }
 ARCHIVE_SUFFIXES = (".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tar")
 
-# ── Upstream choices surfaced by both the install and build screens ────────
-UPSTREAM_ARCH_CHOICES = (
-    "host",  # sentinel: keep the host's architecture
-    "aarch64",
-    "arm",
-    "i686",
-    "riscv64",
-    "x86_64",
-    "linux/arm64",
-    "linux/arm/v7",
-    "linux/amd64",
-    "linux/386",
-    "linux/riscv64",
-)
 APP_PRESETS = (
     ("Terminal", "xterm"),
     ("Files", "thunar"),

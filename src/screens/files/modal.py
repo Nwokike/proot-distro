@@ -13,6 +13,7 @@ import logging
 import flet as ft
 
 from components.file_item import build_file_item
+from components.ui import search_field
 from core import theme, tokens
 from core.constants import GUEST_HOME
 from screens.files.components import (
@@ -58,14 +59,7 @@ def show_manage_files_modal(page: ft.Page, container: str, initial_path: str = G
         filter_text = (e.control.value or "").strip().lower()
         _render()
 
-    filter_field = ft.TextField(
-        hint_text="Filter this folder",
-        prefix_icon=ft.Icons.SEARCH_ROUNDED,
-        text_size=tokens.FONT_SM,
-        dense=True,
-        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-        on_change=_on_filter,
-    )
+    filter_field = search_field(hint="Filter this folder", on_change=_on_filter)
 
     dlg = ft.AlertDialog(
         modal=True,
@@ -73,7 +67,7 @@ def show_manage_files_modal(page: ft.Page, container: str, initial_path: str = G
             controls=[
                 ft.Icon(ft.Icons.FOLDER_ROUNDED, color=theme.primary()),
                 ft.Text(
-                    f"Files — {container}",
+                    f"Files: {container}",
                     weight=ft.FontWeight.W_600,
                     size=tokens.FONT_LG,
                     color=theme.text(),
@@ -389,7 +383,7 @@ def show_manage_files_modal(page: ft.Page, container: str, initial_path: str = G
                 # Log the real error before falling back — otherwise a
                 # permissions bug looks like an empty root.
                 logger.warning(
-                    "list %s in %s failed (%r) — falling back to /", target_dir, container, exc
+                    "list %s in %s failed (%r), falling back to /", target_dir, container, exc
                 )
                 if target_dir != "/":
                     return container_files_service.list_container_dir(container, "/")

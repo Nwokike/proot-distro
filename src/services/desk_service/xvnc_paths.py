@@ -35,7 +35,7 @@ def native_dir() -> Path:
     native = _native_library_dir()
     if native is None or not native.is_dir():
         raise RuntimeError(
-            "the display payloads ship inside the Android app — they are not "
+            "the display payloads ship inside the Android app; they are not "
             "available in this environment"
         )
     return native

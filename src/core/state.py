@@ -24,7 +24,7 @@ DEFAULT_DISPLAY_SETTINGS: dict = {
     "tunnel": False,
     "depth": "24",
     "shared_policy": "always",  # always | never ("auto" == always for our viewer)
-    "resize": "remote",  # remote | scale | off — how the viewer fits the framebuffer
+    "resize": "scale",  # scale | remote | off — scale fits the whole desktop (letterbox)
     "clipboard": True,
     # Raw RFB port gates — OFF by default (the stream server's access code is
     # the viewer gate); the user opts in.
@@ -99,8 +99,21 @@ class AppState:
     storage_detail: dict | None = None  # per-area sizes under the Flet storage roots
     cache_busy: bool = False
     online: bool = True  # Connectivity service's last known state
-    settings_section: str = ""  # "" | "build" (developer tools under Settings)
+    settings_section: str = ""  # "" | "build"
+    # Guest defaults the user adds (KEY=VALUE) — injected into new shells and
+    # displays; separate from the app's own runtime contract.
+    env_defaults: dict = None
+    # Split storage so the Settings row can be honest about what lives where.
+    storage_containers_bytes: int = 0
+    storage_cache_bytes: int = 0
+    notifications_enabled: bool | None = None  # None = not probed
+    # Guest processes from the last listing (None = never listed). The Settings
+    # row shows the count it was told, never a fabricated zero.
+    running_sessions: list | None = None
     terminal_settings: dict = None  # DEFAULT_TERMINAL_SETTINGS + saved values
+    # Bumped when a shell picks its terminal theme, so the FAB menu rebuilds
+    # and its check mark follows the real theme immediately.
+    terminal_theme_rev: int = 0
     device_orientation: str = "portrait"  # PageMediaData.orientation
     keyboard_inset: float = 0.0  # PageMediaData.view_insets.bottom (px)
     docker_token: str = ""
@@ -145,6 +158,14 @@ class AppState:
 
     # Display / X11: the container whose display is open, or None.
     active_display: str | None = None
+    # Probed preset apps per container ({container: [{label, cmd}, ...]}), so
+    # the Display tab can offer real one-tap apps instead of a generic button.
+    # None = never probed; {} = probed and nothing found.
+    detected_apps: dict | None = None
+    # User-made launch presets: [{"name", "cmd", "work_dir", "env"}]. These are
+    # the user's own "desktop shortcuts": a name, a command and the login
+    # options that belong to it.
+    app_presets: list | None = None
     # Bumped by DeskManager.on_sessions_changed on every session transition so
     # the Display tab re-reads manager.running()/visible() immediately (the
     # Stop button included) instead of waiting for a tab switch.

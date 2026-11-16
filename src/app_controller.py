@@ -24,8 +24,10 @@ from controller_actions.app_misc import AppMiscMixin
 from core import proot_probe, shared_services, theme
 from core.constants import (
     NOTIFICATION_ICON,
+    PREF_APP_PRESETS,
     PREF_DISPLAY_SETTINGS,
     PREF_DOCKER_TOKEN,
+    PREF_ENV_DEFAULTS,
     PREF_TERMINAL_SETTINGS,
     PREF_THEME_MODE,
     STORAGE_ONBOARDING_DONE,
@@ -121,6 +123,17 @@ class AppController(
 
         await self.check_probe()
 
+        # Housekeeping, off the UI thread: temp/ is throwaway by contract
+        # (.flet/README.md), and the durable display logs are bounded so a year
+        # of runs cannot grow without limit.
+        try:
+            from core import storage_paths
+
+            await asyncio.to_thread(storage_paths.sweep_temp)
+            await asyncio.to_thread(storage_paths.prune_display_logs)
+        except Exception as exc:
+            logger.debug("startup housekeeping skipped: %s", exc)
+
         # New page session (app reopened while the process stayed alive via the
         # foreground service): drop stale terminal widgets so each live shell
         # re-creates its MobileTerminal on THIS page and re-wires; the retained
@@ -155,12 +168,17 @@ class AppController(
             search_distro=self.search_distro,
             open_notification_settings=self.open_notification_settings,
             open_developer_tools=self.open_developer_tools,
+            save_env_defaults=self.save_env_defaults,
+            save_app_preset=self.save_app_preset,
+            delete_app_preset=self.delete_app_preset,
+            open_settings_section=self.open_settings_section,
             save_display_settings=self.save_display_settings,
             save_terminal_settings=self.save_terminal_settings,
             check_updates_now=self.check_updates_now,
             replay_onboarding=self.replay_onboarding,
             run_container=self.run_container,
             clear_cache=self.clear_cache,
+            clear_app_cache=self.clear_app_cache,
             clear_orphan_layers=self.clear_orphan_layers,
             clear_build_cache=self.clear_build_cache,
             remove_cached_image=self.remove_cached_image,
@@ -187,6 +205,7 @@ class AppController(
             close_session=self.close_session,
             open_display=self.open_display,
             probe_display=self.probe_display,
+            probe_apps=self.probe_apps,
             start_display=self.start_display,
             stop_display=self.stop_display,
             start_x_display=self.start_x_display,
@@ -332,38 +351,91 @@ class AppController(
                 if isinstance(loaded_terminal, dict):
                     state.terminal_settings.update(loaded_terminal)
             except TypeError, ValueError:
-                logger.debug("saved terminal_settings unparseable — keeping defaults")
+                logger.debug("saved terminal_settings unparseable, keeping defaults")
+
+        # Guest defaults the user added in Settings -> Environment.
+        saved_env = await self.prefs.get(PREF_ENV_DEFAULTS)
+        state.env_defaults = {}
+        if isinstance(saved_env, str) and saved_env:
+            try:
+                loaded_env = json.loads(saved_env)
+                if isinstance(loaded_env, dict):
+                    state.env_defaults = {
+                        str(k): str(v) for k, v in loaded_env.items() if str(k).strip()
+                    }
+            except TypeError, ValueError:
+                logger.debug("saved env_defaults unparseable, keeping empty")
+
+        # User-made display presets (name + command + its login options).
+        saved_presets = await self.prefs.get(PREF_APP_PRESETS)
+        state.app_presets = []
+        if isinstance(saved_presets, str) and saved_presets:
+            try:
+                loaded_presets = json.loads(saved_presets)
+                if isinstance(loaded_presets, list):
+                    state.app_presets = [
+                        item
+                        for item in loaded_presets
+                        if isinstance(item, dict) and str(item.get("cmd", "")).strip()
+                    ]
+            except TypeError, ValueError:
+                logger.debug("saved app_presets unparseable, keeping empty")
 
         if isinstance(saved_settings, str) and saved_settings:
             try:
                 loaded = json.loads(saved_settings)
+                if isinstance(loaded, dict) and loaded.get("resize") == "remote":
+                    # "remote" was our old default and cropped the desktop on
+                    # Android; treat it as the fit default unless re-chosen.
+                    loaded["resize"] = "scale"
                 if isinstance(loaded, dict):
                     from core.state import DEFAULT_DISPLAY_SETTINGS
 
                     state.display_settings = {**DEFAULT_DISPLAY_SETTINGS, **loaded}
             except ValueError, TypeError:
-                logger.debug("saved display_settings unparseable — keeping defaults")
+                logger.debug("saved display_settings unparseable, keeping defaults")
         state.theme_revision += 1
 
     async def refresh_containers(self) -> None:
         try:
-            # Wall time = the slowest scan instead of the sum of four.
+            # Wall time = the slowest scan instead of the sum of three.
             containers, storage, cached = await asyncio.gather(
                 asyncio.to_thread(self.proot.list_containers),
-                asyncio.to_thread(self.proot.storage_bytes),
+                asyncio.to_thread(self.proot.storage_split),
                 asyncio.to_thread(self.proot.cached_images),
             )
             state.containers = containers
-            state.storage_bytes = storage
+            state.storage_containers_bytes, state.storage_cache_bytes = storage
+            state.storage_bytes = storage[0] + storage[1]
             state.cached_count = len(cached)
             state.cached_images = cached
             state.data_note = ""
+            self._warm_probes(containers)
         except Exception as exc:
             # Surface, never swallow: the UI shows why the list is empty
             # (e.g. proot_distro missing because the app runs under the wrong
             # interpreter — system flet instead of the project venv).
             state.data_note = f"proot-distro unavailable: {exc}"
             logger.warning("refresh_containers failed: %s", exc)
+
+    def _warm_probes(self, containers: list[dict]) -> None:
+        """Probe containers that have no fresh cache entry, once per app start.
+
+        With the TTL cache warm, the Display tab paints from disk; without this,
+        a first launch after an install would still show "probing..."."""
+        if getattr(self, "_probe_warmed", False):
+            return
+        self._probe_warmed = True
+        from core import probe_cache
+
+        for row in containers:
+            name = str(row.get("name", ""))
+            if not name:
+                continue
+            if probe_cache.load("caps", name) is None:
+                self.page.run_task(self.probe_display, name)
+            if probe_cache.load("apps", name) is None:
+                self.page.run_task(self.probe_apps, name)
 
     async def check_probe(self, force: bool = False) -> None:
         probe = await asyncio.to_thread(proot_probe.bootstrap_env, None, force)
@@ -383,8 +455,8 @@ class AppController(
                 return await fn(*args, **kwargs)
             except (SystemExit, KeyboardInterrupt) as exc:
                 name = getattr(fn, "__name__", "action")
-                logger.exception("handler %s raised %s — contained", name, type(exc).__name__)
-                state.data_note = f"{name} tried to exit the app ({exc!r}) — contained"
+                logger.exception("handler %s raised %s, contained", name, type(exc).__name__)
+                state.data_note = f"{name} tried to exit the app ({exc!r}), contained"
                 return None
             except RuntimeError as exc:
                 # A task can finish after the page session is destroyed (app

@@ -1,5 +1,5 @@
 {
-  "resize": "remote",
+  "resize": "scale",
   "reconnect": true,
   "reconnect_delay": 3000
 }

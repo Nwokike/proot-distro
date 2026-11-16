@@ -4,28 +4,13 @@ from __future__ import annotations
 
 import flet as ft
 
-from core import theme, tokens
+from components.ui import house_field
+from core import tokens
 
 
 def ask_copy(page: ft.Page, methods, container: str) -> None:
-    source = ft.TextField(
-        hint_text="source (container:/path)",
-        text_size=tokens.FONT_SM,
-        height=tokens.CONTROL_INPUT,
-        border=ft.OutlineInputBorder(
-            border_radius=tokens.RADIUS_MD,
-            side=ft.BorderSide(1, theme.surface_alt()),
-        ),
-    )
-    destination = ft.TextField(
-        hint_text="destination (container:/path)",
-        text_size=tokens.FONT_SM,
-        height=tokens.CONTROL_INPUT,
-        border=ft.OutlineInputBorder(
-            border_radius=tokens.RADIUS_MD,
-            side=ft.BorderSide(1, theme.surface_alt()),
-        ),
-    )
+    source = house_field(hint="source (container:/path)")
+    destination = house_field(hint="destination (container:/path)")
 
     use_move = ft.Checkbox(label="Move (delete source after copy)", value=False)
     use_recursive = ft.Checkbox(label="Recursive", value=True)
@@ -63,24 +48,8 @@ def ask_copy(page: ft.Page, methods, container: str) -> None:
 
 
 def ask_sync(page: ft.Page, methods, container: str) -> None:
-    source = ft.TextField(
-        hint_text="source folder (host or container:/path)",
-        text_size=tokens.FONT_SM,
-        height=tokens.CONTROL_INPUT,
-        border=ft.OutlineInputBorder(
-            border_radius=tokens.RADIUS_MD,
-            side=ft.BorderSide(1, theme.surface_alt()),
-        ),
-    )
-    dest = ft.TextField(
-        hint_text="destination folder",
-        text_size=tokens.FONT_SM,
-        height=tokens.CONTROL_INPUT,
-        border=ft.OutlineInputBorder(
-            border_radius=tokens.RADIUS_MD,
-            side=ft.BorderSide(1, theme.surface_alt()),
-        ),
-    )
+    source = house_field(hint="source folder (host or container:/path)")
+    dest = house_field(hint="destination folder")
     use_checksum = ft.Checkbox(label="Verify with checksums", value=False)
     prune_dest = ft.Checkbox(label="Prune files deleted in source", value=False)
 

@@ -14,8 +14,10 @@ from core import theme, tokens
 from core.constants import (
     BATTERY_SAVER_DISPLAY,
     LOW_BATTERY_PCT,
+    PREF_APP_PRESETS,
     PREF_DISPLAY_SETTINGS,
     PREF_DOCKER_TOKEN,
+    PREF_ENV_DEFAULTS,
     PREF_TERMINAL_SETTINGS,
     PREF_THEME_MODE,
     PREF_UPDATE_CHECKED_AT,
@@ -118,7 +120,7 @@ class AppMiscMixin:
         for key, tuned in BATTERY_SAVER_DISPLAY.items():
             if state.display_settings.get(key) == DEFAULT_DISPLAY_SETTINGS[key]:
                 state.display_settings[key] = tuned
-        logger.info("battery saver detected — display defaults lowered")
+        logger.info("battery saver detected, display defaults lowered")
 
     async def _warn_low_battery(self) -> None:
         """A big install on a nearly-flat battery is a support ticket waiting
@@ -132,7 +134,7 @@ class AppMiscMixin:
             logger.debug("battery level probe failed: %s", exc)
             return
         if isinstance(level, int) and level < LOW_BATTERY_PCT:
-            self.show_snack(f"battery at {level}% — keep the app open during the install")
+            self.show_snack(f"battery at {level}%, keep the app open during the install")
 
     async def set_docker_token(self, token: str) -> None:
         """Docker Hub credentials — upstream's PD_DOCKER_AUTH needs
@@ -141,7 +143,7 @@ class AppMiscMixin:
         token = token.strip()
         if token and ":" not in token:
             self.show_snack(
-                "Docker credentials need the form username:token — a bare token breaks pulls"
+                "Docker credentials need the form username:token. A bare token breaks pulls"
             )
             return
         state.docker_token = token
@@ -202,6 +204,101 @@ class AppMiscMixin:
         """Settings shows the Build & push screen in place (a component can only
         be constructed during render, so it lives inside SettingsView)."""
         state.settings_section = "build" if open_ else ""
+
+    async def open_settings_section(self, section: str = "") -> None:
+        """Show the in-place Settings subscreen ("", "build").
+
+        Display and environment no longer have subscreens: display defaults
+        render inline and the environment is a dialog (owner ruling
+        2026-11-15)."""
+        state.settings_section = section if section in ("", "build") else ""
+
+    async def save_env_defaults(self, env: dict | None = None) -> None:
+        """Persist the guest-default environment the user edited.
+
+        These keys are injected into every NEW shell (and therefore into apps
+        launched from it); they are separate from the app's own runtime
+        contract, which is read-only."""
+        import re
+
+        cleaned: dict[str, str] = {}
+        for key, value in (env if env is not None else state.env_defaults or {}).items():
+            name = str(key).strip()
+            if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name):
+                cleaned[name] = str(value)
+        state.env_defaults = cleaned
+        prefs = getattr(self, "prefs", None)
+        if prefs is None:
+            return
+        try:
+            import json
+
+            await prefs.set(PREF_ENV_DEFAULTS, json.dumps(cleaned))
+        except Exception as exc:
+            logger.debug("env defaults persist failed: %s", exc)
+
+    async def save_app_preset(self, preset: dict | None = None) -> None:
+        """Add or replace a launch preset (name, command, work dir, env).
+
+        This is the user's own "desktop shortcut": what to run, what to call
+        it, and the login options that belong to it. Detected .desktop apps
+        stay separate; presets are what the user created."""
+        data = dict(preset or {})
+        name = str(data.get("name") or "").strip()
+        cmd = str(data.get("cmd") or "").strip()
+        if not cmd:
+            self.show_snack("a preset needs a command")
+            return
+        if not name:
+            name = cmd.split()[0].rsplit("/", 1)[-1]
+        # Truncate BEFORE comparing: the replace-by-name filter must see the
+        # same string that lands in the store, or long names duplicate.
+        name = name[:40]
+        work_dir = str(data.get("work_dir") or "").strip()
+        env_lines = [str(item).strip() for item in data.get("env") or [] if str(item).strip()]
+        container = str(data.get("container") or "").strip()
+        entry = {"name": name, "cmd": cmd}
+        if container:
+            entry["container"] = container
+        if work_dir:
+            entry["work_dir"] = work_dir
+        if env_lines:
+            entry["env"] = env_lines
+        current = [
+            item
+            for item in (state.app_presets or [])
+            if str(item.get("name", "")).lower() != name.lower()
+        ]
+        current.append(entry)
+        state.app_presets = current
+        prefs = getattr(self, "prefs", None)
+        if prefs is None:
+            return
+        try:
+            import json
+
+            await prefs.set(PREF_APP_PRESETS, json.dumps(current))
+        except Exception as exc:
+            logger.debug("app presets persist failed: %s", exc)
+        self.show_snack(f"preset '{entry['name']}' saved")
+
+    async def delete_app_preset(self, name: str) -> None:
+        """Remove a launch preset by name."""
+        current = [
+            item
+            for item in (state.app_presets or [])
+            if str(item.get("name", "")).lower() != str(name).lower()
+        ]
+        state.app_presets = current
+        prefs = getattr(self, "prefs", None)
+        if prefs is None:
+            return
+        try:
+            import json
+
+            await prefs.set(PREF_APP_PRESETS, json.dumps(current))
+        except Exception as exc:
+            logger.debug("app presets persist failed: %s", exc)
 
     async def save_display_settings(self) -> None:
         """Settings -> Display saves immediately (a sheet edit used to be lost)."""

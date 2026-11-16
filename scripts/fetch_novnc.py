@@ -42,7 +42,7 @@ KEEP = ("vnc.html", "defaults.json", "mandatory.json", "package.json", "LICENSE.
 # (the framebuffer follows the viewport, as before); reconnect with a short
 # delay so a dropped socket recovers without user action (upstream's
 # reconnect screen + Cancel button come with it).
-DEPLOYMENT_DEFAULTS = {"resize": "remote", "reconnect": True, "reconnect_delay": 3000}
+DEPLOYMENT_DEFAULTS = {"resize": "scale", "reconnect": True, "reconnect_delay": 3000}
 
 
 def fetch() -> bytes:

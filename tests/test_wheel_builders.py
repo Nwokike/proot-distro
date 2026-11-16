@@ -199,7 +199,7 @@ def test_fetch_novnc_vendors_the_full_upstream_viewer(monkeypatch, tmp_path):
         assert (dest / rel).is_file(), rel
     # defaults.json is OUR deployment override, not upstream's empty {}
     defaults = json.loads((dest / "defaults.json").read_text(encoding="utf-8"))
-    assert defaults["resize"] == "remote"
+    assert defaults["resize"] == "scale"
     assert defaults["reconnect"] is True
     provenance = (dest / "PROVENANCE").read_text(encoding="utf-8")
     assert version in provenance and "sha256" in provenance

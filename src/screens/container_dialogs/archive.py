@@ -4,19 +4,14 @@ from __future__ import annotations
 
 import flet as ft
 
-from core import theme, tokens
+from components.ui import house_field
+from core import tokens
 
 
 def ask_backup(page: ft.Page, methods, container: str) -> None:
-    dest = ft.TextField(
+    dest = house_field(
         label="Archive name",
         value=f"{container}-backup.tar.gz",
-        text_size=tokens.FONT_SM,
-        height=tokens.CONTROL_INPUT,
-        border=ft.OutlineInputBorder(
-            border_radius=tokens.RADIUS_MD,
-            side=ft.BorderSide(1, theme.surface_alt()),
-        ),
     )
     compress = ft.Dropdown(
         options=[
@@ -61,34 +56,19 @@ def ask_backup(page: ft.Page, methods, container: str) -> None:
 
 def ask_run(page: ft.Page, methods, container: str) -> None:
     """`proot-distro run` — Entrypoint/Cmd plus args, captured on a PTY."""
-    args_field = ft.TextField(
+    args_field = house_field(
         label="Args after -- (appended to Entrypoint, replace Cmd)",
-        hint_text="e.g. -c 'echo hi'  (empty = image default)",
-        text_size=tokens.FONT_SM,
+        hint="e.g. -c 'echo hi'  (empty = image default)",
         multiline=True,
         autofocus=True,
-        border=ft.OutlineInputBorder(
-            border_radius=tokens.RADIUS_MD,
-            side=ft.BorderSide(1, theme.surface_alt()),
-        ),
     )
 
-    user_field = ft.TextField(
-        label="User (empty = image default)",
-        text_size=tokens.FONT_SM,
-        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-    )
-    workdir_field = ft.TextField(
-        label="Working directory (empty = image default)",
-        text_size=tokens.FONT_SM,
-        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-    )
-    env_field = ft.TextField(
+    user_field = house_field(label="User (empty = image default)")
+    workdir_field = house_field(label="Working directory (empty = image default)")
+    env_field = house_field(
         label="Environment (one KEY=VALUE per line)",
-        text_size=tokens.FONT_SM,
         multiline=True,
         min_lines=2,
-        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
     )
 
     def _save(_e) -> None:

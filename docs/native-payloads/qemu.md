@@ -9,7 +9,7 @@
 
 ## Why all four arches
 
-Owner decision: a phone of either ABI can run containers of any other
+Design decision: a phone of either ABI can run containers of any other
 architecture (x86_64 images on arm64 phones and vice versa, plus 32-bit and
 riscv64). The emulators are found by `proot-distro`'s own
 `shutil.which("qemu-<arch>")`; the app symlinks them into `<app>/bin` and

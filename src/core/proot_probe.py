@@ -243,7 +243,7 @@ def _bootstrap_env_uncached(runtime_root: Path | None = None) -> ProbeResult:
 
     if native is None:
         if is_android:
-            res.problems.append("no nativeLibraryDir — this build cannot exec proot")
+            res.problems.append("no nativeLibraryDir; this build cannot exec proot")
             return res
 
         # Desktop Linux / local development: locate system proot or bundled binary
@@ -263,7 +263,7 @@ def _bootstrap_env_uncached(runtime_root: Path | None = None) -> ProbeResult:
             # Desktop dev runs only: the packaged Android APK always ships the
             # proot payload, so this can only appear running unbundled source.
             res.problems.append(
-                "no proot binary for this dev run — the packaged APK bundles it. "
+                "no proot binary for this dev run; the packaged APK bundles it. "
                 "For local source runs, set PD_PROOT_BIN to a proot binary."
             )
             return res

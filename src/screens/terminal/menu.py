@@ -72,7 +72,7 @@ def show_full_output_dialog(page: ft.Page, entry) -> None:
     page.show_dialog(
         ft.AlertDialog(
             title=ft.Text(
-                f"Full output — {entry.title or entry.key}",
+                f"Full output: {entry.title or entry.key}",
                 size=tokens.FONT_LG,
                 weight=ft.FontWeight.BOLD,
             ),
@@ -143,14 +143,30 @@ def build_terminal_fab(
 
         return _go
 
+    # The REAL current theme: an explicit choice on this entry wins over the
+    # saved default, which wins over the app-mode fallback. Reading
+    # _theme_name() first made the menu show "Colab Light" while the terminal
+    # was actually Matrix Green.
     cur_theme = (
-        (getattr(mt, "theme_name", None) or _theme_name()) if mt is not None else _theme_name()
+        getattr(entry, "terminal_theme", "")
+        or str((getattr(state, "terminal_settings", None) or {}).get("theme") or "")
+        or (getattr(mt, "theme_name", None) if mt is not None else "")
+        or _theme_name()
     )
 
     def _set_theme(name: str):
         def _go(_e):
             if mt is not None:
                 mt.set_theme(name)
+            # Persist the choice (per entry + as the default) and refresh the
+            # menu so its check mark follows immediately.
+            entry.terminal_theme = name
+            state.terminal_settings = {
+                **(getattr(state, "terminal_settings", None) or {}),
+                "theme": name,
+            }
+            state.terminal_theme_rev = (getattr(state, "terminal_theme_rev", 0) or 0) + 1
+            page.run_task(methods.save_terminal_settings)
 
         return _go
 

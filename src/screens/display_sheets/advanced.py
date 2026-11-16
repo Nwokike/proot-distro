@@ -1,4 +1,9 @@
-"""The advanced display options (every control threads into Xvnc/PulseAudio)."""
+"""The advanced display options (every control threads into Xvnc/PulseAudio).
+
+Every enum uses the house pill (components/ui.pill_dropdown) so these match the
+Home/Build controls; booleans are switches. All values are the real option keys
+— labels are display-only, and a saved custom value is never hidden.
+"""
 
 from __future__ import annotations
 
@@ -6,295 +11,249 @@ import logging
 
 import flet as ft
 
+from components.ui import pill_dropdown
 from core import theme, tokens
 from core.state import state
 
-from .common import _picker_with_custom, _set_setting, _switch_row
+from .common import _set_setting, _switch_row
 
 logger = logging.getLogger(__name__)
 
 
+def _pill(
+    key: str,
+    label: str,
+    icon: ft.IconData,
+    choices: tuple[tuple[str, str], ...],
+    *,
+    default: str,
+    tooltip: str = "",
+) -> ft.Control:
+    current = str((state.display_settings or {}).get(key, default))
+    values = [value for value, _text in choices]
+    if current not in values:
+        values.append(current)  # a saved custom value must stay selectable
+    labels = dict(choices)
+    return pill_dropdown(
+        label,
+        icon,
+        values,
+        current,
+        lambda value, k=key: _set_setting(k, value),
+        tooltip=tooltip,
+        labels=labels,
+    )
+
+
+def _row(controls: list[ft.Control]) -> ft.Row:
+    return ft.Row(controls=controls, spacing=tokens.SPACE_SM, wrap=True)
+
+
 def _advanced_display_controls() -> ft.Control:
-    """Real Xvnc/PulseAudio options for technical users — every control here
-    threads 1:1 into the server argv/module lines (depth → -depth, frame rate →
-    -FrameRate, viewers → -AlwaysShared/-NeverShared, auto-close →
-    -MaxDisconnectionTime, clipboard → -AcceptCutText/-SendCutText, audio →
-    the PulseAudio module args). Defaults keep the friendly path intact."""
-    settings = state.display_settings or {}
+    """Real Xvnc/PulseAudio options — each thread 1:1 into the argv/module
+    lines (depth → -depth, frame rate → -FrameRate, viewers →
+    -AlwaysShared/-NeverShared, auto-close → -MaxDisconnectionTime, clipboard →
+    -AcceptCutText/-SendCutText, audio → the PulseAudio module args)."""
     return ft.ExpansionTile(
         title=ft.Text("Advanced display options", size=tokens.FONT_SM, weight=ft.FontWeight.W_600),
         subtitle=ft.Text(
-            "Depth, frame rate, viewers, privacy, audio — applied when the display starts.",
+            "Depth, frame rate, viewers, privacy and audio, applied when the display starts.",
             size=tokens.FONT_XXS,
             color=theme.text_dim(),
         ),
         expanded=False,
         controls=[
-            ft.Row(
-                controls=[
-                    ft.Dropdown(
-                        label="Color depth",
-                        value=str(settings.get("depth", "24")),
-                        options=[
-                            ft.dropdown.Option("16", "16-bit (fastest)"),
-                            ft.dropdown.Option("24", "24-bit (default)"),
-                            ft.dropdown.Option("32", "32-bit"),
-                        ],
-                        on_select=lambda e: _set_setting("depth", e.control.value),
-                        width=tokens.DROPDOWN_WIDTH,
-                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-                        text_size=tokens.FONT_XS,
+            _row(
+                [
+                    _pill(
+                        "depth",
+                        "Depth",
+                        ft.Icons.LAYERS_ROUNDED,
+                        (("16", "16-bit"), ("24", "24-bit"), ("32", "32-bit")),
+                        default="24",
+                        tooltip="Xvnc -depth",
                     ),
-                    _picker_with_custom(
-                        "Frame rate",
-                        (("60", "60 /s"), ("30", "30 /s"), ("15", "15 /s")),
+                    _pill(
                         "fps",
-                        hint="updates per second (1-60)",
+                        "Frame rate",
+                        ft.Icons.SPEED_ROUNDED,
+                        (("15", "15 /s"), ("30", "30 /s"), ("60", "60 /s")),
+                        default="30",
+                        tooltip="Xvnc -FrameRate (1-60)",
                     ),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
-            ),
-            ft.Row(
-                controls=[
-                    ft.Dropdown(
-                        label="Viewers",
-                        value=str(settings.get("shared_policy", "always")),
-                        options=[
-                            # noVNC always asks for shared=1, so upstream's
-                            # "auto" is observably identical to "always" —
-                            # exposing both would be a fake choice.
-                            ft.dropdown.Option("always", "Several viewers"),
-                            ft.dropdown.Option("never", "One viewer at a time"),
-                        ],
-                        on_select=lambda e: _set_setting("shared_policy", e.control.value),
-                        width=tokens.DROPDOWN_WIDTH,
-                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-                        text_size=tokens.FONT_XS,
+                    _pill(
+                        "shared_policy",
+                        "Viewers",
+                        ft.Icons.GROUPS_ROUNDED,
+                        (("always", "Several"), ("never", "One at a time")),
+                        default="always",
+                        tooltip="Xvnc -AlwaysShared / -NeverShared",
                     ),
-                    _picker_with_custom(
-                        "Auto-close",
-                        (
-                            ("0", "Never"),
-                            ("900", "15 minutes"),
-                            ("1800", "30 minutes"),
-                            ("3600", "1 hour"),
-                        ),
-                        "disconnect_timeout",
-                        hint="seconds after the last viewer (0 = never)",
+                ]
+            ),
+            _row(
+                [
+                    _pill(
+                        "compare_fb",
+                        "Pixel diff",
+                        ft.Icons.DIFFERENCE_ROUNDED,
+                        (("2", "Compare"), ("1", "Region"), ("0", "Always send")),
+                        default="2",
+                        tooltip="Xvnc -CompareFB",
                     ),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
-            ),
-            ft.Row(
-                controls=[
-                    _switch_row("Clipboard sync", "clipboard", True),
-                    _switch_row("Microphone", "mic", True),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
-            ),
-            ft.Row(
-                controls=[
-                    _switch_row("Restrict to this device", "restrict_local", False),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
-            ),
-            ft.Row(
-                controls=[
-                    _picker_with_custom(
-                        "Audio latency",
-                        (
-                            ("0", "Device default"),
-                            ("40", "40 ms"),
-                            ("80", "80 ms"),
-                            ("125", "125 ms"),
-                        ),
-                        "audio_latency_ms",
-                        hint="milliseconds (0-2000)",
-                    ),
-                    ft.Dropdown(
-                        label="Audio performance",
-                        value=str(settings.get("audio_pm", "2")),
-                        options=[
-                            ft.dropdown.Option("2", "Low latency"),
-                            ft.dropdown.Option("1", "Power saving"),
-                            ft.dropdown.Option("0", "Balanced"),
-                        ],
-                        on_select=lambda e: _set_setting("audio_pm", e.control.value),
-                        width=tokens.DROPDOWN_WIDTH,
-                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-                        text_size=tokens.FONT_XS,
-                    ),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
-            ),
-            # ── remaining REAL Xvnc 1.16.2 parameters ──────────────────────
-            ft.Row(
-                controls=[
-                    _switch_row("View only (no remote input)", "view_only", False),
-                    _switch_row("New viewer kicks the others", "disconnect_clients", False),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
-            ),
-            ft.Row(
-                controls=[
-                    ft.Dropdown(
-                        label="Pixel diff",
-                        value=str(settings.get("compare_fb", 2)),
-                        options=[
-                            ft.dropdown.Option("2", "Compare (default)"),
-                            ft.dropdown.Option("1", "Region compare"),
-                            ft.dropdown.Option("0", "Always send"),
-                        ],
-                        on_select=lambda e: _set_setting("compare_fb", e.control.value),
-                        width=tokens.DROPDOWN_WIDTH,
-                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-                        text_size=tokens.FONT_XS,
-                    ),
-                    _picker_with_custom(
-                        "DPI",
-                        (("0", "Xvnc default"), ("96", "96"), ("120", "120"), ("144", "144")),
+                    _pill(
                         "dpi",
-                        hint="dots per inch (0-480)",
+                        "DPI",
+                        ft.Icons.STRAIGHTEN_ROUNDED,
+                        (("0", "Default"), ("96", "96"), ("120", "120"), ("144", "144")),
+                        default="0",
+                        tooltip="Xvnc -dpi (0 = default, up to 480)",
                     ),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
+                    _pill(
+                        "disconnect_timeout",
+                        "Auto-close",
+                        ft.Icons.TIMER_OFF_ROUNDED,
+                        (("0", "Never"), ("900", "15 min"), ("1800", "30 min"), ("3600", "1 hour")),
+                        default="0",
+                        tooltip="Xvnc -MaxDisconnectionTime",
+                    ),
+                ]
             ),
-            ft.Row(
-                controls=[
-                    _picker_with_custom(
-                        "Viewer idle timeout",
-                        (("0", "Never"), ("300", "5 minutes"), ("900", "15 minutes")),
+            _row(
+                [
+                    _pill(
                         "idle_timeout",
-                        hint="seconds (0 = never)",
+                        "Idle timeout",
+                        ft.Icons.HOURGLASS_EMPTY_ROUNDED,
+                        (("0", "Never"), ("300", "5 min"), ("900", "15 min")),
+                        default="0",
+                        tooltip="Xvnc -IdleTimeout (drops an idle viewer)",
                     ),
-                    _picker_with_custom(
-                        "Max connection time",
-                        (("0", "Unlimited"), ("1800", "30 minutes"), ("7200", "2 hours")),
+                    _pill(
                         "max_connection_time",
-                        hint="seconds (0 = unlimited)",
+                        "Max session",
+                        ft.Icons.TIMELAPSE_ROUNDED,
+                        (("0", "Unlimited"), ("1800", "30 min"), ("7200", "2 hours")),
+                        default="0",
+                        tooltip="Xvnc -MaxConnectionTime",
                     ),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
-            ),
-            ft.Row(
-                controls=[
-                    _picker_with_custom(
-                        "Clipboard limit",
+                    _pill(
+                        "max_cut_text",
+                        "Clipboard cap",
+                        ft.Icons.CONTENT_PASTE_ROUNDED,
                         (
-                            ("0", "Xvnc default"),
+                            ("0", "Default"),
                             ("65536", "64 KiB"),
                             ("262144", "256 KiB"),
                             ("1048576", "1 MiB"),
                         ),
-                        "max_cut_text",
-                        hint="bytes (0-16777216)",
+                        default="0",
+                        tooltip="Xvnc -MaxCutText (bytes, up to 16 MiB)",
                     ),
-                    ft.Dropdown(
-                        label="Speaker rate",
-                        value=str(settings.get("audio_rate", 0)),
-                        options=[
-                            ft.dropdown.Option("0", "Device default"),
-                            ft.dropdown.Option("44100", "44.1 kHz"),
-                            ft.dropdown.Option("48000", "48 kHz"),
-                        ],
-                        on_select=lambda e: _set_setting("audio_rate", e.control.value),
-                        width=tokens.DROPDOWN_WIDTH,
-                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-                        text_size=tokens.FONT_XS,
-                    ),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
+                ]
             ),
-            ft.Row(
-                controls=[
-                    _switch_row("AAudio close workaround", "audio_no_close_hack", False),
-                    _switch_row("Viewer bell", "viewer_bell", True),
-                    _switch_row("Show cursor dot", "show_dot", False),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
+            _row(
+                [
+                    _switch_row("Clipboard sync", "clipboard", True),
+                    _switch_row("Microphone", "mic", True),
+                    _switch_row("Restrict to this device", "restrict_local", False),
+                    _switch_row("View only", "view_only", False),
+                    _switch_row("Kick other viewers", "disconnect_clients", False),
+                ]
             ),
-            ft.Row(
-                controls=[
-                    ft.Dropdown(
-                        label="Mic rate",
-                        value=str(settings.get("mic_rate", 0)),
-                        options=[
-                            ft.dropdown.Option("0", "Device default"),
-                            ft.dropdown.Option("16000", "16 kHz"),
-                            ft.dropdown.Option("44100", "44.1 kHz"),
-                            ft.dropdown.Option("48000", "48 kHz"),
-                        ],
-                        on_select=lambda e: _set_setting("mic_rate", e.control.value),
-                        width=tokens.DROPDOWN_WIDTH,
-                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-                        text_size=tokens.FONT_XS,
+            _row(
+                [
+                    _pill(
+                        "audio_pm",
+                        "Audio mode",
+                        ft.Icons.GRAPHIC_EQ_ROUNDED,
+                        (("2", "Low latency"), ("1", "Power saving"), ("0", "Balanced")),
+                        default="2",
+                        tooltip="AAudio performance mode (pm=)",
                     ),
-                    ft.Dropdown(
-                        label="Mic format",
-                        value=str(settings.get("mic_format", "")),
-                        options=[
-                            ft.dropdown.Option("", "Device default"),
-                            ft.dropdown.Option("s16le", "s16le"),
-                            ft.dropdown.Option("float32le", "float32le"),
-                        ],
-                        on_select=lambda e: _set_setting("mic_format", e.control.value),
-                        width=tokens.DROPDOWN_WIDTH,
-                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-                        text_size=tokens.FONT_XS,
+                    _pill(
+                        "audio_latency_ms",
+                        "Audio latency",
+                        ft.Icons.AV_TIMER_ROUNDED,
+                        (("0", "Default"), ("40", "40 ms"), ("80", "80 ms"), ("125", "125 ms")),
+                        default="0",
+                        tooltip="AAudio latency= (0-2000 ms)",
                     ),
-                    _picker_with_custom(
-                        "Mic channels",
-                        (("0", "Device default"), ("1", "Mono"), ("2", "Stereo")),
+                    _pill(
+                        "audio_rate",
+                        "Speaker rate",
+                        ft.Icons.SPEAKER_ROUNDED,
+                        (("0", "Default"), ("44100", "44.1 kHz"), ("48000", "48 kHz")),
+                        default="0",
+                        tooltip="AAudio sink rate=",
+                    ),
+                ]
+            ),
+            _row(
+                [
+                    _pill(
+                        "mic_rate",
+                        "Mic rate",
+                        ft.Icons.MIC_ROUNDED,
+                        (
+                            ("0", "Default"),
+                            ("16000", "16 kHz"),
+                            ("44100", "44.1 kHz"),
+                            ("48000", "48 kHz"),
+                        ),
+                        default="0",
+                        tooltip="sles-source rate=",
+                    ),
+                    _pill(
+                        "mic_format",
+                        "Mic format",
+                        ft.Icons.GRAPHIC_EQ_ROUNDED,
+                        (("", "Default"), ("s16le", "s16le"), ("float32le", "float32le")),
+                        default="",
+                        tooltip="sles-source format=",
+                    ),
+                    _pill(
                         "mic_channels",
-                        hint="channels (0-8)",
+                        "Mic channels",
+                        ft.Icons.SURROUND_SOUND_ROUNDED,
+                        (("0", "Default"), ("1", "Mono"), ("2", "Stereo")),
+                        default="0",
+                        tooltip="sles-source channels= (0-8)",
                     ),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
+                ]
             ),
-            ft.Row(
-                controls=[
-                    ft.Dropdown(
-                        label="Resampler",
-                        value=str(settings.get("resample_method", "")),
-                        options=[
-                            ft.dropdown.Option("", "PulseAudio default"),
-                            ft.dropdown.Option("speex-float-1", "Speex (faster)"),
-                            ft.dropdown.Option("speex-float-5", "Speex HQ"),
-                            ft.dropdown.Option("soxr-hq", "SoXR HQ"),
-                        ],
-                        on_select=lambda e: _set_setting("resample_method", e.control.value),
-                        width=tokens.DROPDOWN_WIDTH,
-                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-                        text_size=tokens.FONT_XS,
+            _row(
+                [
+                    _pill(
+                        "resample_method",
+                        "Resampler",
+                        ft.Icons.TUNE_ROUNDED,
+                        (
+                            ("", "Default"),
+                            ("speex-float-1", "Speex fast"),
+                            ("speex-float-5", "Speex HQ"),
+                            ("soxr-hq", "SoXR HQ"),
+                        ),
+                        default="",
+                        tooltip="PulseAudio --resample-method",
                     ),
-                    ft.Dropdown(
-                        label="Viewer log",
-                        value=str(settings.get("viewer_logging", "warn")),
-                        options=[
-                            ft.dropdown.Option("error", "Errors"),
-                            ft.dropdown.Option("warn", "Warnings"),
-                            ft.dropdown.Option("info", "Info"),
-                            ft.dropdown.Option("debug", "Debug"),
-                        ],
-                        on_select=lambda e: _set_setting("viewer_logging", e.control.value),
-                        width=tokens.DROPDOWN_WIDTH,
-                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-                        text_size=tokens.FONT_XS,
+                    _pill(
+                        "viewer_logging",
+                        "Viewer log",
+                        ft.Icons.BUG_REPORT_ROUNDED,
+                        (
+                            ("error", "Errors"),
+                            ("warn", "Warnings"),
+                            ("info", "Info"),
+                            ("debug", "Debug"),
+                        ),
+                        default="warn",
+                        tooltip="noVNC client log level",
                     ),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
+                    _switch_row("AAudio workaround", "audio_no_close_hack", False),
+                    _switch_row("Viewer bell", "viewer_bell", True),
+                    _switch_row("Cursor dot", "show_dot", False),
+                ]
             ),
         ],
     )

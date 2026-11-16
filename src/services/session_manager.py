@@ -55,6 +55,10 @@ class SessionEntry:
         # updated on every re-wire (the app can be reopened in the same
         # process while the FGS keeps it alive).
         self.loop: Any = None
+        # The theme this shell's user picked ("" = follow state.terminal_settings
+        # and then the app light/dark default). Persisted per entry so the FAB
+        # menu shows the real theme and a theme flip cannot overwrite a choice.
+        self.terminal_theme: str = ""
         # Coalescing buffer: reader-thread writers append here; one flush sends
         # everything as a single send_bytes (and one scrollback chunk).
         self._pending = bytearray()

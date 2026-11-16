@@ -129,7 +129,7 @@ class ContainerActions:
             return
         path = picked[0].path
         if not path:
-            self.show_snack("that file's location is unavailable — pick it again")
+            self.show_snack("that file's location is unavailable, pick it again")
             return
         outcome = await asyncio.to_thread(self.proot.restore_container, path)
         self.show_snack(

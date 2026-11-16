@@ -37,7 +37,7 @@ class ProcessMixin:
         session.error = session.error.splitlines()[0][:200]
         session.status = DeskStatus.ERROR
         self._notify_changed()
-        logger.warning("display: %s — %s", session.key, session.error)
+        logger.warning("display: %s, %s", session.key, session.error)
         # The log handle must not leak into the ERROR state: the reader
         # threads are done with it (EOF path) or their writes no-op through
         # the OSError guard, and a leaked fd keeps the file pinned until the

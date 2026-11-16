@@ -8,6 +8,5 @@ entry points so existing imports keep working.
 from __future__ import annotations
 
 from .display_sheets.launcher_sheet import rebuild_display_sheet, show_display_sheet
-from .display_sheets.new_display import show_new_display_sheet
 
-__all__ = ["rebuild_display_sheet", "show_display_sheet", "show_new_display_sheet"]
+__all__ = ["rebuild_display_sheet", "show_display_sheet"]

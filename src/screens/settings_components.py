@@ -22,10 +22,16 @@ def _setting_row(
     icon: ft.IconData,
     title: str,
     subtitle: str,
-    trailing: ft.Control,
+    trailing: ft.Control | None = None,
     stacked: bool = False,
+    value: str | None = None,
+    on_tap=None,
 ) -> ft.Container:
-    """Reusable settings row with icon box, title, subtitle, and responsive stacked trailing."""
+    """Settings row: icon box, title, subtitle and a trailing control.
+
+    Pass `value` to show the live value in the row itself (the Material
+    overview pattern) — the value text plus a chevron when the row navigates.
+    `on_tap` makes the whole row tappable; no "Open/View/Inspect" buttons."""
     icon_box = ft.Container(
         content=ft.Icon(
             icon,
@@ -56,11 +62,49 @@ def _setting_row(
         expand=True,
     )
 
+    tail_controls: list[ft.Control] = []
+    if value is not None:
+        tail_controls.append(
+            ft.Text(
+                value,
+                size=tokens.FONT_XS,
+                color=theme.text(),
+                text_align=ft.TextAlign.RIGHT,
+                no_wrap=False,
+            )
+        )
+    if trailing is not None:
+        tail_controls.append(trailing)
+    # The chevron marks a row that NAVIGATES. A row that already carries its own
+    # trailing control (an external-link icon, a Manage button) gets no second
+    # arrow.
+    if on_tap is not None and trailing is None and value is None:
+        tail_controls.append(
+            ft.Icon(
+                ft.Icons.CHEVRON_RIGHT_ROUNDED,
+                size=tokens.ICON_SM,
+                color=theme.text_dim(),
+            )
+        )
+
+    trailing_control = (
+        ft.Row(
+            controls=tail_controls,
+            spacing=tokens.SPACE_XS,
+            tight=True,
+            alignment=ft.MainAxisAlignment.END,
+        )
+        if tail_controls
+        else None
+    )
+
+    trailing_controls = [trailing_control] if trailing_control is not None else []
+
     if stacked:
         trailing_line = ft.Row(
             controls=[
                 ft.Container(width=tokens.CONTROL_MD + tokens.SPACE_MD),
-                trailing,
+                *trailing_controls,
             ],
             spacing=tokens.SPACE_NONE,
         )
@@ -77,7 +121,7 @@ def _setting_row(
         )
     else:
         content = ft.Row(
-            controls=[icon_box, text_col, trailing],
+            controls=[icon_box, text_col, *trailing_controls],
             spacing=tokens.SPACE_MD,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
@@ -90,4 +134,6 @@ def _setting_row(
             tokens.SPACE_LG,
             tokens.SPACE_MD,
         ),
+        on_click=on_tap,
+        ink=on_tap is not None,
     )

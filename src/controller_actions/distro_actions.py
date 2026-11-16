@@ -31,7 +31,7 @@ class DistroActions:
         if state.installing:
             return
         if not state.online:
-            self.show_snack("you're offline — connect to a network to install")
+            self.show_snack("you're offline. Connect to a network to install")
             return
         await self._warn_low_battery()
         if await asyncio.to_thread(self.proot.busy_locks):
@@ -225,7 +225,7 @@ class DistroActions:
             raise
         state.search_results = results
         state.search_status = (
-            f"{len(results)} result(s) — tap one to fill the fields"
+            f"{len(results)} result(s). Tap one to fill the fields"
             if results
             else "no results (or the search failed)"
         )
@@ -247,6 +247,25 @@ class DistroActions:
         finally:
             state.cache_busy = False
             await self.refresh_containers()
+
+    async def clear_app_cache(self) -> None:
+        """Clear the app's own regenerable caches: probe results and temp.
+
+        Distinct from 'Clear all cache', which drops OCI layers. Nothing here
+        is durable: probe entries rebuild on the next mount, temp is throwaway
+        (`.flet/README.md`), and display logs live in the data root untouched."""
+        from core import probe_cache, storage_paths
+
+        try:
+            probes = await asyncio.to_thread(probe_cache.drop_all)
+            temp_files = await asyncio.to_thread(storage_paths.sweep_temp, 0)
+        except Exception as exc:
+            self.show_snack(f"app cache clear failed: {exc!r}")
+            logger.exception("Could not clear the app cache")
+            return
+        state.display_support = {}
+        state.detected_apps = {}
+        self.show_snack(f"app cache cleared ({probes} probe(s), {temp_files} temp file(s))")
 
     async def clear_orphan_layers(self) -> None:
         if state.cache_busy:

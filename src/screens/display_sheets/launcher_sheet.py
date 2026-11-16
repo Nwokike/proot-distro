@@ -1,4 +1,11 @@
-"""The launcher, new-display and app sheets."""
+"""The ONE display sheet: App | Desktop, sharing every common option.
+
+One sheet replaced the three partial ones: the card launcher, the "run one
+app" sheet and the "+" new-display sheet. Both modes share the display number,
+image options, viewer options, the advanced Xvnc/audio surface and the login
+flags. Only the mode block differs: the app list plus a command box and saved
+presets, or the desktop environment plus the install cell.
+"""
 
 from __future__ import annotations
 
@@ -8,55 +15,118 @@ import logging
 import flet as ft
 
 from components.command_cell import build_command_cell
+from components.ui import pill_dropdown
 from core import theme, tokens
 from core.state import state
+from screens.container_dialogs.shell_options import option_error
+from services import proot_service
 from services.desk_service import DEFAULT_DESKTOP, DESKTOP_ENVIRONMENTS
 from services.desk_service.provision import install_script, package_manager_for
+from services.session_service.login_options import parse_env_bind
 
 from .advanced import _advanced_display_controls
 from .common import (
     _dialog_height,
-    _picker_with_custom,
     _pill_style,
-    _set_setting,
     _sheet_width,
     _status_line,
     _stream_session_log,
+)
+from .sheet_parts import (
+    add_display_options,
+    install_cell_placeholder,
+    mode_pill,
+    new_preset_dialog,
+    preset_tile,
+    run_as_block,
 )
 
 logger = logging.getLogger(__name__)
 
 
-_CUSTOM = "__custom__"
-
-
-def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> None:
-    """Open the launcher sheet for a container. Plain controls; repaint in
-    place when the DE pick or the install log changes."""
+def show_display_sheet(
+    page: ft.Page, methods, container: str, caps: dict, start_mode: str = "app"
+) -> None:
+    """Open the display sheet for a container. App first (owner ruling
+    2026-11-15) — one app needs nothing installed; Desktop is the second pill.
+    `start_mode` opens straight into either; the switch is always visible."""
+    mode = {"value": start_mode}
     selected = {DEFAULT_DESKTOP: True}
+    controller = getattr(page, "_controller", None)
+    manager = getattr(controller, "desk_manager", None)
+    next_free = manager.next_free_display() if manager is not None else 0
+    display_no = {"value": next_free if next_free >= 0 else 0}
+    body: ft.Column = ft.Column(spacing=tokens.SPACE_SM, tight=True, width=_sheet_width(page))
+    dlg: ft.AlertDialog
+    fields: dict = {}
+    # Built ONCE: a fresh block per repaint would drop whatever the user typed
+    # when they switch modes or pick a desktop environment.
+    run_as_control = run_as_block(fields)
 
     def _current() -> str:
         return next((key for key, on in selected.items() if on), DEFAULT_DESKTOP)
 
-    body: ft.Column = ft.Column(spacing=tokens.SPACE_SM, tight=True, width=_sheet_width(page))
-    dlg: ft.AlertDialog
+    def _open_apps(_e) -> None:
+        mode["value"] = "app"
+        _rebuild()
 
-    # App-first: the command cell is the primary path in the ready branch too —
-    # any command on its own display, edits honored, log streamed below.
+    def _open_desktop(_e) -> None:
+        mode["value"] = "desktop"
+        _rebuild()
+
+    # ── install cell (desktop mode, not installed) ────────────────────────────
+    def _run_install(ctrl) -> None:
+        page.run_task(methods.install_display_support, container, _current(), ctrl.source())
+
+    def _source_for(caps_now: dict) -> str:
+        if package_manager_for(caps_now):
+            return install_script(caps_now, _current())
+        return install_cell_placeholder(container)
+
+    try:
+        _install_cell = build_command_cell(
+            page,
+            source=_source_for(caps or {}),
+            hint="install script (edit if needed)",
+            on_run=_run_install,
+            label="Install desktop",
+        )
+        page._display_install_cell = _install_cell[1]
+    except Exception:
+        logger.exception("install cell unavailable for %s", container)
+        _install_cell = (ft.Container(), None)
+
+    def _recheck(_e) -> None:
+        page.run_task(methods.probe_display, container)
+        page.run_task(rebuild_display_sheet, page, container)
+
+    # ── app probe (App mode) ──────────────────────────────────────────────────
+    app_results = ft.Column(
+        controls=[ft.ProgressRing(width=tokens.PROGRESS_RING_MD, height=tokens.PROGRESS_RING_MD)],
+        spacing=tokens.SPACE_XS,
+    )
+    probed = {"done": False}
+
     def _start_app_job(ctrl) -> None:
+        """Run the cell's command on its own display, streaming its log into the
+        cell's OUTPUT panel, exactly like CollabShell's notebook cell. The
+        display takes over once it starts."""
         cmd = ctrl.source().strip()
         if not cmd:
-            methods.show_snack("enter a command for the display")
+            methods.show_snack("enter a command for the app display")
+            ctrl.set_running(False)
+            return
+        opts = _options()
+        if opts is None:
             ctrl.set_running(False)
             return
         ctrl.set_running(True)
         ctrl.clear_output()
 
         async def _job() -> None:
-
             poll = asyncio.create_task(_stream_session_log(page, ctrl, container))
             try:
-                await methods.start_display(container, None, cmd, None)
+                await methods.start_display(container, None, cmd, display_no["value"], opts or None)
             finally:
                 poll.cancel()
             ctrl.set_running(False)
@@ -70,86 +140,224 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
     _app_cell = build_command_cell(
         page,
         source="",
-        hint="command to run on its own display",
+        hint="command to run on its own display (e.g. python3 app.py)",
         on_run=_start_app_job,
         label="Start",
     )
 
-    # The notebook cell (CollabShell copy) for the not-ready branch: pre-filled
-    # with the install script, EDITABLE, Run streams output below. Created once
-    # per sheet; the DE pick regenerates its source. The controller is stashed
-    # on the page so install_display_support streams chunks into it.
-    def _run_install(ctrl) -> None:
-        page.run_task(methods.install_display_support, container, _current(), ctrl.source())
+    def _cell_source() -> str:
+        controller = _app_cell[1]
+        return (controller.source() if controller is not None else "") or ""
 
-    try:
-        _install_cell = build_command_cell(
-            page,
-            source=install_script(caps, DEFAULT_DESKTOP) if package_manager_for(caps) else "",
-            hint="install script — edit if needed",
-            on_run=_run_install,
-            label="Install display support",
+    def _save_preset_dialog(_e=None) -> None:
+        new_preset_dialog(page, methods, container, _cell_source(), _rebuild)
+
+    def _preset_tile(preset: dict) -> ft.Control:
+        cmd = str(preset.get("cmd", ""))
+        name = str(preset.get("name", ""))
+
+        def _run(_e) -> None:
+            _start(app_command=cmd, preset=preset)
+
+        return preset_tile(
+            preset,
+            _run,
+            lambda _e, n=name: _delete_preset(n),
         )
-        page._display_install_cell = _install_cell[1]
-    except Exception:
-        _install_cell = (ft.Container(), None)
 
-    def _rebuild() -> None:
-        # Repaint in place: build rows into a NAME, then assign (the files-modal
-        # pattern) — never a literal list at the assignment site.
-        caps_now = (state.display_support or {}).get(container) or {}
-        has_desktop = any((caps_now.get("desktops") or {}).values())
-        pm = package_manager_for(caps_now)
-        rows = [_status_line(caps_now)]
-        # App-first in EVERY state: single apps run with zero guest installs.
-        rows.append(_app_cell[0])
-        rows.append(
+    def _delete_preset(name: str) -> None:
+        async def _do() -> None:
+            await methods.delete_app_preset(name)
+            _rebuild()
+
+        page.run_task(_do)
+
+    async def _probe() -> None:
+        # ONE source of truth: the controller's probe_apps fills
+        # state.detected_apps from the container's .desktop entries.
+        found = (state.detected_apps or {}).get(container)
+        if found is None:
+            await methods.probe_apps(container)
+            found = (state.detected_apps or {}).get(container) or []
+        rows = [
+            ft.ListTile(
+                leading=ft.Icon(ft.Icons.APPS_ROUNDED, color=theme.primary()),
+                title=ft.Text(app["label"], size=tokens.FONT_SM, weight=ft.FontWeight.W_600),
+                subtitle=ft.Text(app["cmd"], size=tokens.FONT_XS, color=theme.text_dim()),
+                on_click=lambda _e, c=app["cmd"]: _start(app_command=c),
+            )
+            for app in found
+        ]
+        app_results.controls = rows or [
             ft.Text(
-                "Examples:  firefox  ·  xterm  ·  gimp  ·  python3 my_pywebview_app.py",
-                size=tokens.FONT_XXS,
+                "No app entries found in this container. Type a command below.",
+                size=tokens.FONT_XS,
                 color=theme.text_dim(),
             )
+        ]
+        probed["done"] = True
+        try:
+            dlg.update()
+        except Exception:
+            pass
+
+    # ── run ───────────────────────────────────────────────────────────────────
+    def _options() -> dict | None:
+        """The login/run options, validated against the container first."""
+        opts: dict = {}
+        user = (fields["user"].value or "").strip()
+        if user:
+            opts["user"] = user
+        work_dir = (fields["work_dir"].value or "").strip()
+        if work_dir:
+            opts["work_dir"] = work_dir
+        env_lines, bind_lines, error = parse_env_bind(fields["env"].value, fields["bind"].value)
+        if error:
+            methods.show_snack(error)
+            return None
+        if env_lines:
+            opts["env"] = env_lines
+        if bind_lines:
+            opts["bind"] = bind_lines
+        for key in ("shared_tmp", "shared_home", "isolated", "fix_low_ports"):
+            if fields[key].value:
+                opts[key] = True
+        for key in ("hostname", "kernel", "emulator"):
+            value = (fields[key].value or "").strip()
+            if value:
+                opts[key] = value
+        users = proot_service.container_users(container)
+        problem = option_error(
+            container,
+            users,
+            {
+                **opts,
+                "user": user or "root",
+                # Raw text too: the validator checks host bind paths and env
+                # syntax, which only exist in the fields.
+                "bind_text": fields["bind"].value,
+                "env_text": fields["env"].value,
+            },
+        )
+        if problem:
+            methods.show_snack(problem)
+            return None
+        return opts
+
+    def _start(app_command: str | None = None, preset: dict | None = None) -> None:
+        if mode["value"] == "app" and not (app_command or "").strip():
+            methods.show_snack("type a command for the app display")
+            return
+        opts = _options()
+        if opts is None:
+            return
+        if preset:
+            # A saved preset carries its own launch options.
+            if preset.get("work_dir"):
+                opts = {**opts, "work_dir": preset["work_dir"]}
+            if preset.get("env"):
+                opts = {**opts, "env": list(preset["env"])}
+        page.pop_dialog()
+        page.run_task(
+            methods.start_display,
+            container,
+            _current() if mode["value"] == "desktop" else None,
+            app_command if mode["value"] == "app" else None,
+            display_no["value"],
+            opts or None,
         )
 
-        def _open_apps(_e) -> None:
-            page.pop_dialog()
-            from .app_sheet import _show_app_sheet  # deferred: avoids a cycle
-
-            _show_app_sheet(page, methods, container)
-
-        rows.append(
-            ft.OutlinedButton(
-                "Open an app on a new display…",
-                icon=ft.Icons.WINDOW_ROUNDED,
-                on_click=_open_apps,
-                width=float("inf"),
-                height=tokens.CONTROL_MD,
-                style=_pill_style(),
-            )
-        )
-        if has_desktop:
-            rows.append(
-                ft.Dropdown(
-                    label="Desktop environment (full desktop session)",
-                    value=next(
-                        (de.key for de in DESKTOP_ENVIRONMENTS if de.key == _current()),
-                        DEFAULT_DESKTOP,
+    def _rebuild() -> None:
+        caps_now = (state.display_support or {}).get(container) or {}
+        has_desktop = any((caps_now.get("desktops") or {}).values())
+        rows: list[ft.Control] = [
+            ft.Container(
+                alignment=ft.Alignment.CENTER,
+                content=ft.Container(
+                    border=ft.Border.all(
+                        tokens.HAIRLINE,
+                        ft.Colors.with_opacity(tokens.OPACITY_MEDIUM, theme.text()),
                     ),
-                    options=[ft.dropdown.Option(de.key, de.name) for de in DESKTOP_ENVIRONMENTS],
-                    on_select=lambda e: _pick(e.control.value),
-                    width=tokens.DROPDOWN_WIDTH,
-                    border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-                    text_size=tokens.FONT_XS,
+                    border_radius=tokens.RADIUS_SM,
+                    padding=ft.Padding.all(tokens.SPACE_XXS),
+                    content=ft.Row(
+                        controls=[
+                            mode_pill(
+                                "App",
+                                ft.Icons.WINDOW_ROUNDED,
+                                mode["value"] == "app",
+                                _open_apps,
+                            ),
+                            mode_pill(
+                                "Desktop",
+                                ft.Icons.DESKTOP_WINDOWS_ROUNDED,
+                                mode["value"] == "desktop",
+                                _open_desktop,
+                            ),
+                        ],
+                        spacing=tokens.SPACE_XS,
+                    ),
+                ),
+            ),
+            _status_line(caps_now),
+        ]
+
+        if mode["value"] == "app":
+            if not probed["done"]:
+                # Opening in App mode, or switching to it later, starts the
+                # detection; otherwise the spinner would stay forever.
+                page.run_task(_probe)
+            rows.append(
+                ft.Text(
+                    "One app alone on its own display. Nothing to install.",
+                    size=tokens.FONT_XS,
+                    color=theme.text_dim(),
+                )
+            )
+            rows.append(ft.Text("Preset apps", size=tokens.FONT_XS, color=theme.text_dim()))
+            rows.append(app_results)
+            presets = state.app_presets or []
+            if presets:
+                rows.append(ft.Text("Your presets", size=tokens.FONT_XS, color=theme.text_dim()))
+                rows.extend(_preset_tile(preset) for preset in presets)
+            # The command cell carries its own play button and OUTPUT panel
+            # (CollabShell's notebook shape). Preset saving sits UNDER it, which
+            # also keeps two buttons off one line on a small screen.
+            rows.append(_app_cell[0])
+            rows.append(
+                ft.Row(
+                    controls=[
+                        ft.TextButton(
+                            "Save as preset…",
+                            icon=ft.Icons.BOOKMARK_ADD_ROUNDED,
+                            on_click=_save_preset_dialog,
+                            tooltip="Name this command and keep it for one-tap runs",
+                        ),
+                    ],
+                    alignment=ft.MainAxisAlignment.START,
+                )
+            )
+        elif has_desktop:
+            rows.append(
+                ft.Row(
+                    controls=[
+                        pill_dropdown(
+                            "Desktop environment",
+                            ft.Icons.DESKTOP_WINDOWS_ROUNDED,
+                            [de.key for de in DESKTOP_ENVIRONMENTS],
+                            _current(),
+                            _pick,
+                            tooltip="Desktop environment (full desktop session)",
+                            labels={de.key: de.name for de in DESKTOP_ENVIRONMENTS},
+                        ),
+                    ],
                 )
             )
             rows.append(
                 ft.FilledButton(
-                    "Start desktop session",
+                    "Start desktop",
                     icon=ft.Icons.PLAY_CIRCLE_ROUNDED,
-                    on_click=lambda _e: (
-                        page.pop_dialog(),
-                        page.run_task(methods.start_display, container, _current(), None, None),
-                    ),
+                    on_click=lambda _e: _start(),
                     width=float("inf"),
                     height=tokens.CONTROL_MD,
                     style=_pill_style(),
@@ -158,141 +366,66 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
         else:
             rows.append(
                 ft.Text(
-                    "No desktop environment is installed here. Pick one and install it "
-                    "(a few hundred MB from the container's package manager) — the display "
-                    "itself runs in this app, so the apps above need nothing.",
-                    size=tokens.FONT_SM,
-                    color=theme.text(),
+                    "No desktop is installed in this container. A desktop needs the "
+                    "session, a panel and a terminal. Install them below, or switch "
+                    "to App mode (nothing to install).",
+                    size=tokens.FONT_XS,
+                    color=theme.text_dim(),
                 )
             )
             rows.append(ft.Text("Desktop environment", size=tokens.FONT_XS, color=theme.text_dim()))
-            de_row = ft.Row(
-                controls=[
-                    ft.OutlinedButton(
-                        de.name + ("  ★" if de.best else ""),
-                        on_click=lambda _e, k=de.key: _pick(k),
-                        style=ft.ButtonStyle(
-                            shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
-                            side=ft.BorderSide(
-                                1,
-                                theme.primary()
-                                if selected.get(de.key)
-                                else ft.Colors.with_opacity(tokens.OPACITY_LIGHT, theme.text_dim()),
+            rows.append(
+                ft.Row(
+                    controls=[
+                        ft.OutlinedButton(
+                            de.name + ("  ★" if de.best else ""),
+                            on_click=lambda _e, k=de.key: _pick(k),
+                            style=ft.ButtonStyle(
+                                shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL),
+                                side=ft.BorderSide(
+                                    1,
+                                    theme.primary()
+                                    if selected.get(de.key)
+                                    else ft.Colors.with_opacity(
+                                        tokens.OPACITY_LIGHT, theme.text_dim()
+                                    ),
+                                ),
                             ),
-                        ),
-                    )
-                    for de in DESKTOP_ENVIRONMENTS
-                ],
-                spacing=tokens.SPACE_XS,
-                wrap=True,
+                        )
+                        for de in DESKTOP_ENVIRONMENTS
+                    ],
+                    spacing=tokens.SPACE_XS,
+                    wrap=True,
+                )
             )
-            rows.append(de_row)
-            if pm and _install_cell[1] is not None:
-                # Notebook cell (CollabShell copy): the install script is the
-                # EDITABLE input — tweak it if needed, Run streams the output
-                # into the OUTPUT panel below until the desktop is installed.
-                # The DE pick regenerates the source (user edits are lost on
-                # pick — intentional: a new DE means a new script).
-                _install_cell[1].set_source(install_script(caps_now, _current()))
+            if _install_cell[1] is not None:
+                _install_cell[1].set_source(_source_for(caps_now))
                 rows.append(
                     ft.Text(
-                        "Edit the script if you need to, then Run — output streams below.",
+                        "Edit the script if your distro needs something else, then "
+                        "Run. Output streams below.",
                         size=tokens.FONT_XXS,
                         color=theme.text_dim(),
                     )
                 )
                 rows.append(_install_cell[0])
-        rows.append(
-            ft.Row(
-                controls=[
-                    _picker_with_custom(
-                        "Quality",
-                        (("50", "50"), ("70", "70"), ("85", "85"), ("95", "95")),
-                        "quality",
-                        hint="1-95 (viewer image quality)",
-                    ),
-                    _picker_with_custom(
-                        "Compression",
-                        (("2", "2 — fast"), ("6", "6"), ("9", "9 — smallest")),
-                        "compression",
-                        hint="0-9 (CPU vs bandwidth)",
-                    ),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
-            )
-        )
-        rows.append(
-            ft.Row(
-                controls=[
-                    _picker_with_custom(
-                        "Resolution",
-                        (
-                            ("auto", "Auto (screen shape)"),
-                            ("1280x720", "1280 x 720"),
-                            ("1600x900", "1600 x 900"),
-                            ("1920x1080", "1920 x 1080"),
+            rows.append(
+                ft.Row(
+                    controls=[
+                        ft.TextButton(
+                            "Re-check container",
+                            icon=ft.Icons.REFRESH_ROUNDED,
+                            on_click=_recheck,
+                            tooltip="Probe again after installing by hand",
                         ),
-                        "geometry",
-                        hint="WxH, e.g. 2560x1440",
-                    ),
-                    ft.Dropdown(
-                        label="Fit to screen",
-                        value=str((state.display_settings or {}).get("resize", "remote")),
-                        options=[
-                            ft.dropdown.Option("remote", "Resize the desktop"),
-                            ft.dropdown.Option("scale", "Scale (letterbox)"),
-                            ft.dropdown.Option("off", "Keep the resolution"),
-                        ],
-                        on_select=lambda e: _set_setting("resize", e.control.value),
-                        width=tokens.DROPDOWN_WIDTH,
-                        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-                        text_size=tokens.FONT_XS,
-                    ),
-                    _picker_with_custom(
-                        "Orientation",
-                        (
-                            ("landscape", "Landscape"),
-                            ("portrait", "Portrait"),
-                            ("auto", "System default"),
-                        ),
-                        "orientation",
-                        hint="orientation",
-                    ),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
+                    ],
+                )
             )
-        )
-        rows.append(
-            ft.Row(
-                controls=[
-                    ft.Switch(
-                        label="LAN — open to Wi-Fi devices",
-                        value=bool((state.display_settings or {}).get("lan")),
-                        on_change=lambda e: _set_setting("lan", bool(e.control.value)),
-                    ),
-                    ft.Switch(
-                        label="Public URL — localhost.run tunnel",
-                        value=bool((state.display_settings or {}).get("tunnel")),
-                        on_change=lambda e: _set_setting("tunnel", bool(e.control.value)),
-                    ),
-                ],
-                spacing=tokens.SPACE_SM,
-                wrap=True,
-            ),
-        )
-        rows.append(
-            ft.Text(
-                "LAN binds the server to the phone's Wi-Fi address; the tunnel "
-                "publishes a public *.lhr.life URL. Both are protected by the "
-                "access code — share it only with your own devices.",
-                size=tokens.FONT_XXS,
-                color=theme.text_dim(),
-            )
-        )
-        # Real server options for technical users (collapsed by default).
+
+        # ── shared options (identical in both modes) ──────────────────────────
+        rows.extend(add_display_options(display_no))
         rows.append(_advanced_display_controls())
+        rows.append(run_as_control)
 
         body.controls = rows
         try:
@@ -306,7 +439,7 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
         _rebuild()
 
     dlg = ft.AlertDialog(
-        title=ft.Text(f"Display — {container}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
+        title=ft.Text(f"Display: {container}", size=tokens.FONT_LG, weight=ft.FontWeight.BOLD),
         content=ft.Column(
             controls=[body],
             scroll=ft.ScrollMode.AUTO,
@@ -340,4 +473,4 @@ def rebuild_display_sheet(page: ft.Page, container: str) -> None:
     try:
         rebuild()
     except Exception:
-        pass
+        logger.debug("display sheet rebuild failed", exc_info=True)

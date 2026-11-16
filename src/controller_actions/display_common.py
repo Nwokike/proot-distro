@@ -65,3 +65,11 @@ def invalidate_display_support(container: str) -> None:
     """Drop the cached capability probe — call on remove/reset/rename."""
     if state.display_support and container in state.display_support:
         state.display_support = {k: v for k, v in state.display_support.items() if k != container}
+    # The regenerable copies under cache/ must go too, or a recreated container
+    # of the same name would show the previous one's desktops and apps.
+    from core import probe_cache
+
+    probe_cache.drop("caps", container)
+    probe_cache.drop("apps", container)
+    if state.detected_apps and container in state.detected_apps:
+        state.detected_apps = {k: v for k, v in state.detected_apps.items() if k != container}

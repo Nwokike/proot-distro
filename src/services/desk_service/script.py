@@ -95,8 +95,12 @@ def build_guest_script(
     # A session bus for the WHOLE display (desktop and every later shell see
     # the same DBUS_SESSION_BUS_ADDRESS). dbus-run-session is the fallback:
     # it would give the desktop a bus the later shells cannot see.
+    # dbus-run-session is a fallback ONLY when it exists: app-mode containers
+    # install nothing, and an unconditional wrapper made every fresh container
+    # die with 127 ("dbus-run-session: not found").
     session_cmd = (
-        f'if [ -n "${{DBUS_SESSION_BUS_ADDRESS:-}}" ]; then\n'
+        f'if [ -n "${{DBUS_SESSION_BUS_ADDRESS:-}}" ] \\\n'
+        f"   || ! command -v dbus-run-session >/dev/null 2>&1; then\n"
         f"  {child_cmd}\n"
         f"else\n"
         f"  dbus-run-session -- {child_cmd}\n"
