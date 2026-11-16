@@ -48,7 +48,7 @@ async def handle_paste_image(page: ft.Page, container: str, guest_dir: str, refr
     refresh()
 
 
-def preview_file(page: ft.Page, container: str, file_path: str, methods=None) -> None:
+def preview_file(page: ft.Page, container: str, file_path: str) -> None:
     async def _read() -> None:
         try:
             data = await asyncio.to_thread(
