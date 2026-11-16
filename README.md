@@ -27,8 +27,8 @@
 
 | Variant | Download | Notes |
 | :--- | :---: | :--- |
-| 📱 **ARM64** (most phones) | [**proot-distro-flet-arm64-v8a.apk**](https://github.com/Nwokike/proot-distro/releases/latest/download/proot-distro-flet-arm64-v8a.apk) | Modern 64-bit Android devices |
-| 💻 **x86_64** (emulators) | [**proot-distro-flet-x86_64.apk**](https://github.com/Nwokike/proot-distro/releases/latest/download/proot-distro-flet-x86_64.apk) | Chromebooks and Android emulators |
+| 📱 **ARM64** (most phones) | [**proot-distro-flet-arm64-v8a.apk**](https://github.com/Nwokike/proot-distro/releases/latest/download/proot-distro-x11-arm64-v8a.apk) | Modern 64-bit Android devices |
+| 💻 **x86_64** (emulators) | [**proot-distro-flet-x86_64.apk**](https://github.com/Nwokike/proot-distro/releases/latest/download/proot-distro-x11-x86_64.apk) | Chromebooks and Android emulators |
 
 ---
 
