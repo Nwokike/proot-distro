@@ -363,6 +363,7 @@ def FilesView(
     filter_field = search_field(
         hint="Filter this folder",
         value=filter_text,
+        expand=False,
         on_change=lambda e: set_filter_text((e.control.value or "").strip().lower()),
     )
 
