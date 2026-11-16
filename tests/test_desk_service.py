@@ -656,7 +656,9 @@ async def test_stop_stops_pulseaudio_with_the_last_session(monkeypatch):
     assert stopped == []  # a display still runs → the daemon stays
 
 
-def test_stop_sync_sigterms_both_process_groups(monkeypatch):
+def test_stop_sync_sigkills_both_process_groups(monkeypatch):
+    """Owner ruling 2026-11-16: stop uses SIGKILL immediately (no polite TERM
+    that lingers for seconds while the STOPPING spinner shows)."""
     manager = desk_manager.DeskManager()
     session = desk_manager.DeskSession(container="debian", key="debian:0", display=0)
     signaled = []
@@ -679,9 +681,9 @@ def test_stop_sync_sigterms_both_process_groups(monkeypatch):
     session._xvnc_process = xvnc
     monkeypatch.setattr(desk_manager.os, "killpg", lambda pid, sig: signaled.append((pid, sig)))
     manager._stop_sync(session)
-    # both groups received SIGTERM (15) and were waited on
-    assert signaled.count((42, 15)) == 1
-    assert signaled.count((43, 15)) == 1
+    # both groups received SIGKILL (9) and were waited on
+    assert signaled.count((42, 9)) == 1
+    assert signaled.count((43, 9)) == 1
     assert session._process is None and session._xvnc_process is None
     assert session.status is desk_manager.DeskStatus.IDLE
 
@@ -805,10 +807,14 @@ def test_container_menu_groups_destructive_actions_last():
     assert "def ask_shell_options(" in src
 
 
-def test_files_banner_sits_at_the_bottom():
-    """The bottom banner is the shared page_tail (banner + nav-bar clearance)."""
+def test_files_banner_at_top_list_expands_to_edge():
+    """Owner ruling 2026-11-16: the banner sits at the TOP (like Terminal) so
+    the file list expands to the bottom edge. No card wrapper around the list."""
     src = (ROOT / "src" / "screens" / "files" / "__init__.py").read_text(encoding="utf-8")
-    assert src.index("card(file_list_content") < src.index("page_tail(AD_SLOT_FILES")
+    banner = src.index("page_tail(AD_SLOT_FILES")
+    file_list = src.index("file_list_content,")
+    assert banner < file_list
+    assert "card(file_list_content" not in src  # no card wrapper eating space
 
 
 def test_controller_ctx_exposes_the_v11_surface():

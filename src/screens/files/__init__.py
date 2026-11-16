@@ -11,7 +11,7 @@ import logging
 
 import flet as ft
 
-from components import card, containers_required_empty_state
+from components import containers_required_empty_state
 from components.banner_ad import page_tail
 from components.file_item import build_file_item
 from components.ui import search_field

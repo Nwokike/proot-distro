@@ -187,13 +187,11 @@ def test_files_view_keeps_responsive_list_and_banner():
     assert "idx == total or (total > AD_EVERY_ROWS and idx % AD_EVERY_ROWS == 0)" in source
     init_src = (pkg / "__init__.py").read_text(encoding="utf-8")
     assert init_src.count("scroll=ft.ScrollMode.AUTO") == 1
+    # No card wrapper around the list: it expands to the bottom edge.
+    assert "card(file_list_content" not in init_src
     assert re.search(
-        r"ft\.ListView\(\s*controls=file_items,\s*spacing=tokens\.SPACE_XXS,\s*expand=True",
-        source,
-    )
-    assert re.search(
-        r"content=card\(file_list_content, padding=tokens\.SPACE_SM\),\s*expand=True",
-        source,
+        r"content=file_list_content,\s*expand=True",
+        init_src,
     )
 
 

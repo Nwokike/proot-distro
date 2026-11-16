@@ -61,27 +61,21 @@ class ProcessMixin:
                     pass
 
     def _stop_sync(self, session: DeskSession) -> None:
-        # SIGTERM to both groups tears down the session, Xvnc and the tunnel;
-        # the in-process server was already stopped by stop().
+        # SIGKILL both groups immediately: the owner wants instant teardown
+        # ("kill a display and it really kills"), not a polite TERM that
+        # lingers for seconds while the STOPPING spinner shows.
         for attr in ("_process", "_xvnc_process"):
             process = getattr(session, attr)
             if process is None or process.poll() is not None:
                 continue
             try:
-                os.killpg(process.pid, signal.SIGTERM)
+                os.killpg(process.pid, signal.SIGKILL)
             except OSError:
                 pass
             try:
-                process.wait(timeout=3.0)
+                process.wait(timeout=2.0)
             except subprocess.TimeoutExpired:
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except OSError:
-                    pass
-                try:
-                    process.wait(timeout=2.0)
-                except subprocess.TimeoutExpired:
-                    logger.warning("display: %s process group refused to die", session.key)
+                logger.warning("display: %s process group refused to die", session.key)
         log_file, session._log_file = session._log_file, None
         if log_file is not None:
             try:

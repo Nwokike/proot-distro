@@ -77,7 +77,7 @@ def preview_file(page: ft.Page, container: str, file_path: str, methods=None) ->
             # 2026-11-16): pre-fill `./<name>` and let the user edit the command.
             name = posixpath.basename(file_path)
             run_cmd = house_field(
-                label="Run in display",
+                label="Run command",
                 hint=f"./{name}",
                 value=f"./{name}",
                 expand=True,
@@ -85,7 +85,7 @@ def preview_file(page: ft.Page, container: str, file_path: str, methods=None) ->
                 text_size=tokens.FONT_XS,
             )
 
-            def _run(_e) -> None:
+            def _run_in_display(_e) -> None:
                 cmd = (run_cmd.value or "").strip()
                 if not cmd:
                     return
@@ -94,11 +94,38 @@ def preview_file(page: ft.Page, container: str, file_path: str, methods=None) ->
                 if controller is not None:
                     page.run_task(controller.start_display, container, None, cmd, None, None)
 
+            def _run_in_terminal(_e) -> None:
+                cmd = (run_cmd.value or "").strip()
+                if not cmd:
+                    return
+                page.pop_dialog()
+                controller = getattr(page, "_controller", None)
+                if controller is not None:
+                    page.run_task(controller.open_session, container)
+
+                    # Write the command into the shell after a short delay.
+                    async def _write():
+                        import asyncio as _a
+
+                        await _a.sleep(1.5)
+                        entry = controller.session_manager.entries.get(container)
+                        if entry is not None and entry.session is not None:
+                            entry.session.write(f"{cmd}\n".encode())
+
+                    page.run_task(_write)
+
             actions.append(
                 ft.FilledButton(
                     "Run in display",
                     icon=ft.Icons.PLAY_CIRCLE_ROUNDED,
-                    on_click=_run,
+                    on_click=_run_in_display,
+                )
+            )
+            actions.append(
+                ft.OutlinedButton(
+                    "Run in terminal",
+                    icon=ft.Icons.TERMINAL_ROUNDED,
+                    on_click=_run_in_terminal,
                 )
             )
 
