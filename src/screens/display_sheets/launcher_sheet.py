@@ -275,30 +275,29 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
             page.run_task(_probe)
         rows: list[ft.Control] = [_status_line(caps_now)]
 
-        # Display number selector — beside the presets so the user can switch
-        # :0/:1/:2 without scrolling to the options section.
+        # ── Run any app: command cell + presets (always) ──────────────────────
+        # Display number pill lives HERE beside the presets (not buried in the
+        # options section) so the user can pick :0/:1/:2 right where they tap.
         from components.ui import pill_dropdown as _pd
         from services.desk_service import manager as desk_manager
 
-        numbers = range(desk_manager.MAX_DISPLAY_NUMBER + 1)
+        _numbers = range(desk_manager.MAX_DISPLAY_NUMBER + 1)
+        rows.append(ft.Text("Preset apps", size=tokens.FONT_XS, color=theme.text_dim()))
         rows.append(
             ft.Row(
                 controls=[
                     _pd(
                         "Display",
                         ft.Icons.TAG_ROUNDED,
-                        [str(n) for n in numbers],
+                        [str(n) for n in _numbers],
                         str(display_no["value"]),
                         lambda value: display_no.__setitem__("value", int(value or 0)),
-                        tooltip="Display number (:N)",
-                        labels={str(n): f":{n}" for n in numbers},
+                        tooltip="Display number (:N) — which display this preset runs on",
+                        labels={str(n): f":{n}" for n in _numbers},
                     ),
                 ],
             )
         )
-
-        # ── Run any app: command cell + presets (always) ──────────────────────
-        rows.append(ft.Text("Preset apps", size=tokens.FONT_XS, color=theme.text_dim()))
         rows.append(app_results)
         presets = state.app_presets or []
         if presets:
