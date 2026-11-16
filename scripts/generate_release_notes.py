@@ -18,6 +18,22 @@ from core.changelog import notes_for
 from core.constants import APP_NAME
 
 
+def _markdown_list(notes: str) -> str:
+    """The app stores bullets as '• ' for its own renderer; GitHub needs '- '.
+
+    Continuation lines (indented in the source) stay indented so they join the
+    bullet instead of starting a new paragraph."""
+    lines: list[str] = []
+    for raw in notes.splitlines():
+        if raw.startswith("• "):
+            lines.append("- " + raw[2:])
+        elif raw.startswith("•"):
+            lines.append("- " + raw[1:].lstrip())
+        else:
+            lines.append(raw)
+    return "\n".join(lines)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--version", required=True)
@@ -25,7 +41,7 @@ def main() -> int:
     parser.add_argument("--output", default="release_notes.md")
     args = parser.parse_args()
 
-    notes = notes_for(args.version)
+    notes = _markdown_list(notes_for(args.version))
     body = f"# {APP_NAME} {args.version} (build {args.build})\n\n{notes}\n"
     Path(args.output).write_text(body, encoding="utf-8")
     return 0
