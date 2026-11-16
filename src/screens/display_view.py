@@ -293,10 +293,10 @@ def DisplayView() -> ft.Control:
             DisplayProgressCard(progress, on_cancel=_cancel_install),
         )
 
-    # ── Presets first, then the containers ────────────────────────────────────
-    # Presets are listed GLOBALLY, not per distro: one list, and each row says
-    # which container it runs in. Below it, each container gets the same card
-    # Home shows, with the one "Open display" button.
+    # ── Distros first (Open display per container), Presets LAST ─────────────
+    # Owner ruling 2026-11-16: presets grow with installed apps, so they sit
+    # after the distro cards. Detected apps (from .desktop entries) AND manual
+    # presets are listed together, each row naming its container.
     def _run_preset(preset: dict):
         def _handler(_e) -> None:
             opts = None
@@ -322,49 +322,6 @@ def DisplayView() -> ft.Control:
             page.run_task(methods.delete_app_preset, name)
 
         return _handler
-
-    presets = st.app_presets or []
-    preset_rows: list[ft.Control] = [
-        ft.ListTile(
-            leading=ft.Icon(ft.Icons.BOOKMARK_ROUNDED, color=theme.primary()),
-            title=ft.Text(
-                str(preset.get("name", "")),
-                size=tokens.FONT_SM,
-                weight=ft.FontWeight.W_600,
-                color=theme.text(),
-            ),
-            subtitle=ft.Text(
-                " · ".join(
-                    part
-                    for part in (
-                        str(preset.get("cmd", "")),
-                        str(preset.get("container", "")),
-                    )
-                    if part
-                ),
-                size=tokens.FONT_XS,
-                color=theme.text_dim(),
-            ),
-            on_click=_run_preset(preset),
-            trailing=ft.IconButton(
-                icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
-                icon_size=tokens.ICON_SM,
-                tooltip="Delete preset",
-                on_click=_delete_preset(str(preset.get("name", ""))),
-            ),
-        )
-        for preset in presets
-    ]
-    preset_content: ft.Control = (
-        ft.Column(controls=preset_rows, spacing=tokens.SPACE_XXS)
-        if preset_rows
-        else ft.Text(
-            "No presets yet. Open a display, type a command and use Save as preset.",
-            size=tokens.FONT_XS,
-            color=theme.text_dim(),
-        )
-    )
-    sections.append(_section("Presets", None, [card(preset_content, padding=tokens.SPACE_SM)]))
 
     def _display_card(name: str) -> ft.Control:
         caps = (st.display_support or {}).get(name) or {}
@@ -418,7 +375,71 @@ def DisplayView() -> ft.Control:
         )
 
     if containers:
-        sections.append(_section("Displays", None, [_display_card(n) for n in containers]))
+        sections.append(_section("Distros", None, [_display_card(n) for n in containers]))
+
+    # ── Presets (last, grows with installed apps) ─────────────────────────────
+    preset_rows: list[ft.Control] = [
+        ft.ListTile(
+            leading=ft.Icon(ft.Icons.APPS_ROUNDED, color=theme.primary()),
+            title=ft.Text(
+                app["label"],
+                size=tokens.FONT_SM,
+                weight=ft.FontWeight.W_600,
+                color=theme.text(),
+            ),
+            subtitle=ft.Text(
+                " · ".join(part for part in (app["cmd"], container_name) if part),
+                size=tokens.FONT_XS,
+                color=theme.text_dim(),
+            ),
+            on_click=lambda _e, c=container_name, cmd=app["cmd"]: page.run_task(
+                methods.start_display, c, None, cmd, None, None
+            ),
+        )
+        for container_name, apps in sorted((st.detected_apps or {}).items())
+        for app in apps
+    ]
+    preset_rows.extend(
+        ft.ListTile(
+            leading=ft.Icon(ft.Icons.BOOKMARK_ROUNDED, color=theme.primary()),
+            title=ft.Text(
+                str(preset.get("name", "")),
+                size=tokens.FONT_SM,
+                weight=ft.FontWeight.W_600,
+                color=theme.text(),
+            ),
+            subtitle=ft.Text(
+                " · ".join(
+                    part
+                    for part in (
+                        str(preset.get("cmd", "")),
+                        str(preset.get("container", "")),
+                    )
+                    if part
+                ),
+                size=tokens.FONT_XS,
+                color=theme.text_dim(),
+            ),
+            on_click=_run_preset(preset),
+            trailing=ft.IconButton(
+                icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
+                icon_size=tokens.ICON_SM,
+                tooltip="Delete preset",
+                on_click=_delete_preset(str(preset.get("name", ""))),
+            ),
+        )
+        for preset in st.app_presets or []
+    )
+    preset_content: ft.Control = (
+        ft.Column(controls=preset_rows, spacing=tokens.SPACE_XXS)
+        if preset_rows
+        else ft.Text(
+            "No presets yet. Install apps in a container or save a preset from the display sheet.",
+            size=tokens.FONT_XS,
+            color=theme.text_dim(),
+        )
+    )
+    sections.append(_section("Presets", None, [card(preset_content, padding=tokens.SPACE_SM)]))
 
     # Banner at the very bottom — same position as the Terminal tab.
     sections.append(pooled_banner_ad(AD_SLOT_DISPLAY, page))

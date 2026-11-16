@@ -208,6 +208,7 @@ class AppController(
             probe_apps=self.probe_apps,
             start_display=self.start_display,
             stop_display=self.stop_display,
+            set_display_mic=self.set_display_mic,
             start_x_display=self.start_x_display,
             retry_display=self.retry_display,
             resume_display=self.resume_display,

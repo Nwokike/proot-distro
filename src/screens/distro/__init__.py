@@ -357,6 +357,13 @@ def DistroView() -> ft.Control:
     controls.append(main_bar)
     controls.append(install_options)
     if mode == "install":
+        controls.append(
+            ft.Text(
+                "Host runs at full speed; other architectures use an emulator and may be slower.",
+                size=tokens.FONT_XXS,
+                color=theme.text_dim(),
+            )
+        )
         controls.extend([_distro_tile(label, ref) for label, ref in _POPULAR_DISTROS])
 
     # Install logs — the live stage line under the install section.

@@ -143,6 +143,13 @@ def guest_desktop_apps(container: str) -> list[dict]:
             cmd = " ".join(token for token in exec_line.split() if not token.startswith("%"))
             if not cmd:
                 continue
+            # Chromium/Electron apps refuse to run as root without this flag
+            # (proot can't provide user namespaces — proot issue #404). Every
+            # proot GUI guide recommends it.
+            _SANDBOX_APPS = ("chromium", "chromium-browser", "google-chrome", "electron", "brave")
+            base_cmd = cmd.split()[0].rsplit("/", 1)[-1].lower()
+            if base_cmd in _SANDBOX_APPS and "--no-sandbox" not in cmd:
+                cmd += " --no-sandbox"
             apps.setdefault(label, cmd)
     return [{"label": label, "cmd": cmd} for label, cmd in sorted(apps.items())]
 

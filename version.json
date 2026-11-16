@@ -1,0 +1,10 @@
+{
+  "build_number": 4,
+  "version": "1.2.0",
+  "type": "update",
+  "title": "Proot Distro X11 1.2.0",
+  "release_notes": "• Display engine rebuilt: TigerVNC's X server (Xvnc) runs INSIDE the app\n• Audio out and microphone for guest apps (PulseAudio, per-display bus)\n• The viewer is upstream noVNC, verbatim: the keyboard really opens\n• Saved presets: name any app command and start it in one tap\n• Any CPU architecture: QEMU user-mode bundled for foreign-arch images\n• Failures tell the truth (Failed rows, whole-tree Stop, orphan sweep)\n• Settings hub, Help screen, bundled license texts and docs",
+  "mandatory": false,
+  "github_url": "https://github.com/Nwokike/proot-distro/releases/latest",
+  "playstore_url": "https://play.google.com/store/apps/details?id=ng.kiri.prootdistro"
+}

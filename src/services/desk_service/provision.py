@@ -236,9 +236,18 @@ def install_script(caps: dict, desktop_env: str = "xfce") -> str:
     update = _UPDATE_COMMANDS[pm]
     install = _INSTALL_COMMANDS[pm].format(packages=quoted)
     reliability = _APT_RELIABILITY if pm == "apt-get" else ""
+    # Post-install cache registration: Alpine apk triggers don't run correctly
+    # under proot, so the pixbuf loader cache and font cache are never built,
+    # and Wnck crashes with "default_icon_at_size: assertion failed" (device
+    # 2026-11-16: the first XFCE desktop bails out).
+    post_install = (
+        "gdk-pixbuf-query-loaders --update-cache > /dev/null 2>&1 || true\n"
+        "fc-cache -f > /dev/null 2>&1 || true\n"
+    )
     return f"""set -e
 {update}
 {reliability}{install}
+{post_install}
 echo "desktop ready ({desktop_env})"
 """
 

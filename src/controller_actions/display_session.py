@@ -89,24 +89,13 @@ class DisplaySessionMixin:
         state.detected_apps = detected
 
     async def open_display(self, container: str) -> None:
-        """Card/tab entry point: resume a running display, else open the launch
-        sheet (App first / Desktop / options). Never auto-starts."""
+        """Card/tab entry point: ALWAYS opens the launch sheet. A running
+        display is listed under Running on the tab (the user can resume it
+        there); this entry point never silently resumes one — multi-display
+        and kill reliability depend on the sheet being the only start path."""
         state.display_error = ""
         await self.probe_display(container)
         caps = self._display_caps(container)
-        running = [
-            s for s in self.desk_manager.for_container(container) if s.status.value == "running"
-        ]
-        if running:
-            # Prefer the desktop session: a container can also host a running
-            # single-app display, and "Open desktop" must not resume that.
-            desktop = next((s for s in running if s.mode == "desktop"), None)
-            state.active_display = (desktop or running[0]).key
-            self._wakelock(True)
-            return
-        # Always the launch sheet: "Open display" must not silently start a
-        # session (and a provisioned container needs a way to reach its
-        # options). The sheet's primary action is Start.
         from screens.display_launcher import show_display_sheet
 
         show_display_sheet(self.page, self.methods, container, caps)
@@ -250,6 +239,15 @@ class DisplaySessionMixin:
                 logger.debug("display_settings persist failed: %s", exc)
         self._wakelock(True)
         await self._update_fgs()
+
+    async def set_display_mic(self, key: str, enabled: bool) -> None:
+        """Toggle the mic at runtime for a running display (owner 2026-11-16:
+        the mic must not be always-on — the user controls it from the toolbar)."""
+        manager = getattr(self, "desk_manager", None)
+        if manager is None:
+            return
+        await manager.set_mic(key, enabled)
+        self.show_snack(f"microphone {'on' if enabled else 'off'}")
 
     async def stop_display(self, key: str) -> None:
         await self.ad_service.show_interstitial()

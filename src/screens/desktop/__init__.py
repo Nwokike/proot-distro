@@ -184,6 +184,17 @@ def DesktopView(session) -> ft.Control:
                 on_click=lambda _e: page.run_task(_open_terminal),
             ),
             ft.IconButton(
+                icon=ft.Icons.MIC_OFF_ROUNDED if not session.mic else ft.Icons.MIC_ROUNDED,
+                icon_size=tokens.ICON_MD,
+                icon_color=theme.ok() if session.mic else theme.text_dim(),
+                tooltip="Microphone on (tap to turn off)"
+                if session.mic
+                else "Microphone off (tap to turn on)",
+                on_click=lambda _e: page.run_task(
+                    methods.set_display_mic, session.key, not session.mic
+                ),
+            ),
+            ft.IconButton(
                 icon=ft.Icons.FULLSCREEN_EXIT_ROUNDED
                 if st.display_fullscreen
                 else ft.Icons.FULLSCREEN_ROUNDED,

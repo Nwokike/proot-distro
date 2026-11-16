@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import platform
 import re
 import shlex
 from pathlib import Path
@@ -82,6 +81,18 @@ def _harden_session(
         proot_service.setup_fake_sysdata(str(rootfs_path))
         sysdata_binds = proot_service.fake_sysdata_bindings(str(rootfs_path))
 
+        # Fake /proc/sys/kernel/osrelease with a clean version string: glibc's
+        # preinst reads the real Android kernel release (or our earlier
+        # malformed --kernel-release left it unset) and fails dpkg's version
+        # compare, blocking `apt upgrade` on Ubuntu 26.04 (device log: "Kernel
+        # must be upgraded"). Same mechanism as the overflowuid/gid stubs.
+        sysdata_base = rootfs_path.resolve().parent / "sysdata"
+        sysdata_base.mkdir(parents=True, exist_ok=True)
+        osrelease_file = sysdata_base / "osrelease"
+        if not osrelease_file.exists():
+            osrelease_file.write_text("6.17.0-proot\n")
+        sysdata_binds.append(f"--bind={osrelease_file}:/proc/sys/kernel/osrelease")
+
         # bwrap (used by glycin, gdk-pixbuf's SVG/image loader) sets up its uid
         # map by reading /proc/sys/kernel/overflowuid|gid — Android blocks both
         # the read and the real file, so bwrap exits and every GTK image load
@@ -140,24 +151,13 @@ def _harden_session(
 
     is_android = bool(os.environ.get("ANDROID_NATIVE_LIBRARY_DIR") or Path("/data/app").exists())
     if is_android:
-        uname_m = platform.machine() or "aarch64"
-
-        def _clean(value: str | None, fallback: str) -> str:
-            # --kernel-release is a backslash-separated proot string: strip
-            # anything that would break it rather than injecting raw input.
-            if not value:
-                return fallback
-            cleaned = str(value).replace("\\", " ").replace("\n", " ").strip()
-            return cleaned or fallback
-
-        host = _clean(hostname, "localhost")
-        release = _clean(kernel, platform.release() or "unknown")
-        kernel_fake = (
-            f"--kernel-release=\\Linux\\{host}\\{release}\\#1 SMP PREEMPT_DYNAMIC "
-            f"Fri, 10 Oct 2025 00:00:00 +0000\\{uname_m}\\localdomain\\-1\\"
-        )
-        if not any(a.startswith("--kernel-release=") for a in head):
-            head.append(kernel_fake)
+        # --kernel-release: upstream login already emits
+        # --kernel-release=\Linux\{hostname}\{DEFAULT_FAKE_KERNEL_RELEASE}
+        # (a 3-field backslash utsname fake with a clean 6.17.0 release).
+        # We do NOT override it: our earlier 8-field injection broke proot's
+        # backslash parsing, causing uname -r to return the raw Android
+        # kernel string, which failed glibc's preinst "kernel ≥ 3.2" check
+        # on Ubuntu 26.04 (device 2026-11-16). Upstream's default passes.
 
         # --isolated (upstream suppresses its Termux binds under this flag) is
         # implemented HERE: our equivalent is dropping the Android convenience

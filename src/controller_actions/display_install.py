@@ -57,6 +57,7 @@ class DisplayInstallMixin:
         from core.state import display_progress
 
         await self.ad_service.show_interstitial()
+        self._wakelock(True)  # install is long: the app must not close while minimized
         state.display_error = ""
         display_progress.clear(container)
         display_progress.set_running(True)
@@ -147,6 +148,8 @@ class DisplayInstallMixin:
             self.show_snack(f"display install failed in {container}")
             if cell is not None:
                 cell.append_output(state.display_error)
+        # Release the wakelock in both paths (success and failure).
+        self._wakelock(False)
 
     # ── diagnostics ───────────────────────────────────────────────────────────
 

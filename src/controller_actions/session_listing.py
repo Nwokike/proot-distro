@@ -192,6 +192,7 @@ class SessionListingMixin:
                 quality=int(settings.get("quality", 70)),
                 compression=int(settings.get("compression", 2)),
                 geometry=self._resolve_geometry(settings),
+                resize_mode=str(settings.get("resize", "scale")),
             )
         except Exception as exc:
             self.show_snack(f"X display failed: {_reason(exc)}")

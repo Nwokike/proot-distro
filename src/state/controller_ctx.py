@@ -91,6 +91,7 @@ class ControllerMethods:
         [str, str | None, str | None, int | None, dict | None], Awaitable[None]
     ] = field(default=_noop_async)
     stop_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    set_display_mic: Callable[[str, bool], Awaitable[None]] = field(default=_noop_async)
     start_x_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     retry_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     resume_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)

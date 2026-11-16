@@ -242,9 +242,12 @@ class DeskManager(SpawnMixin, AudioMixin, ProcessMixin):
         server = session.server
         if server is not None:
             try:
-                await server.stop()
-            except Exception as exc:
-                logger.debug("server stop failed for %s: %s", key, exc)
+                # Bounded: aiohttp cleanup waits for open WebSocket handlers,
+                # and a viewer WebView that hasn't closed would hang it forever
+                # (device 2026-11-16: the STOPPING spinner stuck indefinitely).
+                await asyncio.wait_for(server.stop(), timeout=3.0)
+            except (TimeoutError, Exception) as exc:
+                logger.debug("server stop failed or timed out for %s: %s", key, exc)
         session.server = None
         await asyncio.to_thread(self._stop_sync, session)
         with self._lock:
@@ -258,6 +261,29 @@ class DeskManager(SpawnMixin, AudioMixin, ProcessMixin):
             keys = [k for k, s in self._sessions.items() if s.status is not DeskStatus.IDLE]
         for key in keys:
             await self.stop(key)
+
+    async def set_mic(self, key: str, enabled: bool) -> None:
+        """Toggle the microphone module at runtime: flips session.mic and
+        restarts PulseAudio with the new audio shape. Audio output is
+        unaffected — only the sles-source (mic capture) module changes."""
+        with self._lock:
+            session = self._sessions.get(key)
+            if session is None or session.status is not DeskStatus.RUNNING:
+                return
+            session.mic = enabled
+        await asyncio.to_thread(
+            self._ensure_pulseaudio,
+            mic=session.mic,
+            latency_ms=session.audio_latency_ms,
+            pm=session.audio_pm,
+            rate=session.audio_rate,
+            no_close_hack=session.audio_no_close_hack,
+            mic_rate=session.mic_rate,
+            mic_format=session.mic_format,
+            mic_channels=session.mic_channels,
+            resample_method=session.resample_method,
+        )
+        self._notify_changed()
 
     def get(self, key: str) -> DeskSession | None:
         with self._lock:

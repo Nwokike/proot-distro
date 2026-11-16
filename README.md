@@ -39,7 +39,9 @@
 | **Rootless Linux userspace** | Genuine Linux distributions (Debian, Ubuntu, Alpine, Fedora, Arch, Kali, openSUSE and any public Docker image) run through `proot-distro`, with no root and no system changes. |
 | **X11 display streamed in the app** | The X server (TigerVNC's Xvnc) and audio (PulseAudio) run **inside the app**, so a single app needs nothing installed in the container. The viewer is upstream noVNC 1.7.0, served verbatim. |
 | **Single app on its own display** | Run one program (browser, editor, file manager, a pywebview or Python GUI app, anything on X11) alone on its own `:N` display. |
-| **Full desktop sessions** | XFCE, LXQt, MATE, IceWM or Openbox, installed into the container with one editable script, then streamed like any other display. |
+| **Full desktop sessions** | XFCE, LXQt, MATE, IceWM or Openbox — install from the collapsed tile in the display sheet with one editable script, then stream like any other display. |
+| **Saved presets** | Name any app command, save it with its own work dir and env, and start it in one tap from the Display tab. |
+| **Detected apps** | Apps installed inside a container are read from their own `.desktop` entries and offered as one-tap presets — no manual configuration. |
 | **Multiple displays at once** | Sessions are keyed `container:display`, so several displays per container and several containers can run at the same time, each with a globally unique display number. |
 | **Cross-architecture containers** | aarch64, arm, i686, x86_64 and riscv64. QEMU user-mode emulators ship in the APK, so a phone of either ABI can run images of any architecture (emulated images are slower). |
 | **Interactive PTY terminal** | Real pseudo-terminal sessions with an extra-keys row, sticky CTRL/ALT, search, zoom, live title tracking, and four terminal themes. |
@@ -48,7 +50,8 @@
 | **File manager** | Browse the container filesystem, preview text and images, upload, download, zip a folder, copy and sync paths with checksum verification and prune. |
 | **Backup and restore** | Archive a whole container to `.tar.gz`, `.tar.bz2`, `.tar.xz`, `.tar.zst` or plain `.tar`, and restore it anywhere through the native file picker. |
 | **Docker Hub search and OCI installs** | Search public images with a result limit, or type a full image reference. Optional custom container name, target architecture and insecure-registry consent. |
-| **Background running** | A foreground service keeps shells and displays alive while you use other apps, with a wakelock while a display is in view. |
+| **Background running** | A foreground service keeps shells and displays alive while you use other apps, with a wakelock while a display is in view or a desktop is installing. |
+| **Microphone on demand** | The mic is off by default at display start; a toolbar button turns it on or off without leaving the viewer. Audio playback is unaffected. |
 | **Private by design** | No account, no telemetry. Container data stays in app-private storage, and the display server binds loopback unless you turn on LAN or the tunnel. |
 
 ---
@@ -87,20 +90,16 @@ The same options live in **Settings → Display defaults**, so every new display
 
 <table>
   <tr>
-    <td width="50%"><img src="screenshots/home_light.png" width="100%" alt="Home: containers, install and search" /></td>
-    <td width="50%"><img src="screenshots/search_results_dark.png" width="100%" alt="Docker Hub search results" /></td>
+    <td width="50%"><img src="screenshots/home_light.png" width="100%" alt="Home: Distros cards and Presets" /></td>
+    <td width="50%"><img src="screenshots/display_sheet_dark.png" width="100%" alt="Display sheet: command cell, presets and install tile" /></td>
   </tr>
   <tr>
-    <td width="50%"><img src="screenshots/install_progress_dark.png" width="100%" alt="Installing a distribution" /></td>
+    <td width="50%"><img src="screenshots/display_viewer_dark.png" width="100%" alt="A desktop or GUI app streaming in the viewer" /></td>
     <td width="50%"><img src="screenshots/terminal_alpine_light.png" width="100%" alt="Interactive PTY terminal" /></td>
   </tr>
   <tr>
-    <td width="50%"><img src="screenshots/terminal_opencode_light.png" width="100%" alt="Running OpenCode CLI inside a container" /></td>
-    <td width="50%"><img src="screenshots/terminal_selector_light.png" width="100%" alt="Open shells and installed containers" /></td>
-  </tr>
-  <tr>
     <td width="50%"><img src="screenshots/files_browser_light.png" width="100%" alt="Container file browser" /></td>
-    <td width="50%"><img src="screenshots/files_rootfs_dark.png" width="100%" alt="Container rootfs in dark mode" /></td>
+    <td width="50%"><img src="screenshots/settings_dark.png" width="100%" alt="Settings: display defaults and storage" /></td>
   </tr>
 </table>
 

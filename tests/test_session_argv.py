@@ -86,9 +86,10 @@ async def test_run_argv_parses_upstream_line(monkeypatch):
 
 
 def test_hardening_makes_the_termux_only_login_options_real(monkeypatch, tmp_path):
-    """hostname/kernel shape the kernel-release line WE own (upstream only emits
-    it when IS_TERMUX); shared_tmp binds a real dir; isolated drops the Android
-    convenience binds but keeps teardown safety."""
+    """Hardening adds Android binds, teardown safety and sysdata stubs. We do
+    NOT inject --kernel-release (upstream's login already emits a clean
+    3-field backslash utsname fake; our earlier 8-field format broke proot's
+    parsing and failed glibc's kernel check on Ubuntu 26.04)."""
     from services.session_service import argv as argv_mod
 
     monkeypatch.setenv("ANDROID_NATIVE_LIBRARY_DIR", str(tmp_path))
@@ -102,8 +103,8 @@ def test_hardening_makes_the_termux_only_login_options_real(monkeypatch, tmp_pat
         kernel="6.9.0-mine",
         shared_tmp=True,
     )
-    joined = " ".join(hard)
-    assert r"\Linux\mybox\6.9.0-mine" in joined
+    # Our backslash kernel fake is GONE — upstream's default stands.
+    assert not any(arg.startswith("--kernel-release=") for arg in hard)
     assert any(arg.startswith("--bind=") and arg.endswith(":/tmp") for arg in hard)
     assert any(
         arg.startswith("--bind=") and "shared-tmp" in arg and arg.endswith(":/tmp") for arg in hard

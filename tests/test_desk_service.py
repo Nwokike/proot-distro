@@ -937,19 +937,18 @@ def test_fab_has_copy_full_output_and_no_select_all():
     assert '"Select All"' not in src
 
 
-def test_display_tab_lists_presets_globally_then_open_display():
-    """Owner ruling 2026-11-15: presets are listed GLOBALLY (one list, each row
-    naming its container), and every container keeps Home's single "Open
-    display" button. No per-distro preset grouping, no "Install desktop"."""
+def test_display_tab_distros_first_presets_last():
+    """Owner ruling 2026-11-16: Distros (Open display per container) come
+    first, Presets LAST (they grow with installed apps). Presets list BOTH
+    detected apps (from .desktop entries) AND manual presets."""
     src = (ROOT / "src" / "screens" / "display_view.py").read_text(encoding="utf-8")
     assert "st.app_presets" in src
+    assert "st.detected_apps" in src
     assert "def _run_preset" in src and "def _display_card" in src
-    assert '_section("Presets"' in src and '_section("Displays"' in src
+    distros = src.index('_section("Distros"')
+    presets = src.index('_section("Presets"')
+    assert distros < presets
     assert '"Open display"' in src
-    assert '"Install desktop"' not in src
-    # Each preset row says which container it runs in.
-    assert 'preset.get("container"' in src
-    # No dead hero card and no duplicated entry point.
     assert "GUI application" not in src
     assert "Icons.ADD_ROUNDED" not in src
     assert 'st.display_status == "starting"' in src
@@ -1080,33 +1079,33 @@ def test_home_containers_before_install_with_one_banner():
     assert "ft.Icons.SEARCH_ROUNDED," in src
 
 
-def test_one_display_sheet_switches_desktop_and_app():
-    """One sheet, one mode switch (owner ruling 2026-11-15): the command must
-    reach start_display as app_command, the probe runs in parallel, and every
-    shared option is built ONCE outside the mode branches."""
+def test_one_display_sheet_no_mode_switch():
+    """Owner ruling 2026-11-16: ONE sheet with NO App | Desktop switch. The
+    command cell, presets and install tile are always visible; the probe runs
+    in the controller; shared options are built ONCE."""
     sheet_dir = ROOT / "src" / "screens" / "display_sheets"
     src = (sheet_dir / "launcher_sheet.py").read_text(encoding="utf-8")
     parts = (sheet_dir / "sheet_parts.py").read_text(encoding="utf-8")
     assert "methods.start_display" in src
-    assert "app_command if mode" in src
-    # The app probe lives in ONE place (the controller) and the sheet reads it.
     assert "methods.probe_apps" in src
     controller = (ROOT / "src" / "controller_actions" / "display_session.py").read_text(
         encoding="utf-8"
     )
     assert "asyncio.gather" in controller
-    # The App | Desktop switch.
-    assert "def mode_pill" in parts and '"Desktop"' in src and '"App"' in src
+    # NO mode switch: mode_pill is gone from the sheet.
+    assert "mode_pill" not in src
+    assert "def mode_pill" in parts  # the helper exists but is not called
     # The merged app sheet is gone; the unified sheet owns the command field.
     assert not (sheet_dir / "app_sheet.py").exists()
+    assert "Install a desktop" in src  # the collapsed tile
     # Shared surface: display number, image/viewer pills, advanced Xvnc and the
-    # login flags — built in sheet_parts, called once, outside the branches.
+    # login flags — built in sheet_parts, called once.
     assert "def add_display_options" in parts
     assert "def run_as_block" in parts
     for marker in (
         "add_display_options(display_no)",
         "_advanced_display_controls()",
-        "run_as_block(fields)",
+        "run_as_control",
         "parse_env_bind",
         "option_error",
     ):
@@ -1124,19 +1123,15 @@ def test_glycin_bwrap_gets_fake_overflow_ids():
 
 
 def test_launcher_is_one_sheet_with_a_mode_switch_and_every_option():
-    """ONE sheet: a Desktop | App switch, an explicit display number, the image
-    and viewer pills shared by both modes, and the login/run flags collapsed by
-    default so a non-technical user still gets one obvious Start button."""
+    """ONE sheet: an explicit display number, the image and viewer pills, the
+    login/run flags collapsed by default, and no App | Desktop switch."""
     src = module_text("screens/display_launcher.py", "screens/display_sheets")
-    assert 'mode = {"value": start_mode}' in src
-    assert '"App"' in src and '"Desktop"' in src
+    assert '"App"' not in src  # no mode switch
     # The display number is a house pill (no Material Dropdown anywhere).
     assert "pill_dropdown(" in src and '"Display"' in src
     assert "MAX_DISPLAY_NUMBER" in src
     assert "def _options(" in src
     assert '"fix_low_ports"' in src and '"shared_home"' in src
-    # The login flags and the Xvnc/audio surface are collapsed by default.
-    assert "def run_as_block" in src
     assert "expanded=False" in src
     assert "add_display_options(" in src
 
@@ -1171,15 +1166,11 @@ def test_naming_and_no_duplicate_single_app_entry():
     parts = (sheet_dir / "sheet_parts.py").read_text(encoding="utf-8")
     card = (ROOT / "src" / "screens" / "container_card.py").read_text(encoding="utf-8")
     view = (ROOT / "src" / "screens" / "display_view.py").read_text(encoding="utf-8")
-    assert '"Install desktop"' in launcher
+    assert '"Install a desktop' in launcher
     assert '"Open display"' in card
-    # The tab lists presets globally, then one Open display card per container.
-    assert '"Presets"' in view and '"Displays"' in view
-    # One app entry: the mode switch, never a second "run one app" button.
-    assert '"App"' in launcher and '"Run one app' not in launcher
+    assert '"Distros"' in view and '"Presets"' in view
+    assert '"App"' not in launcher
     assert "Open an app on a new display" not in launcher
-    # The app command is the CollabShell cell (input + OUTPUT), and saving a
-    # preset sits UNDER it rather than beside Start on a narrow screen.
     assert launcher.count("build_command_cell(") == 2
     assert "Save as preset…" in launcher
     # An unknown distro still gets a path: the editable install cell starts as

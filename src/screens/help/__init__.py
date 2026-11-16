@@ -236,8 +236,12 @@ def show_help_sheet(page: ft.Page, methods=None) -> None:
                     ),
                 ),
                 (
-                    "two finger drag scroll wheel",
-                    _key_row("2-FINGER DRAG", "Scroll wheel inside the guest app."),
+                    "two finger drag scroll wheel one finger drag mouse",
+                    _key_row(
+                        "2-FINGER DRAG",
+                        "Scroll wheel inside the guest app. One finger drags the "
+                        "mouse (click-drag), so use two fingers to scroll.",
+                    ),
                 ),
                 (
                     "pinch zoom ctrl wheel",
