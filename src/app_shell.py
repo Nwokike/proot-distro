@@ -25,7 +25,6 @@ TAB_DISTRO = 0
 TAB_TERMINAL = 1
 TAB_DISPLAY = 2
 TAB_FILES = 3
-TAB_SETTINGS = 4
 
 # Main features only: build/push lives under Settings -> Developer tools
 # (a Dockerfile tool is not one of the five things a phone user opens daily).

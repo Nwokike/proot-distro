@@ -28,7 +28,6 @@ from core.constants import (
     REPO_OWNER,
     TERMS_OF_SERVICE_URL,
 )
-from core.logger_handler import MemoryLogHandler
 from core.state import state
 
 REPO_URL = f"https://github.com/{REPO_OWNER}/{REPO_NAME}"
@@ -102,19 +101,9 @@ def _link_row(icon: ft.IconData, title: str, url: str) -> ft.Control:
     )
 
 
-def _diagnostics_text() -> str:
-    lines = [
-        f"{APP_NAME} {APP_VERSION} (build {APP_BUILD_NUMBER})",
-        f"probe: passed={state.probe_passed} · {state.probe_summary or 'n/a'}",
-        f"orientation: {state.device_orientation} · keyboard inset: {state.keyboard_inset:.0f} px",
-        "recent logs:",
-    ]
-    lines.extend(MemoryLogHandler.get_logs()[-tokens.DIAGNOSTIC_LOG_TAIL :])
-    return "\n".join(lines)
-
-
 def show_help_sheet(page: ft.Page, methods=None) -> None:
     """Open the Help sheet (searchable, grouped, actionable rows)."""
+    from .diagnostics import copy_diagnostics, report_problem, share_diagnostics
 
     def _open_dialog(fn) -> None:
         page.pop_dialog()
@@ -140,20 +129,13 @@ def show_help_sheet(page: ft.Page, methods=None) -> None:
             shared_services.logger.debug("notification settings unavailable")
 
     def _share_diagnostics(_e=None) -> None:
-        share = getattr(ft.context.page, "share", None)
-        if share is None:
-            return
-        ft.context.page.run_task(
-            share.share_text, _diagnostics_text(), title=f"{APP_NAME} diagnostics"
-        )
+        share_diagnostics(page)
 
     def _copy_diagnostics(_e=None) -> None:
-        clipboard = getattr(page, "clipboard", None)
-        if clipboard is None:
-            return
-        page.run_task(clipboard.set, _diagnostics_text())
-        if methods is not None:
-            methods.show_snack("diagnostics copied to clipboard")
+        copy_diagnostics(page, methods)
+
+    def _report_problem(_e=None) -> None:
+        report_problem(page, methods)
 
     sections: list[tuple[str, list[tuple[str, ft.Control]]]] = [
         (
@@ -374,6 +356,14 @@ def show_help_sheet(page: ft.Page, methods=None) -> None:
                         "Share diagnostics",
                         icon=ft.Icons.SHARE_ROUNDED,
                         on_click=_share_diagnostics,
+                    ),
+                ),
+                (
+                    "report problem bug issue github log copy paste feedback",
+                    ft.TextButton(
+                        "Report a problem on GitHub",
+                        icon=ft.Icons.BUG_REPORT_ROUNDED,
+                        on_click=_report_problem,
                     ),
                 ),
                 (

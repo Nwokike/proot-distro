@@ -9,11 +9,3 @@ def format_size(value: int) -> str:
             return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
         value /= 1024.0
     return f"{value:.1f} GiB"
-
-
-def format_count(value: int) -> str:
-    if value >= 1_000_000:
-        return f"{value / 1_000_000:.1f}M"
-    if value >= 1_000:
-        return f"{value / 1_000:.0f}K"
-    return str(value)

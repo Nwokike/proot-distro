@@ -203,10 +203,3 @@ def copy_local_file_in(container: str, guest_dir: str, local_src_path: str) -> s
     target = host_dir / src.name
     shutil.copy2(src, target)
     return str(target)
-
-
-def copy_container_file_out(container: str, guest_file_path: str, local_dest_path: str) -> None:
-    """Copy a file out of the container to local host storage."""
-    _, host_path = resolve_guest_path(container, guest_file_path)
-    os.makedirs(os.path.dirname(local_dest_path), exist_ok=True)
-    shutil.copy2(host_path, local_dest_path)

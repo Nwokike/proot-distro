@@ -21,23 +21,6 @@ _ENV_KEY_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 _DRAFT_ATTR = "_env_draft"
 
-_RUNTIME_KEYS = (
-    "PD_PROOT_BIN",
-    "PROOT_LOADER",
-    "PROOT_L2S_DIR",
-    "FLET_APP_STORAGE_DATA",
-    "FLET_APP_STORAGE_CACHE",
-    "FLET_APP_STORAGE_TEMP",
-    "PD_FORCE_NO_COLORS",
-)
-
-
-def _runtime_contract_lines() -> list[str]:
-    """The app's own read-only contract — what it sets before proot starts."""
-    import os
-
-    return [f"{key}={os.environ[key]}" for key in _RUNTIME_KEYS if os.environ.get(key)]
-
 
 def env_rows_summary() -> str:
     """The row's live value: how many defaults are set."""

@@ -1,4 +1,4 @@
-"""Distro home sections: step/feature helpers, search results, info sections."""
+"""Distro home sections: search results and info sections."""
 
 from __future__ import annotations
 
@@ -6,72 +6,6 @@ import flet as ft
 
 from components import card
 from core import theme, tokens
-
-
-def _step_row(num: str, title: str, desc: str) -> ft.Row:
-    """Numbered step row matching CollabShell / DDGS home patterns."""
-    return ft.Row(
-        controls=[
-            ft.Container(
-                content=ft.Text(
-                    num,
-                    size=tokens.FONT_SM,
-                    weight=ft.FontWeight.BOLD,
-                    color=theme.WHITE,
-                ),
-                width=tokens.CONTROL_XS,
-                height=tokens.CONTROL_XS,
-                border_radius=tokens.RADIUS_PILL,
-                bgcolor=theme.primary(),
-                alignment=ft.Alignment.CENTER,
-            ),
-            ft.Column(
-                controls=[
-                    ft.Text(
-                        title, size=tokens.FONT_SM, weight=ft.FontWeight.W_600, color=theme.text()
-                    ),
-                    ft.Text(desc, size=tokens.FONT_XS, color=theme.text_dim()),
-                ],
-                spacing=tokens.SPACE_XXS,
-                expand=True,
-            ),
-        ],
-        spacing=tokens.SPACE_SM,
-        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-    )
-
-
-def _feature_card(icon: ft.IconData, title: str, desc: str) -> ft.Container:
-    return ft.Container(
-        content=ft.Row(
-            controls=[
-                ft.Container(
-                    content=ft.Icon(icon, size=tokens.ICON_MD, color=theme.primary()),
-                    width=tokens.CONTROL_XL,
-                    height=tokens.CONTROL_XL,
-                    border_radius=tokens.RADIUS_MD,
-                    bgcolor=ft.Colors.with_opacity(tokens.OPACITY_MEDIUM, theme.primary()),
-                    alignment=ft.Alignment.CENTER,
-                ),
-                ft.Column(
-                    controls=[
-                        ft.Text(
-                            title,
-                            size=tokens.FONT_SM,
-                            weight=ft.FontWeight.W_600,
-                            color=theme.text(),
-                        ),
-                        ft.Text(desc, size=tokens.FONT_XS, color=theme.text_dim()),
-                    ],
-                    spacing=tokens.SPACE_XXS,
-                    expand=True,
-                ),
-            ],
-            spacing=tokens.SPACE_MD,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-        ),
-        padding=tokens.SPACE_MD,
-    )
 
 
 def build_search_results(st, consent_install) -> list[ft.Control]:

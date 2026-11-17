@@ -169,6 +169,27 @@ def test_guest_exit_zero_ends_the_display_cleanly():
     assert 'kind == "guest" and process.returncode == 0' in src
 
 
+def test_reporting_a_problem_copies_the_log_then_opens_github():
+    """Every log surface offers Copy + Report: copy, open GitHub Issues, paste."""
+    dialogs = (ROOT / "src" / "screens" / "settings" / "dialogs.py").read_text(encoding="utf-8")
+    assert "GITHUB_ISSUES_URL" in dialogs
+    assert "Report on GitHub" in dialogs
+    logs = (ROOT / "src" / "controller_actions" / "display_logs.py").read_text(encoding="utf-8")
+    assert "Copy log" in logs and "Report on GitHub" in logs
+    diag = (ROOT / "src" / "screens" / "help" / "diagnostics.py").read_text(encoding="utf-8")
+    assert "def report_problem" in diag and "GITHUB_ISSUES_URL" in diag
+    help_src = (ROOT / "src" / "screens" / "help" / "__init__.py").read_text(encoding="utf-8")
+    assert "Report a problem on GitHub" in help_src
+
+
+def test_xvnc_tmp_dir_exists_under_both_android_spellings():
+    """The payload's baked prefix uses /data/data/<pkg> while Flet reports
+    /data/user/0/<pkg>; Waydroid exposed only one, so both are created."""
+    src = (ROOT / "src" / "services" / "desk_service" / "xvnc_paths.py").read_text(encoding="utf-8")
+    assert 'Path("/data/data")' in src
+    assert "PACKAGE_NAME" in src
+
+
 def test_version_is_1_2_1_build_5():
     import tomllib
 

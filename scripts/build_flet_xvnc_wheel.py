@@ -228,8 +228,8 @@ _PINNED_SOURCES = {
                 "1d02de3a7e5ef4ff7d893597091176b8ddf135f1ddfacff951f76c18711a7342",
             ),
             "libffi": (
-                "pool/main/libf/libffi/libffi_3.8.0_aarch64.deb",
-                "4f255badf74cd31f6a2801c17fa1444199c84c834b517b7c843e2fe9ebe91d77",
+                "pool/main/libf/libffi/libffi_3.8.1_aarch64.deb",
+                "9e13f3b5c40625c384101992bb669a278e07d9e2baa37d286d7ed164288fab1a",
             ),
             "libiconv": (
                 "pool/main/libi/libiconv/libiconv_1.19.1_aarch64.deb",
@@ -366,8 +366,8 @@ _PINNED_SOURCES = {
                 "1680378db0b5350d563783eb29ffe7c2397e204c8ab031047cfc3316e61b879b",
             ),
             "libffi": (
-                "pool/main/libf/libffi/libffi_3.8.0_x86_64.deb",
-                "59121ca4bc5f5735d7bb603bd99548983064e8fde97d236e97122cb87d3452a3",
+                "pool/main/libf/libffi/libffi_3.8.1_x86_64.deb",
+                "1a10292f4fe21e17b89337172ed6493bd6314b01923ba54d067355ef5efc00fc",
             ),
             "libiconv": (
                 "pool/main/libi/libiconv/libiconv_1.19.1_x86_64.deb",

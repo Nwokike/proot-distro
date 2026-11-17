@@ -17,7 +17,6 @@ SPACE_MD = 12
 SPACE_LG = 16
 SPACE_XL = 24
 SPACE_XXL = 32
-SPACE_XXXL = 40
 
 # Radii
 RADIUS_XS = 4
@@ -83,14 +82,12 @@ OPACITY_DIM = 0.50
 SNACK_DURATION_MS = 3000
 
 # Control heights — the touch-target scale
-CONTROL_XS = 26  # numbered step badge
 # Buttons inside cards and rows: compact, but still a 36dp tap target. The
 # Material default (44dp + 24dp side padding) is what made every button read
 # as a big blue box; one style helper now owns the density.
 CONTROL_SM = 36
 CONTROL_MD = 40  # primary actions / icon backdrops
 CONTROL_LG = 44  # distro tile icon backdrop
-CONTROL_XL = 42  # feature-card icon backdrop
 CONTROL_INPUT = 44  # text fields and search bars
 # Button density: horizontal padding + icon size. Tune THESE two numbers to
 # resize every pill button in the app. Material's visual_density lives in
@@ -98,9 +95,8 @@ CONTROL_INPUT = 44  # text fields and search bars
 BUTTON_PADDING_H = 12
 BUTTON_ICON_SIZE = 18
 
-# Fixed field/dropdown widths (rows never overflow; narrow screens wrap under)
+# Fixed field widths (rows never overflow; narrow screens wrap under)
 FIELD_NAME_WIDTH = 190
-DROPDOWN_WIDTH = 150
 FIELD_TARGET_WIDTH = 170
 FIELD_INSTALL_AS_WIDTH = 190
 FIELD_EMULATOR_WIDTH = 210
@@ -187,7 +183,6 @@ HTTP_CONNECT_TIMEOUT_SEC = 10.0
 HTTP_MAX_ATTEMPTS = 2
 FIELD_PATH_WIDTH = 220
 FIELD_BUILD_ARGS_WIDTH = 260
-FIELD_DISPLAY_WIDTH = 140
 DIALOG_LOG_HEIGHT = 260
 AUTO_GEOMETRY_LONG_SIDE = 1280
 PROGRESS_RING_STROKE_THICK = 3

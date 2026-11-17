@@ -80,6 +80,7 @@ Device: ____________________  Android: ______  Build: 1.2.1 (build 5)
 - [ ] Environment Probe shows passed or check; tapping opens the detail.
 - [ ] Default environment: add `FOO=bar` and Save; a new shell prints it with `echo $FOO`.
 - [ ] Debugging output shows the last 20 lines, Copy works, Clear empties it, Full log opens the dialog.
+- [ ] Debugging output → Report on GitHub copies the log and opens the issue tracker; Help → "Report a problem on GitHub" copies the diagnostics and opens it; a display's Logs dialog has Copy log and Report on GitHub; the Developer card has Report.
 - [ ] Storage shows the total with "containers X · OCI cache Y"; Sweep, Clear build cache, Clear app cache and Clear all cache each confirm first.
 - [ ] Narrow screen or split view: Terminal defaults, Notifications, Privacy, Running processes, Storage rows and the About rows all drop **under** the title.
 - [ ] About: version row opens release notes; Contact, Rate, More apps and Source open externally; Diagnostics opens in the app; Privacy and Terms open; Exit confirms.

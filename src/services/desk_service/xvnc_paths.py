@@ -148,7 +148,12 @@ def ensure_lock_dir() -> Path | None:
     """Create `<app>/tmp` — where the builder rewrote Xvnc's compiled Termux
     prefix. The server creates `<prefix>/tmp/.tX{N}-lock` there (fatal when
     unwritable, device 2026-11-13) and compiles keymaps under `<prefix>/tmp/`.
-    The app root is derived from our own storage path: `<app>/files/data` → `<app>`."""
+
+    Android exposes the same app data under two spellings, `/data/data/<pkg>`
+    and `/data/user/0/<pkg>`, and the payload's compiled prefix is the
+    `/data/data` one while Flet reports the `/data/user/0` one. Some images
+    (Waydroid, 2026-11-17) only expose one of them, so BOTH are created; the
+    keymap compile fails with ENOENT otherwise."""
     try:
         app_root = storage_paths.data_root().parents[1]
     except Exception:
@@ -157,6 +162,23 @@ def ensure_lock_dir() -> Path | None:
         return None
     target = app_root / "tmp"
     target.mkdir(parents=True, exist_ok=True)
+    try:
+        alternate = Path("/data/data") / storage_paths.PACKAGE_NAME / "tmp"
+        alternate.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        logger.debug("display: alternate tmp dir not created: %r", exc)
+        alternate = None
+    # A keymap left behind by an older build (or a botched upgrade) must not
+    # block the new compile: Xorg rewrites server-<display>.xkm on every start.
+    for folder in (target, alternate):
+        if folder is None:
+            continue
+        try:
+            for stale in folder.glob("server-*.xkm"):
+                stale.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.debug("display: stale keymap cleanup skipped in %s: %r", folder, exc)
+    logger.info("display: Xvnc tmp dir %s (alternate %s)", target, "/data/data")
     return target
 
 

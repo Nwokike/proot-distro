@@ -7,14 +7,10 @@ import logging
 
 import flet as ft
 
-from components.ui import house_field
 from core import layout, theme, tokens
 from core.state import state
 
 logger = logging.getLogger(__name__)
-
-
-_CUSTOM = "__custom__"
 
 
 def _sheet_width(page: ft.Page) -> int:
@@ -72,43 +68,6 @@ def _status_line(caps: dict) -> ft.Control:
 
 def _set_setting(key: str, value: object) -> None:
     state.display_settings = {**(state.display_settings or {}), key: value}
-
-
-def _picker_with_custom(
-    label: str,
-    options: tuple[tuple[str, str], ...],
-    key: str,
-    *,
-    hint: str,
-) -> ft.Control:
-    """Dropdown + a Custom… option that reveals a free-text field — the
-    upstream value ranges are ranges, not our presets."""
-    settings = state.display_settings or {}
-    current = str(settings.get(key, options[0][0]))
-    is_custom = current not in {v for v, _t in options}
-    custom_field = house_field(
-        label=f"{label} (custom)",
-        hint=hint,
-        value=current if is_custom else "",
-        width=tokens.DROPDOWN_WIDTH,
-        height=tokens.CONTROL_SM,
-        text_size=tokens.FONT_XS,
-        visible=is_custom,
-        on_change=lambda e: _set_setting(key, e.control.value or ""),
-    )
-    dropdown = ft.Dropdown(
-        label=label,
-        value=(_CUSTOM if is_custom else current),
-        options=[ft.dropdown.Option(v, t) for v, t in options]
-        + [ft.dropdown.Option(_CUSTOM, "Custom…")],
-        on_select=lambda e: _set_setting(
-            key, e.control.value if e.control.value != _CUSTOM else custom_field.value or current
-        ),
-        width=tokens.DROPDOWN_WIDTH,
-        border=ft.OutlineInputBorder(border_radius=tokens.RADIUS_MD),
-        text_size=tokens.FONT_XS,
-    )
-    return ft.Column(controls=[dropdown, custom_field], spacing=tokens.SPACE_XXS, tight=True)
 
 
 def _switch_row(label: str, key: str, default: bool) -> ft.Control:

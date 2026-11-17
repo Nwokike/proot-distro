@@ -105,6 +105,22 @@ def SettingsView() -> ft.Control:
     def _open_live_terminal(_e=None) -> None:
         dialogs.open_debugging_output(page)
 
+    def _report_problem(_e=None) -> None:
+        """Copy the app log, then open GitHub Issues to paste it."""
+        from core.constants import GITHUB_ISSUES_URL
+
+        async def _do() -> None:
+            from components.snack import show_snack
+            from core.logger_handler import in_memory_log_handler
+
+            clipboard = getattr(page, "clipboard", None)
+            if clipboard is not None:
+                await clipboard.set("\n".join(in_memory_log_handler.get_logs()))
+            await launch_url(GITHUB_ISSUES_URL, page)
+            show_snack(page, "Logs copied. Paste them into the new GitHub issue")
+
+        page.run_task(_do)
+
     def _open_probe_dialog(_e=None) -> None:
         dialogs.open_probe_dialog(page, st.probe_passed, st.probe_summary, methods.check_probe)
 
@@ -424,6 +440,7 @@ def SettingsView() -> ft.Control:
         on_copy=_copy_debug,
         on_clear=_clear_debug,
         on_full_log=_open_live_terminal,
+        on_report=_report_problem,
     )
 
     about_card = build_about_card(

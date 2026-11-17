@@ -17,6 +17,7 @@ GITHUB_RELEASES_URL = f"https://github.com/{REPO_OWNER}/{REPO_NAME}/releases/lat
 UPDATE_CONFIG_URL = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/main/version.json"
 PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=ng.kiri.prootdistro"
 GITHUB_REPO_URL = f"https://github.com/{REPO_OWNER}/{REPO_NAME}"
+GITHUB_ISSUES_URL = f"{GITHUB_REPO_URL}/issues"
 PRIVACY_POLICY_URL = "https://kiri.ng/privacy"
 TERMS_OF_SERVICE_URL = "https://kiri.ng/terms"
 # The owner's About rows are identical in every Kiri app (DDGS/ktv-player):
@@ -40,13 +41,10 @@ PREF_APP_PRESETS = "app_presets"
 # ── Android notifications ───────────────────────────────────────────────────
 NOTIFICATION_ICON = "ic_stat_prootdistro"
 NOTIFICATION_ID_FGS = 1
-NOTIFICATION_ID_INSTALL = 2100
 NOTIFICATION_ID_GUEST_BASE = 3000  # guest-app notification ids cycle above this
 NOTIFICATION_ACTION_EXIT = "exit"
 NOTIFICATION_CHANNEL_SESSIONS = "sessions"
 NOTIFICATION_CHANNEL_SESSIONS_NAME = "Sessions"
-NOTIFICATION_CHANNEL_INSTALLS = "installs"
-NOTIFICATION_CHANNEL_INSTALLS_NAME = "Installs"
 NOTIFICATION_CHANNEL_GUEST = "guest-apps"
 NOTIFICATION_CHANNEL_GUEST_NAME = "Guest apps"
 

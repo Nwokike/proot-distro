@@ -1,4 +1,9 @@
-"""The display log dialog."""
+"""The display log dialog.
+
+One dialog, two paths: copy the log, or copy it and open the GitHub issue
+tracker. Reporting is the reason the log is kept durable in the first place
+(device feedback 2026-11-17: "how do I report this?").
+"""
 
 from __future__ import annotations
 
@@ -7,6 +12,8 @@ import logging
 import flet as ft
 
 from core import theme, tokens
+from core.constants import GITHUB_ISSUES_URL
+from core.shared_services import launch_url
 
 from .display_common import _tail_file_lines
 
@@ -14,6 +21,26 @@ logger = logging.getLogger(__name__)
 
 
 class DisplayLogsMixin:
+    def _copy_text(self, text: str, note: str) -> None:
+        async def _do() -> None:
+            from components.snack import show_snack
+
+            clipboard = getattr(self.page, "clipboard", None)
+            if clipboard is None:
+                return
+            await clipboard.set(text)
+            show_snack(self.page, note)
+
+        self.page.run_task(_do)
+
+    def _report(self) -> None:
+        """Copy the log, then open the issue tracker to paste it."""
+        self.page.run_task(launch_url, GITHUB_ISSUES_URL, self.page)
+
+        from components.snack import show_snack
+
+        show_snack(self.page, "Paste the copied log into the new GitHub issue")
+
     async def show_display_logs(self, key: str) -> None:
         session = self.desk_manager.get(key)
         if session is not None:
@@ -43,6 +70,18 @@ class DisplayLogsMixin:
                     width=tokens.DIALOG_WIDTH_LG,
                     height=320,
                 ),
-                actions=[ft.TextButton("Close", on_click=lambda _e: self.page.pop_dialog())],
+                actions=[
+                    ft.TextButton(
+                        "Copy log",
+                        icon=ft.Icons.CONTENT_COPY_ROUNDED,
+                        on_click=lambda _e: self._copy_text(tail, "display log copied"),
+                    ),
+                    ft.TextButton(
+                        "Report on GitHub",
+                        icon=ft.Icons.BUG_REPORT_ROUNDED,
+                        on_click=lambda _e: self._report(),
+                    ),
+                    ft.TextButton("Close", on_click=lambda _e: self.page.pop_dialog()),
+                ],
             )
         )

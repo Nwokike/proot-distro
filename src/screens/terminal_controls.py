@@ -33,20 +33,6 @@ def _input(entry: SessionEntry, payload: bytes) -> None:
     _write(entry, payload)
 
 
-def _compact_btn_style() -> ft.ButtonStyle:
-    return ft.ButtonStyle(
-        padding=ft.Padding(tokens.SPACE_XS, tokens.SPACE_XS, tokens.SPACE_XS, tokens.SPACE_XS),
-        visual_density=ft.VisualDensity.COMPACT,
-    )
-
-
-def _cycle_terminal_theme(mt) -> None:
-    """Cycle the terminal through the preset themes (switcher-row palette button)."""
-    cur = getattr(mt, "theme_name", None) or _theme_name()
-    idx = _THEME_PRESETS.index(cur) if cur in _THEME_PRESETS else 0
-    mt.set_theme(_THEME_PRESETS[(idx + 1) % len(_THEME_PRESETS)])
-
-
 def _confirm_close(page: ft.Page, methods, session_key: str, title: str = "") -> None:
     def _yes(_e) -> None:
         page.pop_dialog()

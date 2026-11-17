@@ -1146,9 +1146,8 @@ def test_display_toolbar_has_terminal_not_paste_and_inline_output_panel():
     assert "display_log_rev" in state_src
 
 
-def test_settings_offer_custom_values_and_portrait():
+def test_settings_offer_the_real_knobs_and_portrait():
     src = module_text("screens/display_launcher.py", "screens/display_sheets")
-    assert "_CUSTOM" in src
     assert '("portrait", "Portrait")' in src
     # RFB has no fps knob — quality + compression are the real knobs now.
     assert '"FPS"' not in src

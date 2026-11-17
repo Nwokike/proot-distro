@@ -4,8 +4,8 @@
 
 <p align="center">
   <b>Linux on Android, no root.</b><br/>
-  Real Debian, Ubuntu, Alpine, Fedora, Arch, Kali and openSUSE containers,
-  a real X11 desktop, and GUI apps like VS Code, Chromium, Antigravity, ZCode and OpenCode.
+  Real Debian, Ubuntu, Alpine, Fedora, Arch, Kali, openSUSE, or any public containers,
+  a real X11 desktop, for GUI apps.
 </p>
 
 <p align="center">
@@ -25,44 +25,65 @@
 | 📦 **APK, ARM64** | [proot-distro-x11-arm64-v8a.apk](https://github.com/Nwokike/proot-distro/releases/latest/download/proot-distro-x11-arm64-v8a.apk) |
 | 💻 **APK, x86_64** | [proot-distro-x11-x86_64.apk](https://github.com/Nwokike/proot-distro/releases/latest/download/proot-distro-x11-x86_64.apk) |
 
-Android 8.0 and newer, ARM64 or x86_64. Tap any screenshot to open it full size.
+Android 8.0 and newer, ARM64 or x86_64. 
 
 ---
 
+## The app
+
+<table>
+  <tr>
+    <td width="50%"><a href="screenshots/home_light.png"><img src="screenshots/home_light.png" width="100%" alt="Install Linux distros on Android without root"></a></td>
+    <td width="50%"><a href="screenshots/home_dark.png"><img src="screenshots/home_dark.png" width="100%" alt="Linux on Android dark theme with a running X11 display"></a></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="screenshots/install_confirm_light.png"><img src="screenshots/install_confirm_light.png" width="100%" alt="Install a Linux Docker image on Android"></a></td>
+    <td width="50%"><a href="screenshots/install_progress_light.png"><img src="screenshots/install_progress_light.png" width="100%" alt="Linux container install log on Android"></a></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="screenshots/search_results_light.png"><img src="screenshots/search_results_light.png" width="100%" alt="Search Docker Hub images on Android"></a></td>
+    <td width="50%"><a href="screenshots/display_tab_light.png"><img src="screenshots/display_tab_light.png" width="100%" alt="Run Linux GUI apps on Android from the Display tab"></a></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="screenshots/presets_light.png"><img src="screenshots/presets_light.png" width="100%" alt="Linux app presets on Android"></a></td>
+    <td width="50%"><a href="screenshots/settings_light.png"><img src="screenshots/settings_light.png" width="100%" alt="Linux display, audio and terminal settings on Android"></a></td>
+  </tr>
+</table>
+
 ## Linux containers on Android, no root and no Termux
 
-Install any Docker image (Debian, Ubuntu, Alpine, Fedora, Arch Linux, Kali, openSUSE, and more), open a shell, or run a command on its own display. No root, no system modification, no separate terminal app.
-
-| | | | |
-| :---: | :---: | :---: | :---: |
-| [<img src="screenshots/home_light.png" width="170" alt="Install Linux distros on Android without root">](screenshots/home_light.png) | [<img src="screenshots/home_dark.png" width="170" alt="Linux on Android dark theme with a running X11 display">](screenshots/home_dark.png) | [<img src="screenshots/install_confirm_light.png" width="170" alt="Install a Linux Docker image on Android">](screenshots/install_confirm_light.png) | [<img src="screenshots/install_progress_light.png" width="170" alt="Linux container install log on Android">](screenshots/install_progress_light.png) |
-| Containers and installs | Dark theme, display running | Install confirmation | Live install log |
-| [<img src="screenshots/search_results_light.png" width="170" alt="Search Docker Hub images on Android">](screenshots/search_results_light.png) | [<img src="screenshots/display_tab_light.png" width="170" alt="Run Linux GUI apps on Android from the Display tab">](screenshots/display_tab_light.png) | [<img src="screenshots/presets_light.png" width="170" alt="Linux app presets on Android">](screenshots/presets_light.png) | [<img src="screenshots/settings_light.png" width="170" alt="Linux display and terminal settings on Android">](screenshots/settings_light.png) |
-| Docker Hub search | Distros and detected apps | Saved presets | Display and terminal defaults |
+Install any Docker image: Debian, Ubuntu, Alpine, Fedora, Arch Linux, Kali, openSUSE
+or any public reference. Open a shell, or run a command on its own display. No root,
+no system modification, no separate terminal app. Full references, custom container
+names, target architectures and insecure registries are all supported.
 
 ## Run any Linux GUI app on Android
 
-Any X11 command runs on its own display. Apps installed inside a container are detected automatically as one-tap presets, with a `--no-sandbox` checkbox for Chromium and Electron. Save your own commands with their work dir and env.
+Any X11 command runs on its own display. Apps installed inside a container are
+detected automatically as one-tap presets, with a `--no-sandbox` checkbox required for Electron apps to run on PRoot-Distro. Save your own commands with their work dir and env.
 
 | | |
 | :---: | :---: |
 | [<img src="screenshots/opencode_browser_wide.png" width="330" alt="OpenCode AI coding agent running on Android next to a browser">](screenshots/opencode_browser_wide.png) | [<img src="screenshots/zcode_app.png" width="330" alt="ZCode IDE running on Android inside an X11 display">](screenshots/zcode_app.png) |
 | OpenCode answering a question about the browser tab open next to it | ZCode running inside the viewer |
 
-## Desktop apps on Android: VS Code, Antigravity, ZCode, Chromium
+## Desktop apps on Android: VS Code, Antigravity, Chromium
 
-Full desktop applications run for real, not as demos.
+Full desktop applications run for real.
+Electron apps need `--no-sandbox` under proot; the detected preset adds it with
+one checkbox.
 
-| | | |
-| :---: | :---: | :---: |
-| [<img src="screenshots/vscode_marketplace.png" width="260" alt="VS Code on Android with the Marketplace and Copilot">](screenshots/vscode_marketplace.png) | [<img src="screenshots/antigravity_ide_landscape.png" width="260" alt="Google Antigravity IDE running on Android in landscape">](screenshots/antigravity_ide_landscape.png) | [<img src="screenshots/desktop_session.png" width="260" alt="Full Linux X11 desktop with a panel and file manager on Android">](screenshots/desktop_session.png) |
-| VS Code with Marketplace and Copilot | Google Antigravity IDE | A complete X11 desktop session |
-
-Chromium, Brave and Electron apps need `--no-sandbox` under proot; the detected preset adds it with one checkbox.
+| | |
+| :---: | :---: |
+| [<img src="screenshots/vscode_marketplace.png" width="330" alt="VS Code on Android with the Marketplace and Copilot">](screenshots/vscode_marketplace.png) | [<img src="screenshots/antigravity_ide_landscape.png" width="330" alt="Google Antigravity IDE running on Android in landscape">](screenshots/antigravity_ide_landscape.png) |
+| VS Code with Marketplace and Copilot | Google Antigravity IDE, full IDE in landscape |
+| [<img src="screenshots/desktop_session.png" width="330" alt="Full Linux X11 desktop with a panel and file manager on Android">](screenshots/desktop_session.png) | <b>A complete desktop is a command.</b><br/><br/>No desktop installer needed: install the desktop packages in the container, then run its session command such as <code>startxfce4</code> or <code>mate-session</code> from the display sheet. This is LXQt with its panel, a file manager and desktop settings. |
 
 ## Linux terminal on Android
 
-A real PTY, not a command runner: sticky CTRL and ALT, extra keys, search, zoom, and four themes. The default theme follows the app mode, Dracula in dark and Colab Light in light.
+A real PTY, not a command runner: sticky CTRL and ALT, extra keys, search, zoom,
+and four themes. The default theme follows the app mode, Dracula in dark and
+Colab Light in light.
 
 | | |
 | :---: | :---: |
@@ -71,32 +92,41 @@ A real PTY, not a command runner: sticky CTRL and ALT, extra keys, search, zoom,
 
 ## X11 desktop and VNC viewer on Android
 
-Xvnc and PulseAudio run inside the app, so a container needs nothing installed. The viewer is upstream noVNC, verbatim: its panel gives you the on-screen keyboard, CTRL, ALT, ESC and extra keys, and its settings cover scaling and reconnects. Under it, the output panel streams the guest log.
+Xvnc and PulseAudio run inside the app, so a container needs nothing installed.
+The viewer is upstream noVNC, verbatim: its panel gives you the on-screen
+keyboard, CTRL, ALT, ESC and extra keys, and its settings cover scaling and
+reconnects. Under it, the output panel streams the guest log.
 
-| |
-| :---: |
-| [<img src="screenshots/opencode_browser_portrait.png" width="230" alt="noVNC viewer on Android with the control panel and output log">](screenshots/opencode_browser_portrait.png) |
-| OpenCode and a browser, with the noVNC panel and the output panel open |
+| | |
+| :---: | :--- |
+| [<img src="screenshots/opencode_browser_portrait.png" width="220" alt="noVNC viewer on Android with the control panel and output log">](screenshots/opencode_browser_portrait.png) | <b>Real gestures, real keyboard.</b><br/><br/>One finger drags the mouse, two fingers scroll, pinch zooms. The keyboard opens through the noVNC panel and the display keeps its size while it is up. The output panel below the viewer shows the guest log, with a Copy button so a failure can be reported. |
 
-Gestures: one finger drags the mouse, two fingers scroll, pinch zooms. The sheet reminds you, and the first viewer shows it once.
+## Microphone and audio on Android
 
-## Microphone and audio
+Audio out and the microphone both run inside the app through PulseAudio, so guest
+apps play sound with nothing installed. The microphone is off at display start:
+the toolbar button is the only switch, and it asks Android for the recording
+permission the moment you turn it on. Playback is unaffected by the mic state.
 
-The mic is off at display start. The toolbar button is the only switch, and it asks Android for the recording permission when you turn it on.
+The audio surface is real: AAudio performance mode, latency, speaker rate, mic
+rate, mic format, mic channels and the PulseAudio resampler are all in Display
+options.
 
-| |
-| :---: |
-| [<img src="screenshots/mic_voice_chat.png" width="230" alt="Microphone enabled, voice chat with Antigravity on Android">](screenshots/mic_voice_chat.png) |
-| Microphone on: a voice chat with Antigravity |
+| | |
+| :---: | :--- |
+| [<img src="screenshots/mic_voice_chat.png" width="220" alt="Microphone enabled, voice chat with Antigravity on Android">](screenshots/mic_voice_chat.png) | <b>Microphone on demand.</b><br/><br/>The green mic in the toolbar means the microphone is live. Tap it again to turn it off without leaving the viewer. This is a voice chat with Antigravity, with the mic on. |
 
 ## File manager and backups on Android
 
-Browse the container filesystem, preview text, images and binary files (type and size, no garbage), run a file in place with its output streamed, or start it in a display or a terminal (all from the file's own folder), upload, download, zip, copy and sync with checksum verification. Back up and restore a container in any tar format.
+Browse the container filesystem, preview text, images and binary files (type and
+size, no garbage), run a file in place with its output streamed, or start it in a
+display or a terminal (all from the file's own folder), upload, download, zip,
+copy and sync with checksum verification. Back up and restore a container in any
+tar format.
 
-| |
-| :---: |
-| [<img src="screenshots/files_browser_light.png" width="230" alt="Linux container file browser on Android">](screenshots/files_browser_light.png) |
-| Container file browser |
+| | |
+| :---: | :--- |
+| [<img src="screenshots/files_browser_light.png" width="220" alt="Linux container file browser on Android">](screenshots/files_browser_light.png) | <b>Preview, run, move.</b><br/><br/>Tap a file to preview it. Text files open in a monospace view, images inline, binaries as a type and size card. Run, Display and Terminal start it with the file's folder as the working directory. |
 
 ---
 
@@ -107,16 +137,14 @@ Browse the container filesystem, preview text, images and binary files (type and
 - **Background running**: a foreground service keeps shells and displays alive while you use other apps, with an Exit action.
 - **Shell with options**: every `pd login` flag, from users read out of the container's `/etc/passwd` to work dir, env, binds, shared tmp/home, isolation and low ports.
 - **Start X display in your shell**: one tap exports `DISPLAY` and `XAUTHORITY`, so `firefox` typed in that shell opens in the viewer.
-- **LAN and tunnel sharing**: open the display to Wi-Fi devices or a public `*.lhr.life` URL, always behind the access code.
+- **LAN and tunnel sharing**: open the display to Wi-Fi devices or a public `*.lhr.life` URL, always behind the access code, with a sign-in page for the code.
 - **Docker Hub search and OCI installs**: search with a result limit, or type a full reference; choose an architecture, a custom name or an insecure registry.
 - **Storage and cache**: containers and the OCI cache are measured separately, with sweep, build cache and app cache actions.
 - **Build and push**: build a Dockerfile into an OCI image and push it to a registry from Settings, Developer tools.
-
----
+- **Guest notifications**: apps inside the display can raise their notifications as native Android ones, best effort.
+- **Report a problem**: copy the app log or a display log from the app and open GitHub Issues in one tap.
 
 ## Display options
-
-Every control maps to a real Xvnc or PulseAudio setting.
 
 | Area | Options |
 | :--- | :--- |

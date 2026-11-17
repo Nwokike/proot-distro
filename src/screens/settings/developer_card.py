@@ -20,6 +20,7 @@ def build_developer_card(
     on_copy,
     on_clear,
     on_full_log,
+    on_report=None,
 ) -> ft.Control:
     """Rows carry their live value; the log tail is the value of Debugging
     output, not a button that hides it behind a dialog."""
@@ -36,6 +37,18 @@ def build_developer_card(
                 ft.Row(
                     controls=[
                         ft.TextButton("Copy", icon=ft.Icons.COPY_ROUNDED, on_click=on_copy),
+                        *(
+                            [
+                                ft.TextButton(
+                                    "Report",
+                                    icon=ft.Icons.BUG_REPORT_ROUNDED,
+                                    tooltip="Copy the log and open GitHub Issues",
+                                    on_click=on_report,
+                                )
+                            ]
+                            if on_report is not None
+                            else []
+                        ),
                         ft.TextButton(
                             "Clear", icon=ft.Icons.DELETE_SWEEP_ROUNDED, on_click=on_clear
                         ),

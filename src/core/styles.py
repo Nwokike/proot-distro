@@ -146,23 +146,6 @@ def empty_state(icon: str, title: str, message: str = "") -> ft.Control:
     )
 
 
-def loading_state(label: str = "Loading…") -> ft.Control:
-    """The house loading state: a spinner with a muted label."""
-    return ft.Container(
-        content=ft.Column(
-            controls=[
-                ft.ProgressRing(width=tokens.PROGRESS_RING_XL, height=tokens.PROGRESS_RING_XL),
-                ft.Text(label, size=tokens.FONT_SM, color=theme.text_dim()),
-            ],
-            alignment=ft.MainAxisAlignment.CENTER,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=tokens.SPACE_MD,
-        ),
-        padding=ft.Padding.symmetric(vertical=tokens.SPACE_XXXL),
-        expand=True,
-    )
-
-
 def pill_button_style() -> ft.ButtonStyle:
     """The ONE button style: house pill shape at house density.
 

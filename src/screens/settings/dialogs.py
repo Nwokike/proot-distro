@@ -11,7 +11,7 @@ import contextlib
 import flet as ft
 
 from core import theme, tokens
-from core.constants import APP_NAME, APP_VERSION
+from core.constants import APP_NAME, APP_VERSION, GITHUB_ISSUES_URL
 from core.state import state
 from screens.license_view import licenses_view
 
@@ -22,7 +22,7 @@ def open_debugging_output(page: ft.Page) -> None:
     """The full diagnostic log (Settings shows the last 20 lines inline): app
     logs in a green on-dark monospace box, with Copy / Clear / Close."""
     from core.logger_handler import in_memory_log_handler
-    from core.shared_services import launch_url  # noqa: F401  (parity import)
+    from core.shared_services import launch_url
 
     with contextlib.suppress(Exception):
         page.pop_dialog()
@@ -49,6 +49,19 @@ def open_debugging_output(page: ft.Page) -> None:
             show_snack(page, "Logs copied to clipboard")
 
         page.run_task(_do_copy)
+
+    def _report(_e):
+        """Copy the logs, then open the issue tracker: paste and send."""
+        from components.snack import show_snack
+
+        async def _do_report():
+            clipboard = getattr(page, "clipboard", None)
+            if clipboard is not None:
+                await clipboard.set("\n".join(in_memory_log_handler.get_logs()))
+            await launch_url(GITHUB_ISSUES_URL, page)
+            show_snack(page, "Logs copied. Paste them into the new GitHub issue")
+
+        page.run_task(_do_report)
 
     def _clear_logs(_e):
         # Reopen the dialog so the log re-renders fresh (the house guard
@@ -78,7 +91,8 @@ def open_debugging_output(page: ft.Page) -> None:
             content=ft.Column(
                 controls=[
                     ft.Text(
-                        "App diagnostics: sessions, installs, ads, errors.",
+                        "App diagnostics: sessions, installs, ads, errors. When something "
+                        "goes wrong, Copy Logs and paste them into a GitHub issue.",
                         size=tokens.FONT_XS,
                         color=theme.text_dim(),
                     ),
@@ -104,6 +118,7 @@ def open_debugging_output(page: ft.Page) -> None:
         ),
         actions=[
             ft.TextButton("Copy Logs", icon=ft.Icons.COPY_ROUNDED, on_click=_copy_logs),
+            ft.TextButton("Report on GitHub", icon=ft.Icons.BUG_REPORT_ROUNDED, on_click=_report),
             ft.TextButton("Clear", icon=ft.Icons.DELETE_SWEEP_ROUNDED, on_click=_clear_logs),
             ft.TextButton("Close", on_click=lambda _e: page.pop_dialog()),
         ],
