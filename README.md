@@ -137,7 +137,7 @@ tar format.
 - **Background running**: a foreground service keeps shells and displays alive while you use other apps, with an Exit action.
 - **Shell with options**: every `pd login` flag, from users read out of the container's `/etc/passwd` to work dir, env, binds, shared tmp/home, isolation and low ports.
 - **Start X display in your shell**: one tap exports `DISPLAY` and `XAUTHORITY`, so `firefox` typed in that shell opens in the viewer.
-- **LAN and tunnel sharing**: open the display to Wi-Fi devices or a public `*.lhr.life` URL, always behind the access code, with a sign-in page for the code.
+- **LAN and tunnel sharing**: open the display to Wi-Fi devices or a public `*.lhr.life` URL, always behind the access code, with a sign-in page for the code. The tunnel runs `ssh` inside the container.
 - **Docker Hub search and OCI installs**: search with a result limit, or type a full reference; choose an architecture, a custom name or an insecure registry.
 - **Storage and cache**: containers and the OCI cache are measured separately, with sweep, build cache and app cache actions.
 - **Build and push**: build a Dockerfile into an OCI image and push it to a registry from Settings, Developer tools.
@@ -160,12 +160,10 @@ The same options live in Settings, so every new display starts with your choices
 
 ---
 
-## Requirements and limits
+## Limits
 
 - **X11 only.** Xvnc is an X11 server, so Wayland-only apps cannot render.
-- **Desktops are commands.** There is no desktop installer: install the packages in the container, then run its session command (for example `startxfce4`).
 - **Emulated containers are slower.** Chromium and Electron can trap under QEMU; prefer a container matching the phone's architecture.
-- **The public tunnel needs `ssh`** inside the container.
 
 ---
 
