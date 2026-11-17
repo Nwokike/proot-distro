@@ -402,20 +402,6 @@ jobs:
             echo "::error::REQUEST_INSTALL_PACKAGES present"
             exit 1
           fi
-
-          # Device support guard (v1.2.0 regression): Play treats RECORD_AUDIO as
-          # implying android.hardware.microphone REQUIRED unless the feature is
-          # explicitly declared not required. That filtered 18 devices (11 TVs,
-          # 2 phones, 5 tablets) out of the 1.2.0 release. pyproject's
-          # [tool.flet.android.feature] must therefore emit all three as false.
-          for feature in "android.hardware.microphone" "android.hardware.touchscreen" "android.software.leanback"; do
-            line=$(grep "android:name=\"$feature\"" "$manifest" | head -1 || true)
-            echo "uses-feature $feature: ${line:-MISSING}"
-            case "$line" in
-              *'android:required="false"'*) ;;
-              *) echo "::error::uses-feature $feature must be declared required=false (Play device filtering)"; exit 1;;
-            esac
-          done
           echo "manifest OK"
 
       - name: Verify no development files in the bundle

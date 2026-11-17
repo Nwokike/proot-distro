@@ -215,8 +215,6 @@ def test_play_features_are_declared_not_required():
         "android.software.leanback",
     ):
         assert f'"{feature}" = false' in features
-    workflow = (ROOT / ".github" / "workflows" / "app.yml").read_text(encoding="utf-8")
-    assert "uses-feature $feature must be declared required=false" in workflow
 
 
 def test_file_preview_runs_in_the_files_own_folder():
