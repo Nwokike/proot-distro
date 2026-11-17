@@ -116,8 +116,8 @@ _PINNED_SOURCES = {
                 "7b4643fe9d0ab42c0c3c8a1018640816bdb43d422f2268a5e4ea80675624f539",
             ),
             "dbus": (
-                "pool/main/d/dbus/dbus_1.16.2-3_aarch64.deb",
-                "1b6d5e349708414acbbb1404210e32d4e3f390890d02e162639dec1016a8657b",
+                "pool/main/d/dbus/dbus_1.16.4_aarch64.deb",
+                "fff79b58f1a4d5819140ccd5b5d72bc157351285ababf0361229293a4fd69b82",
             ),
             "libiconv": (
                 "pool/main/libi/libiconv/libiconv_1.19.1_aarch64.deb",
@@ -178,8 +178,8 @@ _PINNED_SOURCES = {
                 "9a71bef5c3ba9da2a90ec6dfa0fd99e1802cb03cc3ec37059340c6c7b7f441fd",
             ),
             "dbus": (
-                "pool/main/d/dbus/dbus_1.16.2-3_x86_64.deb",
-                "7860940419ff89270227063267f7aab3e3b7a91789359d9296190e50a361aff7",
+                "pool/main/d/dbus/dbus_1.16.4_x86_64.deb",
+                "f03a238d841c6bd146f324a6429333db29036a4063f2c3d54daa86ea040eb872",
             ),
             "libiconv": (
                 "pool/main/libi/libiconv/libiconv_1.19.1_x86_64.deb",
