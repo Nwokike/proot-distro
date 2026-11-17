@@ -163,7 +163,7 @@ The same options live in Settings, so every new display starts with your choices
 ## Limits
 
 - **X11 only.** Xvnc is an X11 server, so Wayland-only apps cannot render.
-- **Emulated containers are slower.** Chromium and Electron can trap under QEMU; prefer a container matching the phone's architecture.
+- **Emulated containers are slower.** Prefer a container matching the phone's architecture.
 
 ---
 
