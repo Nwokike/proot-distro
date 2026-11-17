@@ -48,6 +48,25 @@ def DesktopView(session) -> ft.Control:
     # a fresh ft.Clipboard() is an unmounted Service and its set() raises;
     # the controller exposes no clipboard attribute.
     clipboard = getattr(page, "clipboard", None)
+    controller = getattr(page, "_controller", None)
+
+    # Viewer mount: the soft keyboard overlays the viewer instead of resizing
+    # the whole screen (device 2026-11-17: landscape + keyboard shrank the
+    # desktop to a sliver), plus the one-time gesture hint.
+    def _viewer_mount():
+        from core.android_ui import set_keyboard_overlay
+
+        set_keyboard_overlay(True)
+        if controller is not None and not getattr(controller, "_gesture_hint_shown", False):
+            controller._gesture_hint_shown = True
+            methods.show_snack("One finger drags the mouse. Two fingers scroll.")
+
+        def _cleanup() -> None:
+            set_keyboard_overlay(False)
+
+        return _cleanup
+
+    ft.use_effect(_viewer_mount, [])
 
     # ── starting / stopping ───────────────────────────────────────────────────
     # Keyed off THIS session's status — the global display_status belongs to

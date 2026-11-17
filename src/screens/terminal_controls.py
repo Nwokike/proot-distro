@@ -11,8 +11,9 @@ _THEME_PRESETS = ("JetBrains Dark", "Dracula", "Matrix Green", "Colab Light")
 
 
 def _theme_name() -> str:
-    """Terminal theme follows the app's light/dark mode (CollabShell pattern)."""
-    return "Colab Light" if theme.is_light_theme() else "JetBrains Dark"
+    """Terminal theme follows the app's light/dark mode (CollabShell pattern):
+    Dracula in dark, Colab Light in light (owner ruling 2026-11-17)."""
+    return "Colab Light" if theme.is_light_theme() else "Dracula"
 
 
 def _write(entry: SessionEntry, payload: bytes) -> None:

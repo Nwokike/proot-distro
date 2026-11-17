@@ -44,7 +44,7 @@ class DisplayProbeMixin:
             _probing.discard(container)
         probe_cache.store("caps", container, caps)
         # REASSIGN: nested dict-item mutation does not notify the observable,
-        # so card labels ("Open display"/"Install display support") never flipped.
+        # so the distro card's labels never flipped.
         state.display_support = {**(state.display_support or {}), container: caps}
 
     async def _guest_has_ssh(self, container: str) -> bool:

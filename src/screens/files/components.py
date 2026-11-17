@@ -18,6 +18,49 @@ def parent_path(path: str) -> str | None:
     return parent if parent else "/"
 
 
+def binary_preview_card(name: str, mime: str, size: int) -> ft.Control:
+    """A binary file described instead of dumped as text.
+
+    Device feedback 2026-11-17: executables and archives used to fill the
+    preview with unreadable bytes. The type, size and a hint are more useful,
+    and the run buttons above the card are exactly what a binary is for."""
+    from screens.formatting import format_size
+
+    return ft.Container(
+        content=ft.Column(
+            controls=[
+                ft.Icon(
+                    ft.Icons.TERMINAL_ROUNDED,
+                    size=tokens.ICON_XXL,
+                    color=theme.text_dim(),
+                ),
+                ft.Text(
+                    name,
+                    size=tokens.FONT_MD,
+                    weight=ft.FontWeight.W_600,
+                    color=theme.text(),
+                ),
+                ft.Text(
+                    f"{mime} · {format_size(size)}",
+                    size=tokens.FONT_XS,
+                    color=theme.text_dim(),
+                ),
+                ft.Text(
+                    "Binary file, so there is no text preview. Run it, or open it in a display.",
+                    size=tokens.FONT_XXS,
+                    color=theme.text_dim(),
+                    text_align=ft.TextAlign.CENTER,
+                ),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=tokens.SPACE_SM,
+        ),
+        alignment=ft.Alignment.CENTER,
+        padding=ft.Padding.symmetric(vertical=tokens.SPACE_XL),
+    )
+
+
 def build_empty_dir_view(on_upload) -> ft.Control:
     """Centered placeholder when current directory has zero files."""
     return ft.Container(

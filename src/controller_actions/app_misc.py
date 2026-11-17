@@ -12,8 +12,12 @@ import flet as ft
 
 from core import theme, tokens
 from core.constants import (
+    APP_NAME,
     BATTERY_SAVER_DISPLAY,
     LOW_BATTERY_PCT,
+    NOTIFICATION_CHANNEL_GUEST,
+    NOTIFICATION_CHANNEL_GUEST_NAME,
+    NOTIFICATION_ID_GUEST_BASE,
     PREF_APP_PRESETS,
     PREF_DISPLAY_SETTINGS,
     PREF_DOCKER_TOKEN,
@@ -373,12 +377,59 @@ class AppMiscMixin:
             self.page.run_task(self.exit_app)
 
     def _on_notification_tap(self, e) -> None:
-        """Tapping the persistent notification returns to the running work —
-        the open display if there is one, else the running shell."""
-        if state.active_display:
+        """Tapping the persistent notification returns to the running work:
+        the display if one is up (from ANY screen — the old early-return made
+        the tap dead while inside a terminal, device 2026-11-17), else the
+        last live shell."""
+        manager = getattr(self, "desk_manager", None)
+        running = manager.running() if manager is not None else []
+        if running:
+            state.active_display = running[-1].key
             return
         entries = list(self.session_manager.entries.values())
         if entries and not state.active_session:
             state.active_session = entries[-1].key
+
+    # ── guest notifications → Android ─────────────────────────────────────────
+
+    def _on_guest_notification(self, app: str, summary: str, body: str) -> None:
+        """Called from the display watcher thread: hop to the page loop."""
+        self.page.run_task(self._show_guest_notification, app, summary, body)
+
+    async def _show_guest_notification(self, app: str, summary: str, body: str) -> None:
+        """Forward one guest D-Bus notification as a native Android one.
+
+        Best effort: a missing service or a denied POST_NOTIFICATIONS simply
+        means nothing appears. Titles/bodies are bounded and de-duplicated."""
+        notifications = getattr(self, "notifications", None)
+        if notifications is None:
+            return
+        text = " · ".join(part for part in (summary, body) if part).strip()
+        if not text:
+            return
+        key = (app, text)
+        if key == getattr(self, "_last_guest_notification", None):
+            return
+        self._last_guest_notification = key
+        sequence = (getattr(self, "_guest_notify_seq", 0) + 1) % 500
+        self._guest_notify_seq = sequence
+        try:
+            import flet_notifications as ftn
+
+            options = ftn.AndroidOptions(
+                channel=ftn.NotificationChannel(
+                    id=NOTIFICATION_CHANNEL_GUEST,
+                    name=NOTIFICATION_CHANNEL_GUEST_NAME,
+                ),
+                auto_cancel=True,
+            )
+            await notifications.show(
+                id=NOTIFICATION_ID_GUEST_BASE + sequence,
+                title=(app or APP_NAME)[:80],
+                body=text[:400],
+                options=options,
+            )
+        except Exception as exc:
+            logger.debug("guest notification show failed: %s", exc)
 
     # ── lifecycle ─────────────────────────────────────────────────────────────

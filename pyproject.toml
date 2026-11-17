@@ -1,6 +1,6 @@
 [project]
 name = "proot-distro-x11"
-version = "1.2.0"
+version = "1.2.1"
 description = "Run Debian, Ubuntu, Alpine and any Docker image on your phone; terminal and X11 desktop, no root, no Termux. Built with Flet."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -23,7 +23,7 @@ package = false
 org = "ng.kiri"
 product = "Proot Distro X11"
 company = "Kiri Research Labs"
-build_number = 4
+build_number = 5
 icon = "src/assets/icon.png"
 
 [tool.flet.app]
@@ -71,6 +71,17 @@ package_files = ["oauthlib/**"]
 # The display's microphone path: PulseAudio's sles-source module records the
 # mic and serves it to guest apps over PULSE_SERVER.
 "android.permission.RECORD_AUDIO" = true
+
+# uses-feature declarations. Play treats a permission as implying its hardware
+# feature: RECORD_AUDIO implies android.hardware.microphone REQUIRED unless the
+# feature is explicitly declared not required. That silently filtered every
+# mic-less TV (11 devices) plus 7 phone/tablet models out of the 1.2.0 release.
+# Flet only declares leanback/touchscreen false on its own; these entries make
+# all three explicit so the store keeps the full 1.0.0 device set.
+[tool.flet.android.feature]
+"android.hardware.microphone" = false
+"android.hardware.touchscreen" = false
+"android.software.leanback" = false
 
 [tool.flet.android.service."com.dexterous.flutterlocalnotifications.ForegroundService"]
 exported = false

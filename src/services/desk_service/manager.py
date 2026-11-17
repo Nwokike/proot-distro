@@ -18,7 +18,6 @@ from services import session_service  # noqa: F401
 
 from . import stream_server, xvnc_runtime
 from .audio_mixin import AudioMixin
-from .environments import DEFAULT_DESKTOP
 from .models import (  # noqa: F401 - re-exported for tests and callers
     MAX_DISPLAY_NUMBER,
     MAX_LOG_BYTES,
@@ -56,6 +55,9 @@ class DeskManager(SpawnMixin, AudioMixin, ProcessMixin):
         self.on_sessions_changed: Callable[[], None] | None = None
         # Fired on every guest log line so the UI can stream the output panel.
         self.on_log_line: Callable[[], None] | None = None
+        # Fired for a guest notification (app, summary, body) by the watcher
+        # thread; the controller forwards it to Android.
+        self.on_guest_notification: Callable[[str, str, str], None] | None = None
 
     def _notify_changed(self) -> None:
         cb = self.on_sessions_changed
@@ -72,7 +74,6 @@ class DeskManager(SpawnMixin, AudioMixin, ProcessMixin):
         container: str,
         *,
         display: int | None = None,
-        desktop_env: str = DEFAULT_DESKTOP,
         app_command: str | None = None,
         bare: bool = False,  # X server only — no guest session (terminal use)
         frame_rate: int = 30,  # Xvnc -FrameRate (updates/second to the viewer)
@@ -102,9 +103,10 @@ class DeskManager(SpawnMixin, AudioMixin, ProcessMixin):
         viewer_logging: str = "warn",
         disconnect_timeout: int = 0,
         desktop_name: str = "",
-        mic: bool = True,
+        mic: bool = False,
         audio_latency_ms: int = 0,
         audio_pm: int = 2,
+        guest_notifications: bool = False,
         host: str = "127.0.0.1",
         tunnel: bool = False,
         options: dict | None = None,
@@ -127,15 +129,11 @@ class DeskManager(SpawnMixin, AudioMixin, ProcessMixin):
             session = DeskSession(
                 container=container,
                 key=key,
-                mode=(
-                    "display"
-                    if bare
-                    else "app"
-                    if app_command and app_command.strip()
-                    else "desktop"
-                ),
+                # Two modes only: a bare X server (terminal hand-off) or one
+                # command on its own display. Desktop sessions are just app
+                # commands now (owner ruling 2026-11-17: no desktop installer).
+                mode="display" if bare else "app",
                 app_command=(app_command or "").strip(),
-                desktop_env=desktop_env,
                 display=display,
                 port=_free_port(),
                 fps=float(frame_rate),
@@ -149,6 +147,7 @@ class DeskManager(SpawnMixin, AudioMixin, ProcessMixin):
                 disconnect_timeout=disconnect_timeout,
                 desktop_name=desktop_name,
                 mic=mic,
+                guest_notifications=bool(guest_notifications),
                 audio_latency_ms=audio_latency_ms,
                 audio_pm=audio_pm,
                 host=host,
@@ -230,6 +229,10 @@ class DeskManager(SpawnMixin, AudioMixin, ProcessMixin):
         logger.info("display: %s ready on %s (Xvnc + noVNC in-app)", session.key, session.url)
         if session.tunnel:
             threading.Thread(target=self._poll_tunnel, args=(session,), daemon=True).start()
+        if session.guest_notifications and session._process is not None:
+            threading.Thread(
+                target=self._watch_guest_notifications, args=(session,), daemon=True
+            ).start()
         return session
 
     async def stop(self, key: str) -> None:
@@ -345,9 +348,10 @@ class DeskManager(SpawnMixin, AudioMixin, ProcessMixin):
         """DISPLAY/XAUTHORITY/PULSE_SERVER for a NEW shell on `container` while
         one of its displays runs — so GUI apps launched from any shell reach
         the display (device 2026-11-14: `firefox` → "no DISPLAY"). Deterministic
-        pick: desktop-mode first, then the lowest display; only RUNNING sessions
-        count (STARTING/STOPPING/ERROR point nowhere). Empty when no display
-        runs — the shell keeps today's plain environment."""
+        pick: app-mode first (it owns the per-display bus), then the lowest
+        display; only RUNNING sessions count (STARTING/STOPPING/ERROR point
+        nowhere). Empty when no display runs — the shell keeps today's plain
+        environment."""
         from .display_env import guest_display_env as _env
 
         with self._lock:
@@ -363,7 +367,7 @@ class DeskManager(SpawnMixin, AudioMixin, ProcessMixin):
         ]
         if not candidates:
             return {}
-        chosen = min(candidates, key=lambda s: (s.mode != "desktop", s.display))
+        chosen = min(candidates, key=lambda s: (s.mode == "display", s.display))
         # A bare "display" session never starts the per-display bus, so it must
         # not advertise a socket that does not exist.
         return _env(

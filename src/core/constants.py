@@ -8,8 +8,8 @@ ship inside the APK), and CI checks it against pyproject + the workflow
 from __future__ import annotations
 
 APP_NAME = "Proot Distro X11"
-APP_VERSION = "1.2.0"
-APP_BUILD_NUMBER = 4
+APP_VERSION = "1.2.1"
+APP_BUILD_NUMBER = 5
 
 REPO_OWNER = "Nwokike"
 REPO_NAME = "proot-distro"
@@ -41,16 +41,20 @@ PREF_APP_PRESETS = "app_presets"
 NOTIFICATION_ICON = "ic_stat_prootdistro"
 NOTIFICATION_ID_FGS = 1
 NOTIFICATION_ID_INSTALL = 2100
+NOTIFICATION_ID_GUEST_BASE = 3000  # guest-app notification ids cycle above this
 NOTIFICATION_ACTION_EXIT = "exit"
 NOTIFICATION_CHANNEL_SESSIONS = "sessions"
 NOTIFICATION_CHANNEL_SESSIONS_NAME = "Sessions"
 NOTIFICATION_CHANNEL_INSTALLS = "installs"
 NOTIFICATION_CHANNEL_INSTALLS_NAME = "Installs"
+NOTIFICATION_CHANNEL_GUEST = "guest-apps"
+NOTIFICATION_CHANNEL_GUEST_NAME = "Guest apps"
 
 # ── Banner ad slots (one name per surface; tests assert these) ──────────────
 AD_SLOT_NO_CONTAINERS = "no-containers"
 AD_SLOT_SEARCH_EMPTY = "search-empty"
 AD_SLOT_CONTAINERS = "containers-1"
+AD_SLOT_INSTALL_LIST = "install-list-1"
 AD_SLOT_FILES = "files-1"
 AD_SLOT_FILES_EMPTY = "files-empty"
 AD_SLOT_TERMINAL = "terminal-1"

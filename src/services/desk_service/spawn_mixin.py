@@ -121,11 +121,11 @@ class SpawnMixin:
             script = build_guest_script(
                 display=session.display,
                 port=session.port,
-                desktop_env=session.desktop_env,
                 geometry=session.geometry,
                 xauth_cookie=xauth_cookie(),
                 tunnel=session.tunnel,
                 pulse=self.pulse_server_alive(),
+                notifications=session.guest_notifications,
                 app_command=session.app_command or None,
             )
             guest_script = _write_guest_script(session.container, script, session.display)
@@ -252,10 +252,13 @@ class SpawnMixin:
             # A configured auto-close (MaxDisconnectionTime) makes Xvnc exit
             # with code 0 once the last viewer has been gone for N seconds —
             # that is the feature WORKING, not a crash: close the session
-            # cleanly instead of surfacing a false ERROR.
+            # cleanly instead of surfacing a false ERROR. The same holds for
+            # the guest command exiting 0: the app finished, the display ends
+            # (device 2026-11-17: running a CLI file in a display used to show
+            # a Failed row).
             clean_auto_close = (
                 kind == "xvnc" and process.returncode == 0 and session.disconnect_timeout > 0
-            )
+            ) or (kind == "guest" and process.returncode == 0)
             if clean_auto_close:
                 logger.info(
                     "display: %s auto-closed after %ss without viewers",
@@ -304,3 +307,41 @@ class SpawnMixin:
                 logger.info("display: tunnel for %s at %s", session.key, url)
                 return
             time.sleep(1.0)
+
+    def _watch_guest_notifications(self, session: DeskSession) -> None:
+        """Daemon: tail the guest's notification log and forward each Notify.
+
+        dbus-monitor (started by the display script itself) writes the calls to
+        `/tmp/x11/notify-<display>.log` inside the rootfs; this thread parses
+        new bytes and hands complete notifications to the manager's callback
+        (the controller turns them into Android notifications). It exits with
+        the session; a missing file is not an error."""
+        from .guest_notifications import NOTIFY_LOG_NAME, NotifyStreamParser
+
+        rootfs = storage_paths.containers_dir() / session.container / "rootfs"
+        path = rootfs / "tmp" / "x11" / NOTIFY_LOG_NAME.format(display=session.display)
+        parser = NotifyStreamParser()
+        position = 0
+        last: tuple[str, str, str] | None = None
+        while session.status is DeskStatus.RUNNING:
+            data = b""
+            try:
+                with path.open("rb") as fh:
+                    fh.seek(position)
+                    data = fh.read()
+                    position = fh.tell()
+            except OSError:
+                pass
+            if data:
+                for line in data.decode("utf-8", "replace").splitlines():
+                    parsed = parser.feed_line(line)
+                    if parsed is None or parsed == last:
+                        continue
+                    last = parsed
+                    callback = self.on_guest_notification
+                    if callback is not None:
+                        try:
+                            callback(*parsed)
+                        except Exception:
+                            logger.debug("guest notification forward failed", exc_info=True)
+            time.sleep(0.5)

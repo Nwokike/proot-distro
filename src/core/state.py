@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import flet as ft
 
-from core import tokens
-
 # The ONE source of display-start defaults (used by state.__init__ and by
 # DisplayActions._display_settings — never duplicated). Every key has a real
 # consumer, in one of three layers: Xvnc argv (fps → -FrameRate, depth →
@@ -49,7 +47,11 @@ DEFAULT_DISPLAY_SETTINGS: dict = {
     "show_dot": False,
     "viewer_logging": "warn",
     "disconnect_timeout": 0,  # seconds after the last viewer exits; 0 = keep running
-    "mic": True,
+    # Microphone OFF at start (owner ruling 2026-11-17): the viewer toolbar's mic
+    # button is the only source of truth, and it requests the Android grant the
+    # moment the user turns it on. A display opened with the mic never prompts.
+    "mic": False,
+    "forward_guest_notifications": True,  # guest D-Bus notifications → Android
     "audio_latency_ms": 0,  # 0 = AAudio's own buffer-derived latency
     "audio_pm": 2,  # AAudio performance-mode offset (2 = LOW_LATENCY)
 }
@@ -64,9 +66,11 @@ def _is_online(types) -> bool:
     return any(getattr(item, "value", item) not in ("none", "None") for item in types)
 
 
-# Terminal defaults (Settings -> Terminal): applied to every NEW shell.
+# Terminal defaults (Settings -> Terminal): applied to every NEW shell. An
+# empty theme means "follow the app mode": Dracula in dark, Colab Light in
+# light (owner ruling 2026-11-17). An explicit saved choice always wins.
 DEFAULT_TERMINAL_SETTINGS: dict = {
-    "theme": "JetBrains Dark",
+    "theme": "",
     "font_size": 0.0,  # 0 = the widget default
     "cursor_blink": True,
 }
@@ -162,6 +166,10 @@ class AppState:
     # the Display tab can offer real one-tap apps instead of a generic button.
     # None = never probed; {} = probed and nothing found.
     detected_apps: dict | None = None
+    # When each container's app scan last ran (monotonic seconds) — the Display
+    # tab and the sheet re-probe a container whose stamp is older than their
+    # TTL, so a freshly installed app appears without an app restart.
+    detected_apps_at: dict | None = None
     # User-made launch presets: [{"name", "cmd", "work_dir", "env"}]. These are
     # the user's own "desktop shortcuts": a name, a command and the login
     # options that belong to it.
@@ -197,39 +205,3 @@ class AppState:
 
 
 state = AppState()
-
-
-@ft.observable
-class DisplayProgress:
-    """Dedicated observable model for the desktop-install progress card — the
-    CollabShell NotebookCell mechanism copied exactly: a SMALL observable
-    object passed as the component's argument (not a field on the global
-    AppState), so every mutation re-renders that one card reactively.
-    Mutate `logs` by REASSIGNMENT and bump `rev` (CellData.outputs_rev)."""
-
-    def __init__(self):
-        self.container: str | None = None
-        self.logs: list[str] = []
-        self.is_running: bool = False
-        self.rev: int = 0
-
-    def append(self, line: str) -> None:
-        clean = line.rstrip()
-        if not clean:
-            return
-        self.logs = [*self.logs[-tokens.DISPLAY_PROGRESS_LOG_MAX :], clean]
-        self.rev += 1
-
-    def clear(self, container: str | None = None) -> None:
-        self.container = container
-        self.logs = []
-        self.rev += 1
-
-    def set_running(self, flag: bool) -> None:
-        self.is_running = bool(flag)
-
-    def finish(self, ok: bool | None) -> None:
-        self.is_running = False
-
-
-display_progress = DisplayProgress()

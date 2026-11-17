@@ -5,13 +5,13 @@ from __future__ import annotations
 import flet as ft
 
 from components import card, empty_state, pill_dropdown, probe_banner, section_header
-from components.banner_ad import pooled_banner_ad
+from components.banner_ad import insert_periodic, pooled_banner_ad
 from components.brand_hero import build_brand_hero
 from components.ui import house_field, search_field
 from core import layout, theme, tokens
 from core.constants import (
-    AD_EVERY_ROWS,
     AD_SLOT_CONTAINERS,
+    AD_SLOT_INSTALL_LIST,
     AD_SLOT_SEARCH_EMPTY,
     SEARCH_LIMIT_DEFAULT,
 )
@@ -365,6 +365,8 @@ def DistroView() -> ft.Control:
             )
         )
         controls.extend([_distro_tile(label, ref) for label, ref in _POPULAR_DISTROS])
+        # One banner after the certified-distro list (owner ruling 2026-11-17).
+        controls.append(pooled_banner_ad(AD_SLOT_INSTALL_LIST, page))
 
     # Install logs — the live stage line under the install section.
     if mode == "install" and (st.installing or st.busy_note):
@@ -380,8 +382,8 @@ def DistroView() -> ft.Control:
     if st.search_status:
         controls.append(ft.Text(st.search_status, size=tokens.FONT_XS, color=theme.text_dim()))
     result_cards = sections.build_search_results(st, _consent_install)
-    for i in range(AD_EVERY_ROWS - 1, len(result_cards), AD_EVERY_ROWS):
-        result_cards.insert(i + 1, pooled_banner_ad(f"search-{i // AD_EVERY_ROWS + 1}", page))
+    # One banner after every 5th result, never after the last (shared helper).
+    result_cards = insert_periodic(result_cards, "search", page=page)
     if result_cards:
         controls.extend(result_cards)
     elif mode == "search":

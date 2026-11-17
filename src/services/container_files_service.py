@@ -21,6 +21,24 @@ from core import storage_paths, tokens
 logger = logging.getLogger(__name__)
 
 _MAX_TEXT_BYTES = tokens.FILE_PREVIEW_MAX_BYTES  # 10 MB text preview bound (memory guard only)
+# A preview sniffs this much before deciding "binary": enough for NUL bytes and
+# UTF-8 validity without reading a large file twice.
+_SNIFF_BYTES = 8192
+
+
+def is_binary(data: bytes) -> bool:
+    """True when a preview would be unreadable garbage.
+
+    A NUL byte is the classic binary signal; otherwise the first bytes must
+    decode as UTF-8. An executable or archive is described by its type and size
+    instead of dumping bytes at the user (device feedback 2026-11-17)."""
+    if b"\x00" in data:
+        return True
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return True
+    return False
 
 
 def resolve_guest_path(container: str, guest_path: str = "/") -> tuple[Path, Path]:
@@ -104,6 +122,15 @@ def read_file_preview(container: str, guest_path: str) -> dict:
 
     with open(host_path, "rb") as f:
         chunk = f.read(_MAX_TEXT_BYTES + 1)
+    if is_binary(chunk[:_SNIFF_BYTES]):
+        # Binary data is not shown as text: the dialog names the type and size
+        # and still offers Run / Display / Terminal.
+        return {
+            "type": "binary",
+            "mime": mime,
+            "size": host_path.stat().st_size,
+            "content": "",
+        }
     is_truncated = len(chunk) > _MAX_TEXT_BYTES
     content = chunk[:_MAX_TEXT_BYTES].decode("utf-8", errors="replace")
     if is_truncated:

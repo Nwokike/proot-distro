@@ -1,8 +1,8 @@
 """Guest script builder — what runs inside the container for one display session.
 
 The DISPLAY SERVER RUNS IN THE APP (Xvnc + PulseAudio from the APK's
-native-library dir) — the guest only runs the session and connects to it over
-the shared loopback, needing NOTHING installed for single apps:
+native-library dir) — the guest only runs the command and connects to it over
+the shared loopback, needing NOTHING installed:
 
 - `DISPLAY=127.0.0.1:N` — Xvnc's X port (proot shares the host network
   namespace, so guest loopback IS host loopback). No unix socket: Xvnc runs
@@ -14,7 +14,7 @@ the shared loopback, needing NOTHING installed for single apps:
 
 With the tunnel enabled, our own `ssh -R` forward runs in the guest (Android
 hosts have no ssh binary); its output lands in `/tmp/x11/tunnel-N.log`.
-It needs the guest's ssh client, which desktop provisioning installs.
+It needs the guest's own ssh client (install openssh-client yourself).
 
 No python, no pip, no vendoring in the guest. Every UI-supplied value is
 validated or shlex-quoted — the script runs as guest root inside proot, still
@@ -29,7 +29,6 @@ import shlex
 from core.constants import GUEST_X11_DIR
 
 from .display_env import guest_display_env
-from .environments import BY_KEY
 
 # Strict geometry allow-list format: the value is validated everywhere the
 # display size is chosen (Xvnc's -geometry app-side). The script itself no
@@ -58,23 +57,23 @@ def build_guest_script(
     *,
     display: int = 0,
     port: int,
-    desktop_env: str = "xfce",
     geometry: str = "1280x720",
     xauth_cookie: str = "",
     tunnel: bool = False,
     pulse: bool = True,
+    notifications: bool = False,
     app_command: str | None = None,
 ) -> str:
     """The `/bin/sh` payload for one display session on DISPLAY=:{display}.
 
     The whole guest tree is one proot process group (kill-on-exit), so SIGTERM
     tears down the session and any ssh tunnel together; the X server and the
-    stream server are app-side and torn down by the manager. `app_command`
-    switches to single-app mode: the DE launch is replaced by `sh -c
-    <app_command>`. `port` is only used by the tunnel forward (the host server
-    binds it itself). `geometry`/`xauth_cookie` are validated for the surface
-    that consumes them app-side. `pulse` is the app-side daemon's actual state:
-    PULSE_SERVER is only exported when it is listening.
+    stream server are app-side and torn down by the manager. `app_command` is
+    the command this display runs (a desktop starter such as startxfce4 is just
+    an app command now). `port` is only used by the tunnel forward (the host
+    server binds it itself). `geometry`/`xauth_cookie` are validated for the
+    surface that consumes them app-side. `pulse` is the app-side daemon's
+    actual state: PULSE_SERVER is only exported when it is listening.
     """
     if not isinstance(display, int) or not 0 <= display <= 99:
         raise ValueError(f"display must be an int 0-99, got {display!r}")
@@ -84,14 +83,9 @@ def build_guest_script(
         raise ValueError(f"geometry must be WxH digits, got {geometry!r}")
     if xauth_cookie and not re.match(r"^[0-9a-f]{32}$", xauth_cookie):
         raise ValueError("xauth_cookie must be 32 hex chars")
-    app_mode = app_command is not None and app_command.strip() != ""
-    if app_mode:
-        child_cmd = f"sh -c {shlex.quote(app_command.strip())}"
-    else:
-        de = BY_KEY.get(desktop_env)
-        if de is None:
-            raise ValueError(f"unknown desktop environment: {desktop_env!r}")
-        child_cmd = shlex.quote(de.starter)
+    if not (app_command or "").strip():
+        raise ValueError("app_command must not be empty")
+    child_cmd = f"sh -c {shlex.quote(app_command.strip())}"
     # A session bus for the WHOLE display (desktop and every later shell see
     # the same DBUS_SESSION_BUS_ADDRESS). dbus-run-session is the fallback:
     # it would give the desktop a bus the later shells cannot see.
@@ -114,6 +108,20 @@ def build_guest_script(
             f"( ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30"
             f" -R 80:localhost:{int(port)} nokey@localhost.run"
             f" > {guest_tunnel_log(display)} 2>&1 ) &\n"
+        )
+
+    # Guest notifications (owner request 2026-11-17): watch the session bus for
+    # Notify calls and log them; the app tails the log and forwards each one to
+    # Android. Best effort: no dbus-monitor just means no forwarding.
+    notify_block = ""
+    if notifications:
+        notify_block = (
+            "if command -v dbus-monitor >/dev/null 2>&1; then\n"
+            "  dbus-monitor --session"
+            " \"type='method_call',interface='org.freedesktop.Notifications'"
+            ",member='Notify'\""
+            f" > {GUEST_X11_DIR}/notify-{display}.log 2>&1 &\n"
+            "fi\n"
         )
 
     guest_env = guest_display_env(display, pulse=pulse)
@@ -143,7 +151,7 @@ if command -v dbus-daemon >/dev/null 2>&1; then
   export DBUS_SESSION_BUS_ADDRESS="{bus}"
 fi
 
-{session_cmd} &
+{notify_block}{session_cmd} &
 SESSION_PID=$!
 
 {tunnel_block}# The session owns this script: when the app or the desktop exits, the

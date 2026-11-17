@@ -3,6 +3,20 @@
 from __future__ import annotations
 
 CHANGELOG: dict[str, str] = {
+    "1.2.1": (
+        "• Desktop installation removed: run any command on its own display; a desktop is just a command such as startxfce4\n"
+        "• Microphone is off at display start; the toolbar button is the only switch and asks Android for the grant when turned on\n"
+        "• Presets refresh on their own and have a refresh button, in the display sheet and on the Display tab\n"
+        "• A container's sheet shows only its own presets; detected apps get a no-sandbox checkbox\n"
+        "• Share works without a tunnel: the local and Wi-Fi URLs open a sign-in page where the access code is typed\n"
+        "• The keyboard overlays the display in fullscreen instead of shrinking it; fullscreen now hides the system bars\n"
+        "• Guest app notifications are forwarded as Android notifications (best effort)\n"
+        "• Arch pacman works under proot (sandbox disabled, download user fixed)\n"
+        "• Ads placed between Distros and Presets, every five presets, and after the Home install list\n"
+        "• Terminal default theme follows the app mode: Dracula in dark, Colab Light in light\n"
+        "• Play device support restored: microphone, touchscreen and leanback are no longer required features\n"
+        "• Files list sits closer to the top; banners stay between sections"
+    ),
     "1.2.0": (
         "• Display engine rebuilt: TigerVNC's X server (Xvnc) runs INSIDE the app\n"
         "• Audio out and microphone for guest apps (PulseAudio, per-display bus)\n"

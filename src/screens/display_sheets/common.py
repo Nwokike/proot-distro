@@ -70,10 +70,6 @@ def _status_line(caps: dict) -> ft.Control:
     )
 
 
-def _pill_style() -> ft.ButtonStyle:
-    return ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=tokens.RADIUS_PILL))
-
-
 def _set_setting(key: str, value: object) -> None:
     state.display_settings = {**(state.display_settings or {}), key: value}
 

@@ -155,7 +155,7 @@ def _advanced_display_controls() -> ft.Control:
             _row(
                 [
                     _switch_row("Clipboard sync", "clipboard", True),
-                    _switch_row("Microphone", "mic", True),
+                    _switch_row("Microphone", "mic", False),
                     _switch_row("Restrict to this device", "restrict_local", False),
                     _switch_row("View only", "view_only", False),
                     _switch_row("Kick other viewers", "disconnect_clients", False),
@@ -253,6 +253,11 @@ def _advanced_display_controls() -> ft.Control:
                     _switch_row("AAudio workaround", "audio_no_close_hack", False),
                     _switch_row("Viewer bell", "viewer_bell", True),
                     _switch_row("Cursor dot", "show_dot", False),
+                    _switch_row(
+                        "Forward guest notifications",
+                        "forward_guest_notifications",
+                        True,
+                    ),
                 ]
             ),
         ],

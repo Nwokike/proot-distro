@@ -34,7 +34,6 @@ from enum import StrEnum
 from core import storage_paths
 
 from . import xvnc_runtime
-from .environments import DEFAULT_DESKTOP
 from .script import TUNNEL_URL_RE, guest_script_name, guest_tunnel_log
 
 logger = logging.getLogger(__name__)
@@ -62,9 +61,8 @@ class DeskStatus(StrEnum):
 class DeskSession:
     container: str
     key: str = ""  # "{container}:{display}" — the manager's dict key
-    mode: str = "desktop"  # desktop | app | display (bare X server)
-    app_command: str = ""  # set in app mode
-    desktop_env: str = DEFAULT_DESKTOP
+    mode: str = "app"  # app | display (bare X server)
+    app_command: str = ""  # the command this display runs
     display: int = 0
     port: int = 0
     url: str = ""
@@ -91,7 +89,7 @@ class DeskSession:
     desktop_name: str = ""  # "" → "<container>:<display>"
     # PulseAudio module options (one app-wide daemon; a later display with a
     # different audio shape restarts it).
-    mic: bool = True
+    mic: bool = False  # OFF at start; the viewer toolbar owns this
     audio_latency_ms: int = 0  # 0 = AAudio's own buffer-derived latency
     audio_pm: int = 2  # AAudio performance-mode offset (2 = LOW_LATENCY)
     audio_rate: int = 0  # AAudio sink sample rate (0 = device default)
@@ -100,6 +98,8 @@ class DeskSession:
     mic_format: str = ""  # sles-source sample format (e.g. s16le)
     mic_channels: int = 0  # sles-source channel count
     resample_method: str = ""  # PulseAudio --resample-method
+    # Guest D-Bus notifications → Android notifications (best effort).
+    guest_notifications: bool = False
     # noVNC viewer knobs (client-side, real settings).
     viewer_bell: bool = True
     show_dot: bool = False

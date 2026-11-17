@@ -254,9 +254,10 @@ def SettingsView() -> ft.Control:
     # ── value helpers ─────────────────────────────────────────────────────────
     def _terminal_summary() -> str:
         size = float(term.get("font_size") or 0)
+        saved_theme = str(term.get("theme") or "")
         return " · ".join(
             [
-                str(term.get("theme") or DEFAULT_TERMINAL_SETTINGS["theme"]),
+                saved_theme or "theme follows the app mode",
                 f"{size:g}pt" if size else "default size",
                 "blink on" if term.get("cursor_blink", True) else "blink off",
             ]
@@ -318,10 +319,11 @@ def SettingsView() -> ft.Control:
                 pill_dropdown(
                     "Theme",
                     ft.Icons.PALETTE_ROUNDED,
-                    list(_THEME_PRESETS),
-                    str(term.get("theme") or DEFAULT_TERMINAL_SETTINGS["theme"]),
-                    lambda value: _set_term("theme", value),
-                    tooltip="Terminal theme for new shells",
+                    ["auto", *(_THEME_PRESETS)],
+                    str(term.get("theme") or "auto"),
+                    lambda value: _set_term("theme", "" if value == "auto" else value),
+                    tooltip="Terminal theme for new shells (auto follows the app mode)",
+                    labels={"auto": "Auto (Dracula / Colab Light)"},
                 ),
                 house_field(
                     value=(

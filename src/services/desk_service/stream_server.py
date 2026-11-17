@@ -31,6 +31,36 @@ _WS_MAX_MSG = tokens.WS_MAX_MSG_BYTES  # inbound RFB messages (pointer/key/clipb
 _WS_HEARTBEAT = tokens.WS_HEARTBEAT_SEC  # dead viewers are dropped instead of lingering
 _WRITE_HIGH_WATER = tokens.WS_WRITE_HIGH_WATER_BYTES  # drain only when the buffer passes this
 
+# Our own sign-in page (served at `/`; the noVNC viewer itself is untouched).
+# A copied Local/LAN URL is useless without this: the browser lands here, the
+# user types the 6-character code from the app, and the page forwards to the
+# viewer. The error line is substituted (no user input is ever echoed).
+_CODE_PAGE = """<!doctype html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Display access</title>
+<style>
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+background:#121218;color:#CDD6F4;font-family:system-ui,sans-serif}
+form{background:#1E1E2E;width:min(340px,88vw);padding:24px;border-radius:16px;
+border:1px solid #3E415C}
+h2{margin:0 0 6px;font-size:20px}
+p{margin:0 0 14px;font-size:13px;color:#A6ADC8}
+input{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;font-size:18px;
+letter-spacing:4px;text-transform:uppercase;text-align:center;background:#121218;
+border:1px solid #3E415C;color:#CDD6F4}
+button{margin-top:14px;width:100%;padding:12px;border:0;border-radius:999px;
+background:#89B4FA;color:#121218;font-weight:700;font-size:15px}
+</style></head>
+<body><form method="get" action="/">
+<h2>Display access</h2>
+<p>Enter the access code shown in the app's Share dialog.</p>
+__ERROR__
+<input name="code" maxlength="6" autocapitalize="characters" autocomplete="off" autofocus>
+<button type="submit">Open display</button>
+</form></body></html>
+"""
+
 
 class DisplayStreamServer:
     """One session's HTTP+WS surface. `start()` returns after binding — the
@@ -119,15 +149,21 @@ class DisplayStreamServer:
         return web.json_response({"ok": True})
 
     async def _index(self, request: web.Request) -> web.Response:
-        """`/` is the shared entry point (the URL the app hands out): it gates
-        the access code, then forwards to the upstream viewer with the code
-        inside `path`. A missing/wrong code never reaches the viewer."""
+        """`/` is the shared entry point (the URL the app hands out).
+
+        A correct code forwards straight to the upstream viewer with the code
+        inside `path` (noVNC builds its WebSocket URL from it verbatim). No
+        code, or a wrong one, gets our own tiny sign-in form instead of a bare
+        403, so a pasted Local/LAN URL is actually usable in another browser."""
         code = request.query.get("code", "")
-        if code != self.code:
-            raise web.HTTPForbidden(
-                text="missing or invalid access code. Open the full URL from the app's Share dialog"
-            )
-        raise web.HTTPFound(f"{self.viewer_path()}?{self.viewer_query()}")
+        if code == self.code:
+            raise web.HTTPFound(f"{self.viewer_path()}?{self.viewer_query()}")
+        error = '<p style="color:#F38BA8">That code is not correct. Try again.</p>' if code else ""
+        return web.Response(
+            text=_CODE_PAGE.replace("__ERROR__", error),
+            content_type="text/html",
+            headers=_NO_CACHE_HEADERS,
+        )
 
     async def _static(self, request: web.Request) -> web.FileResponse:
         root = _NOVNC_DIR.resolve()

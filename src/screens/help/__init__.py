@@ -409,6 +409,26 @@ def show_help_sheet(page: ft.Page, methods=None) -> None:
                         "to mirrorcache.opensuse.org.",
                     ),
                 ),
+                (
+                    "pacman seccomp sandbox arch",
+                    _row(
+                        ft.Icons.SECURITY_ROUNDED,
+                        "Arch: pacman sandbox error",
+                        "pacman 7 sandboxes its downloads with seccomp and a separate "
+                        "user, which proot cannot provide. For Arch containers the app "
+                        "disables that sandbox in /etc/pacman.conf, so pacman -Sy works.",
+                    ),
+                ),
+                (
+                    "emulated x86_64 chromium qemu trap core dump",
+                    _row(
+                        ft.Icons.MEMORY_ROUNDED,
+                        "Emulated browsers can crash",
+                        "Chromium and Electron on a foreign-architecture image run through "
+                        "QEMU and can trap (uncaught target signal 5). Use a container that "
+                        "matches the phone's architecture for browsers.",
+                    ),
+                ),
             ],
         ),
         (

@@ -9,7 +9,7 @@ import flet as ft
 
 from components.app_header import AppHeader
 from core import theme, tokens
-from core.state import display_progress, state
+from core.state import state
 from screens import (
     DesktopView,
     DisplayView,
@@ -53,7 +53,6 @@ def AppShell() -> ft.Control:
     # re-render a component — without use_state(state) the onboarding deck
     # dead-ends on first run and shell open/close never swaps the tree.
     st, _ = ft.use_state(state)
-    prog, _ = ft.use_state(display_progress)
     page = ft.context.page
     active_tab, set_active_tab = ft.use_state(TAB_DISTRO)
     controller = getattr(page, "_controller", None)
@@ -163,40 +162,6 @@ def AppShell() -> ft.Control:
                         ),
                         ft.Text(
                             f"display running: {names}",
-                            size=tokens.FONT_SM,
-                            color=theme.text(),
-                            expand=True,
-                            max_lines=tokens.MAX_LINES_ONE,
-                            overflow=ft.TextOverflow.ELLIPSIS,
-                        ),
-                        ft.Icon(ft.Icons.ARROW_FORWARD_ROUNDED, size=tokens.ICON_SM),
-                    ],
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=tokens.SPACE_SM,
-                ),
-                bgcolor=ft.Colors.with_opacity(tokens.OPACITY_LIGHT, theme.primary()),
-                padding=ft.Padding(
-                    tokens.SPACE_SM, tokens.SPACE_XS, tokens.SPACE_SM, tokens.SPACE_XS
-                ),
-                border_radius=tokens.RADIUS_MD,
-                ink=True,
-                on_click=lambda _e: set_active_tab(TAB_DISPLAY),
-            )
-        )
-    if prog.is_running and entry is None and desk_session is None:
-        # Global install-progress strip — visible on EVERY tab while a desktop
-        # install runs (owner request); tapping it jumps to the Display tab.
-        chrome.append(
-            ft.Container(
-                content=ft.Row(
-                    controls=[
-                        ft.ProgressRing(
-                            width=tokens.PROGRESS_RING_SM,
-                            height=tokens.PROGRESS_RING_SM,
-                            stroke_width=tokens.PROGRESS_RING_STROKE,
-                        ),
-                        ft.Text(
-                            f"installing desktop in {prog.container or '…'}…",
                             size=tokens.FONT_SM,
                             color=theme.text(),
                             expand=True,

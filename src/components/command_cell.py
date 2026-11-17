@@ -117,9 +117,14 @@ def build_command_cell(
     on_run,
     on_stop=None,
     label: str | None = None,
+    run_on_top: bool = False,
 ) -> tuple[ft.Container, CommandCellController]:
     """Build the cell; return (control, controller). `on_run(source)` fires on
-    Play; `on_stop()` on Stop. Visual copy of CollabShell's code cell."""
+    Play; `on_stop()` on Stop. Visual copy of CollabShell's code cell.
+
+    `run_on_top=True` puts the Play/Stop row ABOVE the editor: in a dialog the
+    soft keyboard can push bottom controls out of reach (device feedback
+    2026-11-17), so the run control stays visible at the top."""
     editor = ft.TextField(
         value=source,
         multiline=True,
@@ -227,20 +232,18 @@ def build_command_cell(
     controller._run_row = run_row
     controller._stop_row = stop_row
 
+    run_stop_row = ft.Container(
+        content=ft.Row([run_row, stop_row]),
+        padding=ft.Padding(tokens.SPACE_XS, 0, tokens.SPACE_SM, tokens.SPACE_XS),
+    )
+    inner_controls = [run_stop_row, editor] if run_on_top else [editor, run_stop_row]
+
     cell = ft.Container(
         content=ft.Column(
             controls=[
                 ft.Container(
                     content=ft.Column(
-                        controls=[
-                            editor,
-                            ft.Container(
-                                content=ft.Row([run_row, stop_row]),
-                                padding=ft.Padding(
-                                    tokens.SPACE_XS, 0, tokens.SPACE_SM, tokens.SPACE_XS
-                                ),
-                            ),
-                        ],
+                        controls=inner_controls,
                         spacing=0,
                     ),
                     border_radius=tokens.RADIUS_SM,

@@ -57,7 +57,7 @@ def test_no_stale_architecture_names():
 def test_split_packages_keep_public_facades():
     """The modules that were split must still re-export their entry points."""
     checks = {
-        "screens/display_launcher.py": ("show_display_sheet", "rebuild_display_sheet"),
+        "screens/display_launcher.py": ("show_display_sheet",),
         "screens/container_actions.py": ("ask_shell_options", "container_menu_items"),
         "controller_actions/display_actions.py": ("DisplayActions",),
         "controller_actions/session_actions.py": ("SessionActions",),
@@ -93,7 +93,13 @@ def test_shared_helpers_have_real_consumers():
     ]
     text = "\n".join(p.read_text(encoding="utf-8") for p in users)
     assert "layout.is_narrow" in text or "layout.is_mobile_layout" in text
-    assert "page_tail(" in (SRC / "screens" / "files" / "__init__.py").read_text(encoding="utf-8")
+    assert "pooled_banner_ad(" in (SRC / "screens" / "files" / "__init__.py").read_text(
+        encoding="utf-8"
+    )
+    # page_tail keeps a real consumer (the terminal session picker).
+    assert "page_tail(" in (SRC / "screens" / "session_selector_view.py").read_text(
+        encoding="utf-8"
+    )
     assert "styles.pill_button_style()" in (SRC / "screens" / "build_view.py").read_text(
         encoding="utf-8"
     )

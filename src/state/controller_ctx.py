@@ -86,7 +86,7 @@ class ControllerMethods:
     # (start_display takes the container and picks a display number).
     open_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     probe_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
-    probe_apps: Callable[[str], Awaitable[None]] = field(default=_noop_async)
+    probe_apps: Callable[[str, bool], Awaitable[None]] = field(default=_noop_async)
     start_display: Callable[
         [str, str | None, str | None, int | None, dict | None], Awaitable[None]
     ] = field(default=_noop_async)
@@ -95,9 +95,7 @@ class ControllerMethods:
     start_x_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     retry_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     resume_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)
-    cancel_install_display: Callable[[], Awaitable[None]] = field(default=_noop_async)
     leave_display: Callable[[], Awaitable[None]] = field(default=_noop_async)
-    install_display_support: Callable[[str, str], Awaitable[None]] = field(default=_noop_async)
     show_display_logs: Callable[[str], Awaitable[None]] = field(default=_noop_async)
     set_display_fullscreen: Callable[[bool], Awaitable[None]] = field(default=_noop_async)
     share_display: Callable[[str], Awaitable[None]] = field(default=_noop_async)

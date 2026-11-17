@@ -19,75 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 class DisplaySessionMixin:
-    async def probe_apps(self, container: str) -> None:
-        """Detect the preset GUI apps this container actually has.
-
-        Primary source: the container's own .desktop files, read host-side (no
-        proot spawn, real application names). Fallback for minimal images that
-        register nothing: a `command -v` probe of the bundled preset list.
-        Cached on `state.detected_apps` so the Display tab and the sheet can
-        offer one-tap apps."""
-        import asyncio
-
-        from core import probe_cache
-        from core.constants import APP_PRESETS
-        from services import proot_service, session_service
-
-        detected = dict(state.detected_apps or {})
-        if container in detected:
-            return
-        disk = probe_cache.load("apps", container)
-        if isinstance(disk, list):
-            detected[container] = disk
-            state.detected_apps = detected
-            return
-
-        scan_failed = False
-        try:
-            found = await asyncio.to_thread(proot_service.guest_desktop_apps, container)
-        except Exception as exc:
-            logger.debug("desktop-app scan failed for %s: %s", container, exc)
-            found = []
-            scan_failed = True
-
-        if not found:
-            errors = {"count": 0}
-
-            async def _one(label: str, cmd: str) -> dict | None:
-                try:
-                    result = await asyncio.wait_for(
-                        asyncio.to_thread(
-                            session_service.command_capture,
-                            container,
-                            ["/bin/sh", "-c", f"command -v {cmd}"],
-                            timeout=10.0,
-                        ),
-                        timeout=12.0,
-                    )
-                except Exception as exc:
-                    logger.debug("app probe for %s/%s failed: %s", container, cmd, exc)
-                    errors["count"] += 1
-                    return None
-                if result.get("ok") and result.get("output", "").strip():
-                    return {"label": label, "cmd": cmd}
-                return None
-
-            found = [
-                item
-                for item in await asyncio.gather(*(_one(label, cmd) for label, cmd in APP_PRESETS))
-                if item is not None
-            ]
-            # Every probe ERRORED (as opposed to a clean "not installed"): the
-            # answer is unknown, so do not pin "no apps" in the cache for an
-            # hour.
-            if errors["count"] == len(APP_PRESETS) or (scan_failed and errors["count"]):
-                detected[container] = found
-                state.detected_apps = detected
-                return
-        probe_cache.store("apps", container, found)
-        detected[container] = found
-        state.detected_apps = detected
-
     async def open_display(self, container: str) -> None:
         """Card/tab entry point: ALWAYS opens the launch sheet. A running
         display is listed under Running on the tab (the user can resume it
@@ -103,16 +34,16 @@ class DisplaySessionMixin:
     async def start_display(
         self,
         container: str,
-        desktop_env: str | None = None,
         app_command: str | None = None,
         display: int | None = None,
         options: dict | None = None,
     ) -> None:
         """Start one display session (key `container:display`). `app_command`
-        switches to single-app mode (bare Xvnc, no DE). `options` carries the
-        advanced login options (user, work_dir, env, bind, shared_tmp,
-        shared_home, isolated, fix_low_ports) — everything proot-distro's
-        login supports, so a technical user has full control."""
+        is the command that runs on its own display (a desktop starter such as
+        startxfce4 is just another command). `options` carries the advanced
+        login options (user, work_dir, env, bind, shared_tmp, shared_home,
+        isolated, fix_low_ports) — everything proot-distro's login supports, so
+        a technical user has full control."""
         manager = self.desk_manager
         if any(
             s.status.value == "starting"
@@ -123,18 +54,11 @@ class DisplaySessionMixin:
             self.show_snack("a display is already starting. Wait a moment")
             return
         await self.ad_service.show_interstitial()
-        caps = self._display_caps(container)
-        installed_desktops = caps.get("desktops") or {}
-        env = desktop_env or next(
-            (key for key, present in installed_desktops.items() if present),
-            "xfce",
-        )
         settings = self._display_settings()
         tunnel_enabled = bool(settings.get("tunnel"))
         if tunnel_enabled and not await self._guest_has_ssh(container):
             self.show_snack(
-                "the tunnel needs ssh in the container. Installing desktop support "
-                "adds openssh-client"
+                "the tunnel needs ssh in the container. Install openssh-client in it first"
             )
             tunnel_enabled = False
         state.display_error = ""
@@ -143,15 +67,10 @@ class DisplaySessionMixin:
         # Immediate, visible feedback wherever the user is (home, display, or
         # any tab) — the in-app snack, like the distro install flow.
         self.show_snack(state.display_status_text)
-        # The mic grant is asked through the official recorder service right
-        # before the PulseAudio daemon (which loads the mic module) starts —
-        # AFTER the starting feedback, so the dialog never appears out of
-        # nowhere. A denial degrades audio only.
-        mic_allowed = True
-        if settings.get("mic", True):
-            mic_allowed = await self._ensure_mic_permission()
-            if not mic_allowed:
-                self.show_snack("microphone permission not granted. Display audio is playback-only")
+        # The microphone is OFF at start and never prompts here (owner ruling
+        # 2026-11-17): the viewer toolbar's mic button is the only source of
+        # truth and requests the Android grant itself the moment it is tapped.
+        # Audio playback is unaffected by this choice.
         # Every value below is clamped/validated here, then threads straight
         # into the Xvnc argv / PulseAudio module lines (no dead knobs).
         depth = str(settings.get("depth", "24"))
@@ -171,7 +90,6 @@ class DisplaySessionMixin:
             session = await manager.start(
                 container,
                 display=display,
-                desktop_env=env,
                 app_command=app_command,
                 options=options,
                 frame_rate=frame_rate,
@@ -202,7 +120,8 @@ class DisplaySessionMixin:
                 show_dot=bool(settings.get("show_dot", False)),
                 viewer_logging=str(settings.get("viewer_logging", "warn") or "warn"),
                 disconnect_timeout=disconnect_timeout,
-                mic=bool(settings.get("mic", True)) and mic_allowed,
+                mic=False,  # always off at start; the toolbar owns the mic
+                guest_notifications=bool(settings.get("forward_guest_notifications", True)),
                 audio_latency_ms=audio_latency,
                 audio_pm=audio_pm,
                 # LAN sharing maps to the server's bind host (S104 is the point).
@@ -242,12 +161,33 @@ class DisplaySessionMixin:
 
     async def set_display_mic(self, key: str, enabled: bool) -> None:
         """Toggle the mic at runtime for a running display (owner 2026-11-16:
-        the mic must not be always-on — the user controls it from the toolbar)."""
+        the mic must not be always-on — the user controls it from the toolbar;
+        owner 2026-11-17: this button is the ONLY place the Android grant is
+        requested, and the reported state must be real).
+
+        Turning ON requests RECORD_AUDIO first; the daemon only loads the mic
+        module after the grant, and a denial leaves the mic off instead of
+        claiming it is on."""
         manager = getattr(self, "desk_manager", None)
         if manager is None:
             return
-        await manager.set_mic(key, enabled)
-        self.show_snack(f"microphone {'on' if enabled else 'off'}")
+        if enabled:
+            granted = await self._ensure_mic_permission()
+            if not granted:
+                self.show_snack("microphone permission denied. Allow it to use the mic")
+                return
+            await manager.set_mic(key, True)
+            session = manager.get(key)
+            alive = manager.pulse_server_alive()
+            if session is not None and session.mic and alive:
+                self.show_snack("microphone on")
+            else:
+                # Honest: the grant is there but the daemon did not come back
+                # with the mic module — do not claim success.
+                self.show_snack("microphone could not start. Check the display logs")
+            return
+        await manager.set_mic(key, False)
+        self.show_snack("microphone off")
 
     async def stop_display(self, key: str) -> None:
         await self.ad_service.show_interstitial()
@@ -258,19 +198,18 @@ class DisplaySessionMixin:
             state.display_url = ""
             self._wakelock(False)
             self._lock_orientation(False)
+            self._set_system_bars(hidden=False)
         await self._update_fgs()
 
     async def retry_display(self, key: str) -> None:
-        """Retry a failed display with the SAME shape it had (mode, desktop
-        env, login options, display number) — a bare start_display call
-        would turn a failed single-app session into a desktop."""
+        """Retry a failed display with the SAME shape it had (command, login
+        options, display number) — a bare start_display call would lose them."""
         session = self.desk_manager.get(key)
         if session is None:
             self.show_snack("that display is gone")
             return
         await self.start_display(
             session.container,
-            desktop_env=session.desktop_env,
             app_command=session.app_command or None,
             display=session.display,
             options=dict(getattr(session, "login_options", None) or {}),
@@ -293,10 +232,22 @@ class DisplaySessionMixin:
         state.display_fullscreen = False
         self._lock_orientation(False)
         self._wakelock(False)
+        self._set_system_bars(hidden=False)
 
     async def set_display_fullscreen(self, on: bool) -> None:
         state.display_fullscreen = bool(on)
         self._lock_orientation(bool(on))
+        # Real fullscreen on Android: hide the system bars (page.window is
+        # desktop-only). Best effort; harmless where unsupported.
+        self._set_system_bars(hidden=bool(on))
+
+    def _set_system_bars(self, *, hidden: bool) -> None:
+        from core.android_ui import set_system_bars_hidden
+
+        try:
+            set_system_bars_hidden(hidden)
+        except Exception as exc:
+            logger.debug("system bar toggle failed: %s", exc)
 
     # ── sharing (LAN + tunnel + code) ─────────────────────────────────────────
 
@@ -314,6 +265,10 @@ class DisplaySessionMixin:
         share = getattr(self.page, "share", None)
         rows: list[ft.Control] = []
 
+        def _copy(text: str) -> None:
+            if clipboard is not None:
+                self.page.run_task(clipboard.set, text)
+
         def _url_row(label: str, url: str) -> ft.Control:
             return ft.Row(
                 controls=[
@@ -330,7 +285,7 @@ class DisplaySessionMixin:
                         icon=ft.Icons.COPY_ROUNDED,
                         icon_size=tokens.ICON_MD,
                         tooltip="Copy URL",
-                        on_click=lambda _e: self.page.run_task(clipboard.set, url),
+                        on_click=lambda _e, u=url: _copy(u),
                     ),
                 ],
                 spacing=tokens.SPACE_XS,
@@ -376,7 +331,7 @@ class DisplaySessionMixin:
                         icon=ft.Icons.COPY_ROUNDED,
                         icon_size=tokens.ICON_MD,
                         tooltip="Copy access code",
-                        on_click=lambda _e: self.page.run_task(clipboard.set, session.code),
+                        on_click=lambda _e: _copy(session.code),
                     ),
                 ],
                 spacing=tokens.SPACE_XS,
@@ -385,18 +340,36 @@ class DisplaySessionMixin:
         )
         rows.append(
             ft.Text(
-                "Any device opening a URL above must enter this access code. "
-                "localhost.run's free URLs rotate after a few hours.",
+                "Any device opening a URL above must enter this access code on the "
+                "display's sign-in page. localhost.run's free URLs rotate after a few hours.",
                 size=tokens.FONT_XXS,
                 color=theme.text_dim(),
             )
         )
 
-        share_url = session.tunnel_url
-        if not share_url:
-            self.page.pop_dialog()
-            self.show_snack("no public URL yet. Turn on the tunnel to share this display")
-            return
+        # The dialog is useful without a tunnel: the Local (and LAN) URL plus the
+        # code are how a browser on the same phone or Wi-Fi opens the display
+        # (device 2026-11-17). The system share sheet needs a public URL.
+        actions: list[ft.Control] = []
+        if session.tunnel_url and share is not None:
+            actions.append(
+                ft.TextButton(
+                    "Share…",
+                    on_click=lambda _e: (
+                        self.page.pop_dialog(),
+                        self.page.run_task(share.share_uri, session.tunnel_url),
+                    ),
+                )
+            )
+        else:
+            rows.append(
+                ft.Text(
+                    "Turn on the public tunnel to get a shareable link.",
+                    size=tokens.FONT_XS,
+                    color=theme.text_dim(),
+                )
+            )
+        actions.append(ft.TextButton("Close", on_click=lambda _e: self.page.pop_dialog()))
         self.page.show_dialog(
             ft.AlertDialog(
                 title=ft.Text(
@@ -410,29 +383,11 @@ class DisplaySessionMixin:
                     spacing=tokens.SPACE_SM,
                     width=tokens.DIALOG_WIDTH,
                 ),
-                actions=[
-                    ft.TextButton(
-                        "Share…",
-                        on_click=lambda _e: (
-                            self.page.pop_dialog(),
-                            self.page.run_task(share.share_uri, share_url),
-                        ),
-                    ),
-                    ft.TextButton("Close", on_click=lambda _e: self.page.pop_dialog()),
-                ],
+                actions=actions,
             )
         )
 
-    # ── provisioning ──────────────────────────────────────────────────────────
-
-    async def cancel_install_display(self) -> None:
-        """Stop the running desktop-install capture (the card/cell Stop)."""
-        session = getattr(self, "_install_session", None)
-        if session is None:
-            self.show_snack("no install is running")
-            return
-        session.stop()
-        self.show_snack("install stopped")
+    # ── settings ──────────────────────────────────────────────────────────────
 
     def _display_settings(self) -> dict:
         return {**DEFAULT_DISPLAY_SETTINGS, **(state.display_settings or {})}

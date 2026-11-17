@@ -180,7 +180,7 @@ def test_files_view_keeps_responsive_list_and_banner():
     pkg = ROOT / "src" / "screens" / "files"
     source = "\n".join(f.read_text(encoding="utf-8") for f in sorted(pkg.glob("*.py")))
 
-    assert "page_tail(AD_SLOT_FILES, page)" in source
+    assert "pooled_banner_ad(AD_SLOT_FILES, page)" in source
     # Picker banner lives INSIDE the list: always after the last container,
     # plus after every 5th when there are more than 5 containers.
     assert 'pooled_banner_ad(f"files-picker-{banner_count}", page)' in source

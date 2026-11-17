@@ -55,7 +55,14 @@ async def test_index_gates_then_forwards_to_the_upstream_viewer(client):
     assert params["compression"] == ["3"]
     for bad in ({"code": "XXXXXX"}, {}):
         response = await client.get("/", params=bad, allow_redirects=False)
-        assert response.status == 403
+        # Our own sign-in form, not a bare 403: a pasted local/LAN URL is
+        # usable by typing the code (device 2026-11-17).
+        assert response.status == 200
+        body = await response.read()
+        assert b"Display access" in body
+        assert b'name="code"' in body
+    wrong = await client.get("/", params={"code": "XXXXXX"}, allow_redirects=False)
+    assert b"not correct" in await wrong.read()
 
 
 async def test_upstream_viewer_is_served_verbatim_with_no_cache(client):

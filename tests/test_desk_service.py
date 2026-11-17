@@ -1,6 +1,6 @@
 """desk_service — the Option-D wrap contract (Xvnc + PulseAudio in-app, noVNC
-viewer): guest script, runtime, stream server, manager, provision — plus the
-UI-structure pins (card 3-item, grouped menu, files banner).
+viewer): guest script, runtime, stream server, manager — plus the UI-structure
+pins (card 3-item, grouped menu, files banner).
 """
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ from session_support import GOLDEN_CMD
 from core.state import state
 from services import desk_service, session_service
 from services.desk_service import manager as desk_manager
-from services.desk_service import provision as desk_provision
 from services.desk_service import script as desk_script
 from services.desk_service import spawn_mixin
 from state.controller_ctx import ControllerMethods
@@ -30,9 +29,6 @@ ALPINE_CAPS = {
         "version_id": "3.22",
         "pretty_name": "Alpine 3.22",
     },
-    "desk_ready": True,  # apps ALWAYS run — the display is in the app now
-    "dbus": False,
-    "desktops": {"xfce": False, "lxqt": False, "mate": False, "icewm": False, "openbox": False},
 }
 
 
@@ -40,7 +36,9 @@ ALPINE_CAPS = {
 
 
 def test_guest_script_exports_the_app_side_display():
-    src = desk_script.build_guest_script(port=9999, geometry="1600x900", display=3)
+    src = desk_script.build_guest_script(
+        port=9999, geometry="1600x900", display=3, app_command="xterm"
+    )
     # The guest connects over the SHARED loopback to Xvnc's X port — no unix
     # socket exists (Xvnc runs -nolisten unix; there is no /tmp/.X11-unix).
     assert "export DISPLAY=127.0.0.1:3" in src
@@ -54,27 +52,29 @@ def test_guest_script_exports_the_app_side_display():
     assert "xclip" not in src
 
 
-def test_guest_script_runs_the_desktop_via_dbus():
-    src = desk_script.build_guest_script(port=9999, desktop_env="xfce")
-    assert "dbus-run-session -- startxfce4" in src
+def test_guest_script_runs_the_command_via_dbus():
+    src = desk_script.build_guest_script(port=9999, app_command="startxfce4")
+    assert "dbus-run-session -- sh -c startxfce4" in src
 
 
 def test_guest_script_has_no_python_left():
-    src = desk_script.build_guest_script(port=9999, desktop_env="xfce", tunnel=True)
+    src = desk_script.build_guest_script(port=9999, app_command="startxfce4", tunnel=True)
     assert "python3" not in src
     assert "termux_desk" not in src
     assert "auth.json" not in src
 
 
 def test_guest_script_warns_when_the_cookie_file_is_missing():
-    src = desk_script.build_guest_script(port=9999)
+    src = desk_script.build_guest_script(port=9999, app_command="xterm")
     assert '[ -f "$XAUTHORITY" ]' in src
     assert "warning: the display auth file is missing" in src
 
 
 def test_guest_script_tunnel_is_upstreams_exact_ssh_line():
-    plain = desk_script.build_guest_script(port=9999, display=2)
-    tunneled = desk_script.build_guest_script(port=9999, display=2, tunnel=True)
+    plain = desk_script.build_guest_script(port=9999, display=2, app_command="xterm")
+    tunneled = desk_script.build_guest_script(
+        port=9999, display=2, tunnel=True, app_command="xterm"
+    )
     assert "ssh" not in plain
     assert (
         "ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30"
@@ -89,82 +89,68 @@ def test_tunnel_url_regex_is_upstreams_pattern():
     assert match and match.group(1) == "https://random-name-123.lhr.life"
 
 
-def test_guest_script_app_mode_replaces_the_desktop():
-    desktop = desk_script.build_guest_script(port=9999, desktop_env="xfce")
-    assert "dbus-run-session -- startxfce4" in desktop
+def test_guest_script_runs_a_single_command():
     app = desk_script.build_guest_script(port=9999, app_command="python3 app.py --flag 'x'")
     # A display-scoped session bus is started first; dbus-run-session is only
     # the fallback when no bus is available (so later shells share it).
     assert 'DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/x11/bus-0"' in app
     assert "dbus-run-session -- sh -c" in app
     assert "sh -c 'python3 app.py --flag '\"'\"'x'\"'\"''" in app  # shlex-quoted command
-    assert "startxfce4" not in app
+
+
+def test_guest_script_requires_a_command():
+    with pytest.raises(ValueError):
+        desk_script.build_guest_script(port=9999)
+
+
+def test_guest_script_starts_the_notification_watcher_when_enabled():
+    plain = desk_script.build_guest_script(port=9999, app_command="xterm")
+    watched = desk_script.build_guest_script(port=9999, app_command="xterm", notifications=True)
+    assert "dbus-monitor" not in plain
+    assert "dbus-monitor --session" in watched
+    assert "/tmp/x11/notify-0.log" in watched
 
 
 def test_guest_script_rejects_unsafe_values():
     with pytest.raises(ValueError):
-        desk_script.build_guest_script(port=9999, geometry="999; rm -rf /")
+        desk_script.build_guest_script(port=9999, geometry="999; rm -rf /", app_command="xterm")
     with pytest.raises(ValueError):
-        desk_script.build_guest_script(port=9999, geometry="1280x")
+        desk_script.build_guest_script(port=9999, geometry="1280x", app_command="xterm")
     with pytest.raises(ValueError):
-        desk_script.build_guest_script(port=9999, display=100)
+        desk_script.build_guest_script(port=9999, display=100, app_command="xterm")
     with pytest.raises(ValueError):
-        desk_script.build_guest_script(port=9999, xauth_cookie="zz; rm -rf /")
+        desk_script.build_guest_script(port=9999, xauth_cookie="zz; rm -rf /", app_command="xterm")
     assert desk_script.is_valid_geometry("1280x720")
     assert not desk_script.is_valid_geometry("1280")
 
 
 def test_guest_script_waits_on_the_session_not_an_x_server():
-    """The session owns the script: when the app or the desktop exits, the
+    """The session owns the script: when the app or the command exits, the
     guest tree exits and the manager marks the display ERROR."""
-    src = desk_script.build_guest_script(port=9999)
+    src = desk_script.build_guest_script(port=9999, app_command="xterm")
     assert 'wait "$SESSION_PID"' in src
     assert "XVFB_PID" not in src
 
 
-# ── provision (provision.py) — the guest needs dbus + ssh only ───────────────
+# ── desktop install is gone (owner ruling 2026-11-17) ────────────────────────
 
 
-def test_every_package_manager_gets_dbus_ssh_and_nothing_x():
-    for pm, packages in desk_provision._BASE_PACKAGES.items():
-        assert any(p.startswith("openssh") for p in packages), f"{pm} misses openssh"
-        assert any("dbus" in p for p in packages), f"{pm} misses the session bus"
-        # The X stack lives in the app now — the guest installs none of it.
-        assert not any("xvfb" in p or "xauth" in p or "xclip" in p for p in packages), (
-            f"{pm} still installs the guest X stack"
-        )
-        assert not any(p.startswith(("py3-", "python3-", "python-")) for p in packages), (
-            f"{pm} still installs guest python"
-        )
-        # The base stays MINIMAL — the desktop-only extras live in _DESKTOP_EXTRAS:
-        # without an icon theme + pixbuf + mime DB, GTK cannot load images and
-        # xfce4-panel aborts (device-proven 2026-11-10). Apps don't need them.
-        assert "adwaita-icon-theme" not in packages, f"{pm} base is not minimal"
-        extras = desk_provision._DESKTOP_EXTRAS[pm]
-        assert "adwaita-icon-theme" in extras, f"{pm} extras miss an icon theme"
-        assert "shared-mime-info" in extras, f"{pm} extras miss the mime database"
-        assert any("pixbuf" in p or "rsvg" in p for p in extras), f"{pm} extras miss image loaders"
-
-
-def test_fedora_xfce_ships_xfsettingsd():
-    """xfce4-session launches xfsettingsd; Fedora's xfce4-settings package was
-    missing from the list and the session degraded to a bare WM on a black root."""
-    assert "xfce4-settings" in desk_provision._DESKTOP_PACKAGES["dnf"]["xfce"]
-
-
-def test_alpine_install_script_is_minimal_for_apps():
-    src = desk_provision.install_script(ALPINE_CAPS, "xfce")
-    for package in ("dbus", "dbus-x11", "openssh-client"):
-        assert package in src
-    for gone in ("xvfb", "xauth", "xclip"):
-        assert gone not in src
-    assert "apk add --no-cache" in src
-
-
-def test_unsupported_container_names_the_reason():
-    caps = {"os": {"distro_id": "mystery", "distro_like": "", "version_id": "", "pretty_name": ""}}
-    assert desk_provision.unsupported_reason(caps) is not None
-    assert desk_provision.package_manager_for(ALPINE_CAPS) == "apk"
+def test_desktop_install_surfaces_are_gone():
+    assert not (ROOT / "src" / "controller_actions" / "display_install.py").exists()
+    assert not (ROOT / "src" / "screens" / "display_progress_card.py").exists()
+    assert not (ROOT / "src" / "services" / "desk_service" / "provision.py").exists()
+    assert not (ROOT / "src" / "services" / "desk_service" / "environments.py").exists()
+    state_src = (ROOT / "src" / "core" / "state.py").read_text(encoding="utf-8")
+    assert "DisplayProgress" not in state_src
+    shell_src = (ROOT / "src" / "app_shell.py").read_text(encoding="utf-8")
+    assert "prog.is_running" not in shell_src
+    sheet_dir = ROOT / "src" / "screens" / "display_sheets"
+    launcher = (sheet_dir / "launcher_sheet.py").read_text(encoding="utf-8")
+    assert "Install a desktop" not in launcher
+    assert "startxfce4" not in launcher or "command to run" in launcher
+    parts = (sheet_dir / "sheet_parts.py").read_text(encoding="utf-8")
+    assert "install_cell_placeholder" not in parts
+    assert "def mode_pill" not in parts
 
 
 # ── manager (manager.py) — in-app Xvnc, stream server, RFB wait ──────────────
@@ -182,7 +168,8 @@ def test_desk_session_carries_the_full_wrap_surface():
     assert session.host == "127.0.0.1"
     assert session.tunnel is False
     assert session.tunnel_url == ""
-    assert session.mode == "desktop"
+    assert session.mode == "app"  # desktop sessions are plain app commands now
+    assert session.mic is False  # the toolbar owns the microphone
     assert session.server is None
     assert desk_manager._local_ip() == "" or isinstance(desk_manager._local_ip(), str)
 
@@ -581,7 +568,9 @@ def test_spawn_failure_kills_what_already_started(monkeypatch):
         desk_manager.subprocess, "Popen", lambda *a, **kw: (_ for _ in ()).throw(OSError("boom"))
     )
 
-    session = desk_manager.DeskSession(container="debian", key="debian:0", display=0, port=1)
+    session = desk_manager.DeskSession(
+        container="debian", key="debian:0", display=0, port=1, app_command="xterm"
+    )
     with pytest.raises(OSError):
         manager._spawn(session)
     assert killed and killed[0] == ["_xvnc_process"]  # Xvnc started, guest did not
@@ -811,7 +800,7 @@ def test_files_banner_at_top_list_expands_to_edge():
     """Owner ruling 2026-11-16: the banner sits at the TOP (like Terminal) so
     the file list expands to the bottom edge. No card wrapper around the list."""
     src = (ROOT / "src" / "screens" / "files" / "__init__.py").read_text(encoding="utf-8")
-    banner = src.index("page_tail(AD_SLOT_FILES")
+    banner = src.index("pooled_banner_ad(AD_SLOT_FILES")
     file_list = src.index("file_list_content,")
     assert banner < file_list
     assert "card(file_list_content" not in src  # no card wrapper eating space
@@ -906,12 +895,14 @@ def test_desk_service_exports_the_full_surface():
         "DeskStatus",
         "TUNNEL_URL_RE",
         "build_guest_script",
-        "install",
+        "is_valid_geometry",
         "session_key",
         "shared_manager",
-        "DESKTOP_ENVIRONMENTS",
     ):
         assert hasattr(desk_service, name)
+    # The desktop installer is gone (owner ruling 2026-11-17).
+    assert not hasattr(desk_service, "install")
+    assert not hasattr(desk_service, "DESKTOP_ENVIRONMENTS")
     assert not hasattr(desk_service, "vendor_termux_desk")  # vendoring is gone
 
 
@@ -950,7 +941,7 @@ def test_display_tab_distros_first_presets_last():
     src = (ROOT / "src" / "screens" / "display_view.py").read_text(encoding="utf-8")
     assert "st.app_presets" in src
     assert "st.detected_apps" in src
-    assert "def _run_preset" in src and "def _display_card" in src
+    assert "def _preset_options" in src and "def _display_card" in src
     distros = src.index('_section("Distros"')
     presets = src.index('_section("Presets"')
     assert distros < presets
@@ -961,10 +952,10 @@ def test_display_tab_distros_first_presets_last():
 
 
 def test_display_tab_running_section_is_mode_agnostic():
-    """Running displays (desktop OR single app) surface in ONE 'Running'
+    """Running displays (a command OR a bare display) surface in ONE 'Running'
     section, never split by mode."""
     src = (ROOT / "src" / "screens" / "display_view.py").read_text(encoding="utf-8")
-    assert 'sections.append(_section("Running", None, _session_rows(running)))' in src
+    assert '_section("Running", None, session_rows(running' in src
     assert '_section("Apps"' not in src
     assert '"Desktops"' not in src
 
@@ -974,10 +965,11 @@ def test_display_stop_is_reactive_with_stopping_spinner():
     on every transition, the controller bumps state.display_sessions_rev, and
     the Display tab lists STOPPING sessions with a 'stopping…' spinner."""
     view_src = (ROOT / "src" / "screens" / "display_view.py").read_text(encoding="utf-8")
+    rows_src = (ROOT / "src" / "screens" / "display_rows.py").read_text(encoding="utf-8")
     assert "manager.visible()" in view_src
     assert "st.display_sessions_rev" in view_src
-    assert "DeskStatus.STOPPING" in view_src
-    assert "stopping…" in view_src
+    assert "DeskStatus.STOPPING" in rows_src
+    assert "stopping…" in rows_src
     mgr_src = (ROOT / "src" / "services" / "desk_service" / "manager.py").read_text(
         encoding="utf-8"
     )
@@ -1005,19 +997,18 @@ def test_desktop_fullscreen_has_visible_exit_fab():
     assert "state.display_fullscreen = False" in ctrl_src
 
 
-def test_install_chunk_path_uses_run_task_not_raw_threadsafe():
-    """Chunk callbacks must go through page.run_task so ft.context.page
-    resolves (a raw call_soon_threadsafe notify raised RuntimeError — the
-    99x log spam) — with no error swallowing."""
-    src = module_text("controller_actions/display_actions.py", "controller_actions")
-    assert "self.page.run_task(_apply)" in src
-    assert "call_soon_threadsafe(_apply)" not in src
-    assert "_notify_install" in src and "id=NOTIFICATION_ID_INSTALL" in src
+def test_mic_is_off_at_start_and_only_the_toolbar_requests_the_grant():
+    """Owner ruling 2026-11-17: no microphone permission prompt at display
+    open; the toolbar button requests it and reports the real state."""
     state_src = (ROOT / "src" / "core" / "state.py").read_text(encoding="utf-8")
-    assert "def append(" in state_src.split("class DisplayProgress")[1]
-    assert "except RuntimeError:" not in state_src
-    shell_src = (ROOT / "src" / "app_shell.py").read_text(encoding="utf-8")
-    assert "prog.is_running" in shell_src  # global install strip on all tabs
+    assert '"mic": False' in state_src
+    ctl = (ROOT / "src" / "controller_actions" / "display_session.py").read_text(encoding="utf-8")
+    assert "mic=False" in ctl  # the start call never enables it
+    assert "microphone permission not granted. Display audio is playback-only" not in ctl
+    # The toggle asks for the grant BEFORE flipping the module.
+    mic_fn = ctl.split("async def set_display_mic")[1].split("async def stop_display")[0]
+    assert "_ensure_mic_permission()" in mic_fn
+    assert "microphone permission denied" in mic_fn
 
 
 def test_xvnc_wheel_uses_underscore_android_platform_tags():
@@ -1056,13 +1047,14 @@ def test_novnc_is_vendored_verbatim_with_provenance():
     assert defaults["reconnect"] is True
 
 
-def test_stream_server_gates_both_the_page_and_the_websocket():
-    """The 6-char access code gates the ENTRY page (which forwards to upstream
-    vnc.html) and the RFB WebSocket itself (LAN + tunnel clients)."""
+def test_stream_server_gates_the_page_and_the_websocket():
+    """The 6-char access code gates the ENTRY page (our own sign-in form, then
+    the upstream viewer) and the RFB WebSocket itself (LAN + tunnel clients)."""
     src = (ROOT / "src" / "services" / "desk_service" / "stream_server.py").read_text(
         encoding="utf-8"
     )
-    assert 'request.query.get("code", "") != self.code' in src
+    assert 'request.query.get("code", "")' in src
+    assert "_CODE_PAGE" in src and "Display access" in src  # the sign-in form
     assert "4401" in src
     assert "HTTPFound" in src  # `/` forwards to the upstream viewer
     assert "open_connection" in src  # the transparent RFB byte pump
@@ -1085,25 +1077,25 @@ def test_home_containers_before_install_with_one_banner():
     assert "ft.Icons.SEARCH_ROUNDED," in src
 
 
-def test_one_display_sheet_no_mode_switch():
-    """Owner ruling 2026-11-16: ONE sheet with NO App | Desktop switch. The
-    command cell, presets and install tile are always visible; the probe runs
-    in the controller; shared options are built ONCE."""
+def test_one_display_sheet_runs_commands_and_refreshes_presets():
+    """Owner rulings 2026-11-16/17: ONE sheet with no App | Desktop switch and
+    no desktop installer; presets refresh in place and scope to the container;
+    detected apps carry a no-sandbox checkbox."""
     sheet_dir = ROOT / "src" / "screens" / "display_sheets"
     src = (sheet_dir / "launcher_sheet.py").read_text(encoding="utf-8")
     parts = (sheet_dir / "sheet_parts.py").read_text(encoding="utf-8")
     assert "methods.start_display" in src
-    assert "methods.probe_apps" in src
-    controller = (ROOT / "src" / "controller_actions" / "display_session.py").read_text(
-        encoding="utf-8"
-    )
-    assert "asyncio.gather" in controller
-    # NO mode switch: mode_pill is gone from the sheet.
-    assert "mode_pill" not in src
-    assert "def mode_pill" in parts  # the helper exists but is not called
+    assert "methods.probe_apps" in src and "force" in src
+    assert 'preset.get("container")' in src  # only this container's presets
+    assert "def with_sandbox" in parts and "sandbox_checked" in parts
+    assert "no sandbox" in src
+    assert "GESTURE_HINT" in src
+    # NO mode switch, NO install tile, NO install-cell placeholder.
+    assert "mode_pill" not in src and "mode_pill" not in parts
+    assert "Install a desktop" not in src
+    assert "install_cell_placeholder" not in parts
     # The merged app sheet is gone; the unified sheet owns the command field.
     assert not (sheet_dir / "app_sheet.py").exists()
-    assert "Install a desktop" in src  # the collapsed tile
     # Shared surface: display number, image/viewer pills, advanced Xvnc and the
     # login flags — built in sheet_parts, called once.
     assert "def add_display_options" in parts
@@ -1128,9 +1120,9 @@ def test_glycin_bwrap_gets_fake_overflow_ids():
     assert 'write_text("65534\\n"' in src
 
 
-def test_launcher_is_one_sheet_with_a_mode_switch_and_every_option():
-    """ONE sheet: an explicit display number, the image and viewer pills, the
-    login/run flags collapsed by default, and no App | Desktop switch."""
+def test_launcher_is_one_sheet_with_every_shared_option():
+    """ONE sheet: an explicit display number, the image and viewer pills and
+    the login/run flags collapsed by default; no App | Desktop switch."""
     src = module_text("screens/display_launcher.py", "screens/display_sheets")
     assert '"App"' not in src  # no mode switch
     # The display number is a house pill (no Material Dropdown anywhere).
@@ -1164,25 +1156,19 @@ def test_settings_offer_custom_values_and_portrait():
 
 
 def test_naming_and_no_duplicate_single_app_entry():
-    """Cards open a display; the install cell installs DESKTOP support; single
-    apps are reached only through the sheet's App mode (owner ruling
-    2026-11-15: the old sheet had three paths to the same thing)."""
+    """Cards open the display sheet; single apps start from its one command
+    cell. No desktop installer and no second path to the same thing."""
     sheet_dir = ROOT / "src" / "screens" / "display_sheets"
     launcher = (sheet_dir / "launcher_sheet.py").read_text(encoding="utf-8")
-    parts = (sheet_dir / "sheet_parts.py").read_text(encoding="utf-8")
     card = (ROOT / "src" / "screens" / "container_card.py").read_text(encoding="utf-8")
     view = (ROOT / "src" / "screens" / "display_view.py").read_text(encoding="utf-8")
-    assert '"Install a desktop' in launcher
+    assert '"Install a desktop' not in launcher
     assert '"Open display"' in card
     assert '"Distros"' in view and '"Presets"' in view
     assert '"App"' not in launcher
     assert "Open an app on a new display" not in launcher
-    assert launcher.count("build_command_cell(") == 2
+    assert launcher.count("build_command_cell(") == 1
     assert "Save as preset…" in launcher
-    # An unknown distro still gets a path: the editable install cell starts as
-    # a placeholder instead of vanishing.
-    assert "def install_cell_placeholder" in parts
-    assert "No supported package manager was detected" in parts
 
 
 def test_cache_invalidation_on_remove_reset_rename():

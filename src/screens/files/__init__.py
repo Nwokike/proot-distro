@@ -12,7 +12,7 @@ import logging
 import flet as ft
 
 from components import containers_required_empty_state
-from components.banner_ad import page_tail
+from components.banner_ad import pooled_banner_ad
 from components.file_item import build_file_item
 from components.ui import search_field
 from core import theme, tokens
@@ -371,8 +371,9 @@ def FilesView(
         controls=[
             # Banner at the TOP (like Terminal) so the file list expands to the
             # bottom edge — the owner's ruling: "the space to show the current
-            # files and folders can expand to the edge of the screen".
-            page_tail(AD_SLOT_FILES, page),
+            # files and folders can expand to the edge of the screen". No
+            # nav-bar clearance here: the app shell already owns that below.
+            pooled_banner_ad(AD_SLOT_FILES, page),
             ft.Row(controls=container_chips, scroll=ft.ScrollMode.AUTO, spacing=tokens.SPACE_SM),
             nav_row,
             action_bar,

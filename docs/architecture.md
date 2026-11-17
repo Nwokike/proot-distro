@@ -1,4 +1,4 @@
-# Architecture (1.2.0)
+# Architecture (1.2.1)
 
 The app is a rootless Linux container host for Android, built with Flet 1.1
 (Python 3.14) and `proot-distro`.
@@ -18,13 +18,23 @@ Android app process
 Key decisions:
 
 - **Xvnc runs in the app**, not in the guest. A container needs no X packages for
-  a single app; a desktop session brings its own packages only for the DE.
+  any command; a desktop is just a command such as `startxfce4` typed into the
+  display sheet (there is no desktop installer, owner ruling 2026-11-17).
 - **The guest connects over shared loopback**: `DISPLAY=127.0.0.1:N`,
   `XAUTHORITY=/tmp/x11/xauth-N`, `PULSE_SERVER=127.0.0.1:4713`. Every new shell
   opened while a display runs inherits that environment.
 - **One session per `container:display`**, several displays per container are
   allowed. The stream server binds an ephemeral port and gates the viewer with a
-  per-session access code carried in the noVNC `path` setting.
+  per-session access code carried in the noVNC `path` setting. `/` serves a small
+  sign-in form when the code is missing, so a pasted Local/LAN URL is usable.
+- **The microphone is off at start.** The viewer toolbar is the only switch and
+  requests the Android grant when it is turned on.
+- **Guest notifications ride the session bus**: the display script starts
+  `dbus-monitor` for `org.freedesktop.Notifications`, the app tails the log and
+  forwards each `Notify` as a native Android notification (best effort).
+- **Android window details use pyjnius** (`core/android_ui.py`): the keyboard
+  overlays the viewer (ADJUST_NOTHING) and fullscreen hides the system bars,
+  because `page.window` is desktop-only in Flet.
 - **X11 only.** Xvnc is an X11 server: Wayland-only apps cannot render. This is
   stated in onboarding and Help rather than implied.
 - **Everything device-dependent is opt-in**: RFB loopback binding, view-only,

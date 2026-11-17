@@ -1,8 +1,8 @@
 """Building blocks of the display sheet (kept out of launcher_sheet.py).
 
 `launcher_sheet.py` owns the sheet's state and repaint; these are pure
-builders: the install cell's placeholder text, one pill of the App | Desktop
-switch, the shared "Run as / advanced" block, and the preset row and form.
+builders: a display setting pill, the shared display options, the shared
+"Run as / advanced" block, the preset row and form, and the sandbox helper.
 """
 
 from __future__ import annotations
@@ -15,49 +15,15 @@ from core.state import state
 from screens.display_sheets.common import _set_setting
 
 
-def install_cell_placeholder(container: str) -> str:
-    """The install cell's starting text when no package manager is known.
+def with_sandbox(cmd: str, enabled: bool) -> str:
+    """The command to run, with --no-sandbox appended when the row asks for it.
 
-    Every distro cannot have a recipe, but every one can still grow a desktop —
-    so the cell starts as a commented skeleton the user completes instead of
-    disappearing (owner ruling 2026-11-15)."""
-    return (
-        f"# No supported package manager was detected in {container}.\n"
-        "# Paste the install command for this distro below, then Run.\n"
-        "# It needs: a session (e.g. xfce4-session), a window manager,\n"
-        "# a panel, a terminal, xterm and an icon theme.\n"
-        "# The display server (Xvnc) and the viewer already ship with the app.\n"
-    )
-
-
-def mode_pill(label: str, icon: ft.IconData, active: bool, on_click) -> ft.Container:
-    """One pill of the Desktop | App switch (Home's Install | Search track)."""
-    return ft.Container(
-        content=ft.Row(
-            controls=[
-                ft.Icon(
-                    icon,
-                    size=tokens.ICON_SM,
-                    color=theme.WHITE if active else theme.text_dim(),
-                ),
-                ft.Text(
-                    label,
-                    size=tokens.FONT_SM,
-                    weight=ft.FontWeight.BOLD,
-                    color=theme.WHITE if active else theme.text_dim(),
-                ),
-            ],
-            spacing=tokens.SPACE_XS,
-            alignment=ft.MainAxisAlignment.CENTER,
-        ),
-        bgcolor=theme.primary() if active else theme.TRANSPARENT,
-        border_radius=tokens.RADIUS_SM,
-        padding=ft.Padding(tokens.SPACE_MD, tokens.SPACE_XS, tokens.SPACE_MD, tokens.SPACE_XS),
-        ink=True,
-        expand=True,
-        alignment=ft.Alignment.CENTER,
-        on_click=on_click,
-    )
+    The checkbox starts checked and belongs to each preset row: nothing is
+    injected silently, and unchecking it (for an app that rejects the flag)
+    removes it again."""
+    if enabled and "--no-sandbox" not in cmd:
+        return f"{cmd} --no-sandbox"
+    return cmd
 
 
 def settings_pill(
@@ -80,7 +46,7 @@ def settings_pill(
 
 
 def add_display_options(display_no: dict) -> list[ft.Control]:
-    """The display/viewer options, identical in BOTH modes of the sheet."""
+    """The display/viewer options (the ONE place the display number lives)."""
     from services.desk_service import manager as desk_manager
 
     from .common import _switch_row
@@ -171,7 +137,7 @@ def add_display_options(display_no: dict) -> list[ft.Control]:
 
 
 def run_as_block(fields: dict) -> ft.Control:
-    """The login/run options (upstream `pd login` flags) — shared by both modes."""
+    """The login/run options (upstream `pd login` flags)."""
 
     def _field(key: str, label: str, hint: str = "", multiline: bool = False) -> ft.TextField:
         tf = house_field(label=label, hint=hint, multiline=multiline, text_size=tokens.FONT_XS)
@@ -219,8 +185,29 @@ def run_as_block(fields: dict) -> ft.Control:
     )
 
 
-def preset_tile(preset: dict, on_run, on_delete) -> ft.Control:
-    """One saved preset: tap to start it, dustbin to forget it."""
+def preset_row(
+    preset: dict,
+    on_run,
+    on_delete,
+    *,
+    sandbox_checked: bool = False,
+    on_sandbox=None,
+) -> ft.Control:
+    """One saved preset: tap to start it, dustbin to forget it.
+
+    A user-made preset starts with its sandbox checkbox UNCHECKED (it is the
+    user's own command, unlike a detected app), and can be toggled freely."""
+    cmd = str(preset.get("cmd", ""))
+    subtitle = ft.Text(
+        with_sandbox(cmd, sandbox_checked),
+        size=tokens.FONT_XS,
+        color=theme.text_dim(),
+    )
+
+    def _toggle(e) -> None:
+        if on_sandbox is not None:
+            on_sandbox(bool(e.control.value))
+
     return ft.ListTile(
         leading=ft.Icon(ft.Icons.BOOKMARK_ROUNDED, color=theme.primary()),
         title=ft.Text(
@@ -228,17 +215,27 @@ def preset_tile(preset: dict, on_run, on_delete) -> ft.Control:
             size=tokens.FONT_SM,
             weight=ft.FontWeight.W_600,
         ),
-        subtitle=ft.Text(
-            str(preset.get("cmd", "")),
-            size=tokens.FONT_XS,
-            color=theme.text_dim(),
-        ),
+        subtitle=subtitle,
         on_click=on_run,
-        trailing=ft.IconButton(
-            icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
-            icon_size=tokens.ICON_SM,
-            tooltip="Delete preset",
-            on_click=on_delete,
+        trailing=ft.Row(
+            controls=[
+                ft.Checkbox(
+                    label="no sandbox",
+                    value=sandbox_checked,
+                    scale=tokens.SWITCH_SCALE,
+                    tooltip="Add --no-sandbox for this app (Chromium and Electron need it)",
+                    on_change=_toggle,
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
+                    icon_size=tokens.ICON_SM,
+                    tooltip="Delete preset",
+                    on_click=on_delete,
+                ),
+            ],
+            spacing=tokens.SPACE_XXS,
+            tight=True,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
     )
 

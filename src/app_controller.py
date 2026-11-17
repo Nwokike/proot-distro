@@ -67,6 +67,9 @@ class AppController(
         # Display tab re-reads the manager's lists immediately.
         self.desk_manager.on_sessions_changed = self._bump_display_sessions
         self.desk_manager.on_log_line = self._bump_display_log
+        # Guest D-Bus notifications (Electron, browsers, GTK apps) surface as
+        # native Android notifications through this callback.
+        self.desk_manager.on_guest_notification = self._on_guest_notification
         self.ad_service = ad_service.AdService(page)
         # android_default_icon: our app-icon silhouette (bundled via
         # tool.flet.android.res_dir), not the plugin's default Flet logo.
@@ -100,6 +103,9 @@ class AppController(
                     state.display_url = ""
                     self._wakelock(False)
                     self._lock_orientation(False)
+                    from core.android_ui import set_system_bars_hidden
+
+                    set_system_bars_hidden(False)
             await self._update_fgs()
 
         self.page.run_task(_apply_bump)
@@ -212,9 +218,7 @@ class AppController(
             start_x_display=self.start_x_display,
             retry_display=self.retry_display,
             resume_display=self.resume_display,
-            cancel_install_display=self.cancel_install_display,
             leave_display=self.leave_display,
-            install_display_support=self.install_display_support,
             show_display_logs=self.show_display_logs,
             set_display_fullscreen=self.set_display_fullscreen,
             share_display=self.share_display,

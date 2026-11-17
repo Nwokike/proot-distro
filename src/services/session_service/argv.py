@@ -125,6 +125,28 @@ def _harden_session(
                 except OSError:
                     pass
 
+        # pacman (Arch) sandbox: libalpm 7 restricts syscalls through seccomp
+        # and switches to a dedicated download user. Under proot both fail
+        # ("error restricting syscalls via seccomp: 22", "switching to sandbox
+        # user 'alpm' failed") and every sync dies. DisableSandbox is pacman's
+        # own documented switch for exactly this; the download user goes back
+        # to root (the only uid that exists here).
+        pacman_conf = rootfs_path / "etc" / "pacman.conf"
+        if pacman_conf.is_file():
+            try:
+                text = pacman_conf.read_text(encoding="utf-8", errors="replace")
+                original = text
+                if "DisableSandbox" not in text:
+                    if "[options]" in text:
+                        text = text.replace("[options]", "[options]\nDisableSandbox", 1)
+                    else:
+                        text = "[options]\nDisableSandbox\n" + text
+                text = re.sub(r"(?m)^\s*DownloadUser\s*=.*$", "DownloadUser = root", text)
+                if text != original:
+                    pacman_conf.write_text(text, encoding="utf-8")
+            except OSError:
+                pass
+
     # Hardened Android extensions (device-proven in M0 spike), injected right
     # before the inner guest command. Every proot flag is one token EXCEPT -q:
     # upstream emits `-q <absolute emulator path>` (arch.py get_emulator_args),

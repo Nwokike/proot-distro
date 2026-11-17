@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import posixpath
+import shlex
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -13,6 +14,8 @@ import flet as ft
 
 from components.ui import house_field
 from core import theme, tokens
+from screens.files.components import binary_preview_card
+from screens.files.run_dialog import open_file_run_dialog
 from services import container_files_service
 
 
@@ -49,6 +52,13 @@ async def handle_paste_image(page: ft.Page, container: str, guest_dir: str, refr
 
 
 def preview_file(page: ft.Page, container: str, file_path: str) -> None:
+    folder = posixpath.dirname(file_path) or "/"
+    name = posixpath.basename(file_path)
+    # Quoted, and every run uses the FILE'S folder as its working directory, so
+    # ./name resolves even outside /root (device 2026-11-17). The editable
+    # command lives in the Run dialog, so this preview stays: buttons + file.
+    command = shlex.quote(f"./{name}")
+
     async def _read() -> None:
         try:
             data = await asyncio.to_thread(
@@ -59,6 +69,12 @@ def preview_file(page: ft.Page, container: str, file_path: str) -> None:
                     src=data["base64"],
                     fit=ft.BoxFit.CONTAIN,
                     width=tokens.DIALOG_WIDTH_LG,
+                )
+            elif data["type"] == "binary":
+                dialog_content = binary_preview_card(
+                    name,
+                    str(data.get("mime") or "application/octet-stream"),
+                    int(data.get("size") or 0),
                 )
             else:
                 dialog_content = ft.TextField(
@@ -73,61 +89,90 @@ def preview_file(page: ft.Page, container: str, file_path: str) -> None:
 
             actions = [ft.TextButton("Close", on_click=lambda _e: page.pop_dialog())]
 
-            # Run-in-display affordance for non-directory files (owner ruling
-            # 2026-11-16): pre-fill `./<name>` and let the user edit the command.
-            name = posixpath.basename(file_path)
-            run_cmd = house_field(
-                label="Run command",
-                hint=f"./{name}",
-                value=f"./{name}",
-                expand=True,
-                dense=True,
-                text_size=tokens.FONT_XS,
-            )
+            def _run_in_dialog(_e) -> None:
+                page.pop_dialog()
+                open_file_run_dialog(page, container, folder, command)
 
             def _run_in_display(_e) -> None:
-                cmd = (run_cmd.value or "").strip()
-                if not cmd:
-                    return
                 page.pop_dialog()
                 controller = getattr(page, "_controller", None)
                 if controller is not None:
-                    page.run_task(controller.start_display, container, None, cmd, None, None)
+                    page.run_task(
+                        controller.start_display,
+                        container,
+                        command,
+                        None,
+                        {"work_dir": folder},
+                    )
 
             def _run_in_terminal(_e) -> None:
-                cmd = (run_cmd.value or "").strip()
-                if not cmd:
-                    return
                 page.pop_dialog()
                 controller = getattr(page, "_controller", None)
-                if controller is not None:
-                    page.run_task(controller.open_session, container)
+                if controller is None:
+                    return
 
-                    # Write the command into the shell after a short delay.
-                    async def _write():
-                        import asyncio as _a
+                async def _open_and_write() -> None:
+                    # The shell starts in the file's folder; wait until it is
+                    # actually ready before typing (a proot shell can take
+                    # seconds on emulated images, which the old fixed 1.5 s
+                    # delay silently missed).
+                    await controller.open_session_with_options(container, {"work_dir": folder})
+                    from core.state import state
 
-                        await _a.sleep(1.5)
-                        entry = controller.session_manager.entries.get(container)
-                        if entry is not None and entry.session is not None:
-                            entry.session.write(f"{cmd}\n".encode())
+                    key = state.active_session
+                    entry = None
+                    for _ in range(80):
+                        entry = controller.session_manager.entries.get(key or "")
+                        if entry is not None and entry.ready and entry.session is not None:
+                            break
+                        await asyncio.sleep(0.25)
+                    if entry is not None and entry.session is not None:
+                        entry.session.write(f"{command}\n".encode())
 
-                    page.run_task(_write)
+                page.run_task(_open_and_write)
 
-            actions.append(
-                ft.FilledButton(
-                    "Run in display",
-                    icon=ft.Icons.PLAY_CIRCLE_ROUNDED,
-                    on_click=_run_in_display,
-                )
+            # Three buttons, then the file. The run controls sit at the TOP of
+            # the dialog body (owner ruling 2026-11-17): the soft keyboard can
+            # push bottom actions out of reach, and Run is the primary action.
+            run_actions = ft.Row(
+                controls=[
+                    ft.FilledButton(
+                        "Run",
+                        icon=ft.Icons.PLAY_CIRCLE_ROUNDED,
+                        on_click=_run_in_dialog,
+                        height=tokens.CONTROL_SM,
+                        tooltip="Run here and watch the output (no screen switch)",
+                    ),
+                    ft.OutlinedButton(
+                        "Display",
+                        icon=ft.Icons.DESKTOP_WINDOWS_ROUNDED,
+                        on_click=_run_in_display,
+                        height=tokens.CONTROL_SM,
+                        tooltip="Run in the viewer (GUI apps)",
+                    ),
+                    ft.OutlinedButton(
+                        "Terminal",
+                        icon=ft.Icons.TERMINAL_ROUNDED,
+                        on_click=_run_in_terminal,
+                        height=tokens.CONTROL_SM,
+                        tooltip="Run in an interactive shell (full-screen apps)",
+                    ),
+                ],
+                spacing=tokens.SPACE_XS,
+                wrap=False,
+                scroll=ft.ScrollMode.AUTO,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
             )
-            actions.append(
-                ft.OutlinedButton(
-                    "Run in terminal",
-                    icon=ft.Icons.TERMINAL_ROUNDED,
-                    on_click=_run_in_terminal,
+
+            content_controls: list[ft.Control] = []
+            if data["type"] != "image":
+                content_controls.extend(
+                    [
+                        run_actions,
+                        ft.Divider(height=tokens.HAIRLINE, color=theme.glass_border()),
+                    ]
                 )
-            )
+            content_controls.append(dialog_content)
 
             page.show_dialog(
                 ft.AlertDialog(
@@ -138,10 +183,7 @@ def preview_file(page: ft.Page, container: str, file_path: str) -> None:
                     ),
                     content=ft.Container(
                         content=ft.Column(
-                            controls=[
-                                dialog_content,
-                                run_cmd,
-                            ],
+                            controls=content_controls,
                             spacing=tokens.SPACE_SM,
                             tight=True,
                         ),
