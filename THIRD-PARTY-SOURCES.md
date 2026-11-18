@@ -36,7 +36,7 @@ closure, repackaged verbatim from the Termux repositories:
 
 | Package | Version | License | Upstream Source | Termux Pool URL | SHA-256 |
 |---|---|---|---|---|---|
-| `tigervnc` | 1.16.2-1 | GPL-2.0-or-later | [tigervnc](https://tigervnc.org) | [pool/main/t/tigervnc/tigervnc_1.16.2-1_aarch64.deb](https://packages.termux.dev/apt/termux-x11/pool/main/t/tigervnc/tigervnc_1.16.2-1_aarch64.deb) | `3d844963554f7b5b76527312329e8834ff060d6e3512b750044b79de21aa3e11` |
+| `tigervnc` | 1.16.2-2 | GPL-2.0-or-later | [tigervnc](https://tigervnc.org) | [pool/main/t/tigervnc/tigervnc_1.16.2-2_aarch64.deb](https://packages.termux.dev/apt/termux-x11/pool/main/t/tigervnc/tigervnc_1.16.2-2_aarch64.deb) | `8dacf03fb8a132e56745316c3c0308f6deb7dca252f9e3fd5a4166444d2f8109` |
 | `xorg-xkbcomp` | 1.5.0 | MIT | [xorg-xkbcomp](https://gitlab.freedesktop.org/xorg/app/xkbcomp) | [pool/main/x/xorg-xkbcomp/xorg-xkbcomp_1.5.0_aarch64.deb](https://packages.termux.dev/apt/termux-x11/pool/main/x/xorg-xkbcomp/xorg-xkbcomp_1.5.0_aarch64.deb) | `ee52d69758a8fcebc2d7f0bd1805a300f18a3472d43fc2eb45867463448cb4a9` |
 | `openssl` | 1:3.6.5 | Apache-2.0 | [openssl](https://www.openssl.org) | [pool/main/o/openssl/openssl_1:3.6.5_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/o/openssl/openssl_1:3.6.5_aarch64.deb) | `a2fb7856875e63ef6b90442752e05974813372c3ca86d2513a78ea43c67a0f8b` |
 | `libjpeg-turbo` | 3.2.1 | BSD-3-Clause | [libjpeg-turbo](https://libjpeg-turbo.org) | [pool/main/libj/libjpeg-turbo/libjpeg-turbo_3.2.1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libj/libjpeg-turbo/libjpeg-turbo_3.2.1_aarch64.deb) | `3e46721f2fbb10d5f53a45b99e2549d18a34ca3751aa4b704b3404fcdea5f8e7` |

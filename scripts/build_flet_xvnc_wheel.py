@@ -138,8 +138,8 @@ _PINNED_SOURCES = {
         "platform": "arm64_v8a",
         "packages": {
             "tigervnc": (
-                "pool/main/t/tigervnc/tigervnc_1.16.2-1_aarch64.deb",
-                "3d844963554f7b5b76527312329e8834ff060d6e3512b750044b79de21aa3e11",
+                "pool/main/t/tigervnc/tigervnc_1.16.2-2_aarch64.deb",
+                "8dacf03fb8a132e56745316c3c0308f6deb7dca252f9e3fd5a4166444d2f8109",
             ),
             "xorg-xkbcomp": (
                 "pool/main/x/xorg-xkbcomp/xorg-xkbcomp_1.5.0_aarch64.deb",
@@ -281,8 +281,8 @@ _PINNED_SOURCES = {
         "platform": "x86_64",
         "packages": {
             "tigervnc": (
-                "pool/main/t/tigervnc/tigervnc_1.16.2-1_x86_64.deb",
-                "bdae705e72a18c74609a56b711b0e631828a97d5c1f6513ca9cf0248f6df77b1",
+                "pool/main/t/tigervnc/tigervnc_1.16.2-2_x86_64.deb",
+                "a4e1ed87b065cbff0c86ae26ab4d68fdd99e1943108c3063a7398780f5b4c3eb",
             ),
             "xorg-xkbcomp": (
                 "pool/main/x/xorg-xkbcomp/xorg-xkbcomp_1.5.0_x86_64.deb",

@@ -119,7 +119,7 @@ PA_UPSTREAMS = {
 
 
 def _deb_bits(rel: str) -> tuple[str, str, str]:
-    """pool/main/t/tigervnc/tigervnc_1.16.2-1_aarch64.deb → (name, version, arch)."""
+    """pool/main/t/tigervnc/tigervnc_1.16.2-2_aarch64.deb → (name, version, arch)."""
     filename = rel.rsplit("/", 1)[-1].removesuffix(".deb")
     pkg, version, _arch = filename.rsplit("_", 2)
     return pkg, version, _arch

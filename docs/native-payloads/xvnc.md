@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Upstream | TigerVNC 1.16.2 (Termux `tigervnc` 1.16.2-1, x11 repo) |
+| Upstream | TigerVNC 1.16.2 (Termux `tigervnc` 1.16.2-2, x11 repo) |
 | Builder | `scripts/build_flet_xvnc_wheel.py` |
 | App pin | `flet-xvnc==1.16.2` |
 | Ships | `libXvnc.so`, `libxkbcomp.so`, 33 ELF closure libs, `data/xkb/` (xkeyboard-config 2.49), `data/fonts/misc/` (Latin bitmap fonts + generated `fonts.dir`), `data/fonts/ttf/` (DejaVu TrueType) |
