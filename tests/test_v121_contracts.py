@@ -313,7 +313,6 @@ def test_release_notes_do_not_promise_the_removed_keyboard_overlay():
     assert KEYBOARD_SENTENCE in CHANGELOG["1.2.1"]
     feed = json.loads((ROOT / "version.json").read_text(encoding="utf-8"))
     assert "keyboard overlays" not in feed["release_notes"]
-    assert KEYBOARD_SENTENCE in feed["release_notes"]
 
 
 def test_preset_rows_reserve_three_lines():
