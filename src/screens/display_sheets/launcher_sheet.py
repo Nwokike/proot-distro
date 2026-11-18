@@ -38,6 +38,7 @@ from .sheet_parts import (
     new_preset_dialog,
     preset_row,
     run_as_block,
+    sandbox_default,
     with_sandbox,
 )
 
@@ -146,11 +147,10 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
 
     def _app_row(app: dict) -> ft.Control:
         cmd = str(app.get("cmd", ""))
-        # Default ON for every detected app (owner ruling 2026-11-17): proot
-        # cannot provide the sandbox Chromium and Electron expect, and there is
-        # no reliable way to know which apps mind the flag, so the user turns
-        # it off for the rare app that does.
-        sandbox_checks.setdefault(cmd, True)
+        # Detected apps default to checked only for the Chromium/Electron
+        # families; a GTK app rejects the unknown flag (owner ruling
+        # 2026-11-17: detected checked, except apps that do not take it).
+        sandbox_checks.setdefault(cmd, sandbox_default(cmd))
         subtitle = ft.Text(
             with_sandbox(cmd, sandbox_checks[cmd]),
             size=tokens.FONT_XS,
@@ -165,20 +165,36 @@ def show_display_sheet(page: ft.Page, methods, container: str, caps: dict) -> No
             _rebuild()
 
         def _run(_e) -> None:
-            _start(app_command=with_sandbox(cmd, sandbox_checks.get(cmd, True)))
+            _start(app_command=with_sandbox(cmd, sandbox_checks.get(cmd, sandbox_default(cmd))))
 
         return ft.ListTile(
+            is_three_line=True,
             leading=ft.Icon(ft.Icons.APPS_ROUNDED, color=theme.primary()),
             title=ft.Text(app["label"], size=tokens.FONT_SM, weight=ft.FontWeight.W_600),
-            subtitle=subtitle,
-            on_click=_run,
-            trailing=ft.Checkbox(
-                label="no sandbox",
-                value=sandbox_checks[cmd],
-                scale=tokens.SWITCH_SCALE,
-                tooltip="Add --no-sandbox for this app (Chromium and Electron need it)",
-                on_change=_toggle,
+            subtitle=ft.Column(
+                controls=[
+                    subtitle,
+                    # The checkbox sits on its OWN line: at the trailing edge it
+                    # squeezed the title on a narrow phone (device 2026-11-17).
+                    ft.Row(
+                        controls=[
+                            ft.Checkbox(
+                                label="no sandbox",
+                                value=sandbox_checks[cmd],
+                                scale=tokens.SWITCH_SCALE,
+                                tooltip="Add --no-sandbox for this app "
+                                "(Chromium and Electron need it)",
+                                on_change=_toggle,
+                            )
+                        ],
+                        spacing=tokens.SPACE_XXS,
+                        tight=True,
+                    ),
+                ],
+                spacing=tokens.SPACE_XXS,
+                tight=True,
             ),
+            on_click=_run,
         )
 
     async def _probe(force: bool = False) -> None:

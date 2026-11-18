@@ -111,6 +111,19 @@ def _harden_session(
                     continue
             sysdata_binds.append(f"--bind={stub}:/proc/sys/kernel/{name}")
 
+        # Bundled DejaVu TrueType fonts: Xft/fontconfig apps (Firefox, Electron,
+        # GTK) read scalable fonts from the guest's ~/.fonts. The app stages
+        # them with the display payload; a minimal container ships none, so
+        # every glyph rendered as garbage (device 2026-11-17).
+        ttf_dir = storage_paths.support_root() / "runtime" / "ttf"
+        if ttf_dir.is_dir():
+            guest_fonts = rootfs_path / "root" / ".fonts"
+            try:
+                guest_fonts.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                pass
+            sysdata_binds.append(f"--bind={ttf_dir}:/root/.fonts")
+
         # APT reliability: under proot on Android, apt's sandbox user (_apt)
         # cannot read cache archives, and dpkg fsync slows down operations.
         apt_conf_dir = rootfs_path / "etc" / "apt" / "apt.conf.d"

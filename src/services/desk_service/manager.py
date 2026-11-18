@@ -49,6 +49,9 @@ class DeskManager(SpawnMixin, AudioMixin, ProcessMixin):
         # One PulseAudio daemon for the whole app (guest apps reach it over
         # loopback); started with the first display, stopped with the last.
         self._pulse_process: subprocess.Popen | None = None
+        # Serializes daemon start/stop/reconfigure: concurrent display starts
+        # could otherwise orphan a daemon holding port 4713.
+        self._pulse_lock = threading.RLock()
         # Fired on every session-set/status transition (start, running, stop,
         # error) so the UI can re-read running()/visible() reactively — the
         # controller wires this to an observable rev bump.
@@ -199,6 +202,12 @@ class DeskManager(SpawnMixin, AudioMixin, ProcessMixin):
             # the error wiped).
             self._kill_session(session)
             raise RuntimeError(session.error or "the display failed to start")
+        if session.status is not DeskStatus.STARTING:
+            # Stop (or a crash) finished while the spawn waits were running:
+            # _stop_sync already killed the tree and set IDLE. Never start a
+            # stream server or flip this session to RUNNING (race fixed
+            # 2026-11-17).
+            return session
         # The stream server runs IN THIS PROCESS — its start() sets up the
         # aiohttp site and returns; the RFB bytes flow through the proxy task.
         try:
@@ -339,10 +348,13 @@ class DeskManager(SpawnMixin, AudioMixin, ProcessMixin):
             return [s for s in self._sessions.values() if s.container == container]
 
     def pulse_server_alive(self) -> bool:
-        """True while the app-wide PulseAudio daemon runs. Public accessor —
-        the actions layer must never read the private process handle."""
+        """True while the app-wide PulseAudio daemon runs AND answers its TCP
+        port. A started-but-dead daemon must not leak PULSE_SERVER into the
+        guest environment (device 2026-11-17)."""
         process = self._pulse_process
-        return process is not None and process.poll() is None
+        if process is None or process.poll() is not None:
+            return False
+        return xvnc_runtime.probe_pulseaudio()
 
     def guest_display_env(self, container: str) -> dict[str, str]:
         """DISPLAY/XAUTHORITY/PULSE_SERVER for a NEW shell on `container` while

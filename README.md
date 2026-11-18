@@ -154,7 +154,7 @@ reconnects. Under it, the output panel streams the guest log.
   <tr>
     <td>
       <b>Real gestures, real keyboard.</b><br/><br/>
-      One finger drags the mouse, two fingers scroll, pinch zooms. The keyboard opens through the noVNC panel and the display keeps its size while it is up. The output panel below the viewer shows the guest log, with a Copy button so a failure can be reported.
+      One finger drags the mouse, two fingers scroll, pinch zooms. The keyboard opens through the noVNC panel. The output panel below the viewer shows the guest log, with a Copy button so a failure can be reported.
     </td>
   </tr>
 </table>
@@ -220,6 +220,7 @@ tar format.
 - **Storage and cache**: containers and the OCI cache are measured separately, with sweep, build cache and app cache actions.
 - **Build and push**: build a Dockerfile into an OCI image and push it to a registry from Settings, Developer tools.
 - **Guest notifications**: apps inside the display can raise their notifications as native Android ones, best effort.
+- **Bundled fonts**: core X fonts plus DejaVu TrueType, exposed to the guest, so Firefox and Electron apps render text without installing anything.
 - **Report a problem**: copy the app log or a display log from the app and open GitHub Issues in one tap.
 
 ## Display options

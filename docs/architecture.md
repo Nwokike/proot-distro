@@ -32,8 +32,7 @@ Key decisions:
 - **Guest notifications ride the session bus**: the display script starts
   `dbus-monitor` for `org.freedesktop.Notifications`, the app tails the log and
   forwards each `Notify` as a native Android notification (best effort).
-- **Android window details use pyjnius** (`core/android_ui.py`): the keyboard
-  overlays the viewer (ADJUST_NOTHING) and fullscreen hides the system bars,
+- **Fullscreen hides the system bars via pyjnius** (`core/android_ui.py`),
   because `page.window` is desktop-only in Flet.
 - **X11 only.** Xvnc is an X11 server: Wayland-only apps cannot render. This is
   stated in onboarding and Help rather than implied.

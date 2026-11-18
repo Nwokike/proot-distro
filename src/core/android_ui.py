@@ -1,16 +1,9 @@
 """Android window control through pyjnius (guarded: a no-op off-device).
 
-Two things Flet cannot express on Android from Python:
-
-- **Keyboard overlay**: the activity's default soft-input mode resizes the
-  Flutter view, so opening the keyboard in the display viewer shrinks the
-  WebView and noVNC re-fits the whole desktop into a sliver (device
-  2026-11-17: "the whole screen moves up and it's now tiny"). ADJUST_NOTHING
-  lets the keyboard sit ON TOP of the viewer, which is what the user expects.
-- **Real fullscreen**: `page.window.full_screen` is desktop-only (mobile apps
-  are embedded), so our orientation-based fullscreen still showed the status
-  and navigation bars. Hiding the system bars makes the viewer actually
-  full-screen, and restoring them brings the bars back on exit.
+`page.window.full_screen` is desktop-only (mobile apps are embedded), so our
+orientation-based fullscreen still showed the status and navigation bars.
+Hiding the system bars makes the viewer actually full-screen, and restoring
+them brings the bars back on exit.
 
 Every call is best-effort: no pyjnius (desktop/dev) or a refused call only
 logs at debug level.
@@ -53,25 +46,6 @@ def _run_on_ui(activity, action: Callable[[], None]) -> None:
         activity.runOnUiThread(_UiRunnable())
     except Exception as exc:
         logger.debug("android ui runnable unavailable: %s", exc)
-
-
-def set_keyboard_overlay(overlay: bool) -> None:
-    """ADJUST_NOTHING while the viewer is mounted; ADJUST_RESIZE afterwards."""
-    activity = _activity()
-    if activity is None:
-        return
-    try:
-        from jnius import autoclass
-
-        params = autoclass("android.view.WindowManager$LayoutParams")
-        mode = params.SOFT_INPUT_ADJUST_NOTHING if overlay else params.SOFT_INPUT_ADJUST_RESIZE
-
-        def _apply() -> None:
-            activity.getWindow().setSoftInputMode(mode)
-
-        _run_on_ui(activity, _apply)
-    except Exception as exc:
-        logger.debug("soft input mode not changed: %s", exc)
 
 
 def set_system_bars_hidden(hidden: bool) -> None:

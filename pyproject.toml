@@ -5,10 +5,10 @@ description = "Run Debian, Ubuntu, Alpine and any Docker image on your phone; te
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "flet>=1.1.2",
-    "flet-ads>=1.1.2",
-    "flet-notifications>=1.1.2",
-    "flet-webview>=1.1.2",
+    "flet==1.1.2",
+    "flet-ads==1.1.2",
+    "flet-notifications==1.1.2",
+    "flet-webview==1.1.2",
     "httpx>=0.28.1",
     "flet-terminal>=0.4.2",
     "proot-distro>=5.10.3",

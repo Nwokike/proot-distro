@@ -36,7 +36,13 @@ from .xvnc_paths import (
     xauth_bytes,
     xvnc_binary,
 )
-from .xvnc_payload import ensure_font_dir, ensure_pa_libs, ensure_xkb_dir, guest_font_dirs
+from .xvnc_payload import (
+    ensure_font_dir,
+    ensure_pa_libs,
+    ensure_ttf_dir,
+    ensure_xkb_dir,
+    guest_font_dirs,
+)
 from .xvnc_spawn import spawn
 
 __all__ = [
@@ -51,6 +57,7 @@ __all__ = [
     "ensure_lock_dir",
     "ensure_pa_libs",
     "ensure_prefix_bin",
+    "ensure_ttf_dir",
     "ensure_xkb_dir",
     "guest_cookie_path",
     "guest_font_dirs",

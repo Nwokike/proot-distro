@@ -33,13 +33,19 @@ class DisplayLogsMixin:
 
         self.page.run_task(_do)
 
-    def _report(self) -> None:
+    def _report(self, text: str) -> None:
         """Copy the log, then open the issue tracker to paste it."""
-        self.page.run_task(launch_url, GITHUB_ISSUES_URL, self.page)
 
-        from components.snack import show_snack
+        async def _do() -> None:
+            from components.snack import show_snack
 
-        show_snack(self.page, "Paste the copied log into the new GitHub issue")
+            clipboard = getattr(self.page, "clipboard", None)
+            if clipboard is not None:
+                await clipboard.set(text)
+            await launch_url(GITHUB_ISSUES_URL, self.page)
+            show_snack(self.page, "Log copied. Paste it into the new GitHub issue")
+
+        self.page.run_task(_do)
 
     async def show_display_logs(self, key: str) -> None:
         session = self.desk_manager.get(key)
@@ -79,7 +85,7 @@ class DisplayLogsMixin:
                     ft.TextButton(
                         "Report on GitHub",
                         icon=ft.Icons.BUG_REPORT_ROUNDED,
-                        on_click=lambda _e: self._report(),
+                        on_click=lambda _e: self._report(tail),
                     ),
                     ft.TextButton("Close", on_click=lambda _e: self.page.pop_dialog()),
                 ],

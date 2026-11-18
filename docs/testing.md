@@ -79,7 +79,7 @@ Device: ____________________  Android: ______  Build: 1.2.1 (build 5)
 - [ ] Build and push: the architecture list matches the app's derived list (host reads `host (aarch64)` on a 64-bit phone).
 - [ ] Environment Probe shows passed or check; tapping opens the detail.
 - [ ] Default environment: add `FOO=bar` and Save; a new shell prints it with `echo $FOO`.
-- [ ] Debugging output shows the last 20 lines, Copy works, Clear empties it, Full log opens the dialog.
+- [ ] Debugging output shows the last 20 lines inline, Copy works, Clear empties it, and Full log opens the dialog with up to 500 lines.
 - [ ] Debugging output → Report on GitHub copies the log and opens the issue tracker; Help → "Report a problem on GitHub" copies the diagnostics and opens it; a display's Logs dialog has Copy log and Report on GitHub; the Developer card has Report.
 - [ ] Storage shows the total with "containers X · OCI cache Y"; Sweep, Clear build cache, Clear app cache and Clear all cache each confirm first.
 - [ ] Narrow screen or split view: Terminal defaults, Notifications, Privacy, Running processes, Storage rows and the About rows all drop **under** the title.
@@ -100,7 +100,7 @@ Device: ____________________  Android: ______  Build: 1.2.1 (build 5)
 
 - [ ] **Two-finger drag** scrolls inside the guest app. **One finger** drags the mouse. **Pinch** zooms.
 - [ ] The gesture reminder appears once when the viewer opens.
-- [ ] **Fullscreen keyboard**: enter fullscreen (orientation lock), open the on-screen keyboard. The keyboard covers the bottom of the viewer; the desktop keeps its size and does not shrink or jump.
+- [ ] **Fullscreen keyboard**: enter fullscreen (orientation lock), open the on-screen keyboard. Typing reaches the guest app.
 - [ ] **System bars**: in fullscreen the status and navigation bars hide; leaving fullscreen brings them back.
 - [ ] **Mic button**: the mic starts off. Tap it: Android asks for the microphone permission once; on Allow the snack says "microphone on". Tap again: "microphone off". If you deny, the snack says the permission was denied and the mic stays off.
 - [ ] Toolbar order: Back, Title, Terminal, Mic, Fullscreen, More.

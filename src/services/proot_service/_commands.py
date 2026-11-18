@@ -15,7 +15,10 @@ from ._guard import _no_process_exit
 logger = logging.getLogger(__name__)
 
 
-_GET_PROOT_CMD_LOCK = threading.Lock()
+# Reentrant: the late-payload retry re-enters this function from INSIDE the
+# lock below (the "proot utility does not exist" device case). A plain Lock
+# deadlocked every later display and shell open.
+_GET_PROOT_CMD_LOCK = threading.RLock()
 
 
 def _call_get_proot_cmd(module_name: str, fn_name: str, namespace, _retry: bool = True) -> str:

@@ -119,6 +119,16 @@ _DATA_PAYLOADS: tuple[tuple[str, str, str], ...] = (
         "data/data/com.termux/files/usr/share/xkeyboard-config-2/",
         "flet_xvnc/data/xkb/",
     ),
+    # DejaVu TrueType fonts: Firefox and every Xft/fontconfig app needs a
+    # scalable font. The core bitmap fonts above only serve X core font
+    # clients; a minimal container ships no TTF, so Firefox rendered every
+    # glyph as garbage (device 2026-11-17). Staged and bound to the guest's
+    # ~/.fonts at run time.
+    (
+        "ttf-dejavu",
+        "data/data/com.termux/files/usr/share/fonts/TTF/",
+        "flet_xvnc/data/fonts/ttf/",
+    ),
 )
 
 # ── the pin set (bump a source = one edit here) ──────────────────────────────
@@ -194,6 +204,11 @@ _PINNED_SOURCES = {
             "xkeyboard-config": (
                 "pool/main/x/xkeyboard-config/xkeyboard-config_2.49_all.deb",
                 "9523dbe04fd7fba2218451813041872957dca459d86dfed9c23a3b247e8fa371",
+            ),
+            # Arch-independent: one deb serves both ABIs.
+            "ttf-dejavu": (
+                "pool/main/t/ttf-dejavu/ttf-dejavu_2.37-8_all.deb",
+                "3fa9352d528cb19aebcdd2de5d1fb0cb67b201be3ae264207fc1a277d2cfd6da",
             ),
             "libx11": (
                 "pool/main/libx/libx11/libx11_1.8.14_aarch64.deb",
@@ -333,6 +348,11 @@ _PINNED_SOURCES = {
                 "pool/main/x/xkeyboard-config/xkeyboard-config_2.49_all.deb",
                 "9523dbe04fd7fba2218451813041872957dca459d86dfed9c23a3b247e8fa371",
             ),
+            # Arch-independent: one deb serves both ABIs.
+            "ttf-dejavu": (
+                "pool/main/t/ttf-dejavu/ttf-dejavu_2.37-8_all.deb",
+                "3fa9352d528cb19aebcdd2de5d1fb0cb67b201be3ae264207fc1a277d2cfd6da",
+            ),
             "libx11": (
                 "pool/main/libx/libx11/libx11_1.8.14_x86_64.deb",
                 "e155dc1171b12a3f625e8516aa195d3c4ac63b850b079b203029b1b0874d497d",
@@ -429,6 +449,16 @@ _FONT_ALLOWLIST_RE = re.compile(
 
 def _font_allowed(name: str) -> bool:
     return bool(_FONT_ALLOWLIST_RE.match(name.rsplit("/", 1)[-1]))
+
+
+# The APK is already large; ship only the three DejaVu faces Firefox and GTK
+# actually use (Sans, Sans Bold, Sans Mono: about 1 MB), not the whole
+# ttf-dejavu package (~10 MB).
+_TTF_ALLOWED = frozenset({"DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSansMono.ttf"})
+
+
+def _ttf_allowed(name: str) -> bool:
+    return name.rsplit("/", 1)[-1] in _TTF_ALLOWED
 
 
 def _pcf_font_name(raw: bytes) -> str | None:
@@ -683,6 +713,8 @@ def main() -> int:
             members = {k: v for k, v in extracted[pkg].items() if k.startswith(src_prefix)}
             if "data/fonts/misc" in dest_prefix:
                 members = {k: v for k, v in members.items() if _font_allowed(k)}
+            if "data/fonts/ttf" in dest_prefix:
+                members = {k: v for k, v in members.items() if _ttf_allowed(k)}
             if not members:
                 raise SystemExit(f"{pkg}: no files under {src_prefix}")
             for name, blob in sorted(members.items()):

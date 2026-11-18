@@ -22,7 +22,7 @@ from core import styles, theme, tokens
 from core.constants import AD_SLOT_DISPLAY
 from core.state import state
 from screens.display_rows import failed_rows, session_rows
-from screens.display_sheets.sheet_parts import with_sandbox
+from screens.display_sheets.sheet_parts import sandbox_default, with_sandbox
 from state.controller_ctx import ControllerMethodsCtx
 
 GESTURE_HINT = "In the viewer: one finger drags the mouse, two fingers scroll, pinch zooms."
@@ -182,6 +182,7 @@ def DisplayView() -> ft.Control:
             )
 
         return ft.ListTile(
+            is_three_line=True,
             leading=ft.Icon(ft.Icons.BOOKMARK_ROUNDED, color=theme.primary()),
             title=ft.Text(
                 str(preset.get("name", "")),
@@ -189,34 +190,45 @@ def DisplayView() -> ft.Control:
                 weight=ft.FontWeight.W_600,
                 color=theme.text(),
             ),
-            subtitle=ft.Text(
-                " · ".join(part for part in (with_sandbox(cmd, checked), container_name) if part),
-                size=tokens.FONT_XS,
-                color=theme.text_dim(),
-            ),
-            on_click=_run,
-            trailing=ft.Row(
+            subtitle=ft.Column(
                 controls=[
-                    ft.Checkbox(
-                        label="no sandbox",
-                        value=checked,
-                        scale=tokens.SWITCH_SCALE,
-                        tooltip="Add --no-sandbox for this app (Chromium and Electron need it)",
-                        on_change=lambda e, c=cmd: set_sandbox(
-                            {**sandbox, c: bool(e.control.value)}
+                    ft.Text(
+                        " · ".join(
+                            part for part in (with_sandbox(cmd, checked), container_name) if part
                         ),
+                        size=tokens.FONT_XS,
+                        color=theme.text_dim(),
                     ),
-                    ft.IconButton(
-                        icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
-                        icon_size=tokens.ICON_SM,
-                        tooltip="Delete preset",
-                        on_click=_delete_preset(str(preset.get("name", ""))),
+                    # Checkbox and delete share a line UNDER the text, never
+                    # the trailing edge (narrow-screen house rule).
+                    ft.Row(
+                        controls=[
+                            ft.Checkbox(
+                                label="no sandbox",
+                                value=checked,
+                                scale=tokens.SWITCH_SCALE,
+                                tooltip="Add --no-sandbox for this app "
+                                "(Chromium and Electron need it)",
+                                on_change=lambda e, c=cmd: set_sandbox(
+                                    {**sandbox, c: bool(e.control.value)}
+                                ),
+                            ),
+                            ft.IconButton(
+                                icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
+                                icon_size=tokens.ICON_SM,
+                                tooltip="Delete preset",
+                                on_click=_delete_preset(str(preset.get("name", ""))),
+                            ),
+                        ],
+                        spacing=tokens.SPACE_XXS,
+                        tight=True,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
                 ],
                 spacing=tokens.SPACE_XXS,
                 tight=True,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
+            on_click=_run,
         )
 
     def _display_card(name: str) -> ft.Control:
@@ -278,21 +290,23 @@ def DisplayView() -> ft.Control:
     for container_name, apps in sorted((st.detected_apps or {}).items()):
         for app in apps:
             cmd = str(app.get("cmd", ""))
-            # Default ON for every detected app; the user can uncheck an app
-            # that rejects the flag. The subtitle shows the real command.
-            checked = bool(sandbox.get(cmd, True))
+            # Detected apps default to checked only for Chromium/Electron
+            # families; a GTK app rejects the unknown flag. The subtitle shows
+            # the real command.
+            checked = bool(sandbox.get(cmd, sandbox_default(cmd)))
 
             def _run_detected(_e, c=container_name, command=cmd) -> None:
                 page.run_task(
                     methods.start_display,
                     c,
-                    with_sandbox(command, bool(sandbox.get(command, True))),
+                    with_sandbox(command, bool(sandbox.get(command, sandbox_default(command)))),
                     None,
                     None,
                 )
 
             detected_rows.append(
                 ft.ListTile(
+                    is_three_line=True,
                     leading=ft.Icon(ft.Icons.APPS_ROUNDED, color=theme.primary()),
                     title=ft.Text(
                         app["label"],
@@ -300,23 +314,44 @@ def DisplayView() -> ft.Control:
                         weight=ft.FontWeight.W_600,
                         color=theme.text(),
                     ),
-                    subtitle=ft.Text(
-                        " · ".join(
-                            part for part in (with_sandbox(cmd, checked), container_name) if part
-                        ),
-                        size=tokens.FONT_XS,
-                        color=theme.text_dim(),
+                    subtitle=ft.Column(
+                        controls=[
+                            ft.Text(
+                                " · ".join(
+                                    part
+                                    for part in (
+                                        with_sandbox(cmd, checked),
+                                        container_name,
+                                    )
+                                    if part
+                                ),
+                                size=tokens.FONT_XS,
+                                color=theme.text_dim(),
+                            ),
+                            # The checkbox sits on its OWN line: pushed to the
+                            # trailing edge it squeezed the title on a narrow
+                            # phone (device 2026-11-17).
+                            ft.Row(
+                                controls=[
+                                    ft.Checkbox(
+                                        label="no sandbox",
+                                        value=checked,
+                                        scale=tokens.SWITCH_SCALE,
+                                        tooltip="Add --no-sandbox for this app "
+                                        "(Chromium and Electron need it)",
+                                        on_change=lambda e, c=cmd: set_sandbox(
+                                            {**sandbox, c: bool(e.control.value)}
+                                        ),
+                                    )
+                                ],
+                                spacing=tokens.SPACE_XXS,
+                                tight=True,
+                            ),
+                        ],
+                        spacing=tokens.SPACE_XXS,
+                        tight=True,
                     ),
                     on_click=_run_detected,
-                    trailing=ft.Checkbox(
-                        label="no sandbox",
-                        value=checked,
-                        scale=tokens.SWITCH_SCALE,
-                        tooltip="Add --no-sandbox for this app (Chromium and Electron need it)",
-                        on_change=lambda e, c=cmd: set_sandbox(
-                            {**sandbox, c: bool(e.control.value)}
-                        ),
-                    ),
                 )
             )
     preset_rows: list[ft.Control] = list(detected_rows)

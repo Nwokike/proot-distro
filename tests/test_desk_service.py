@@ -203,6 +203,7 @@ def _stub_runtime(monkeypatch):
         lambda cookie, display, path: path,
     )
     monkeypatch.setattr(desk_manager.xvnc_runtime, "ensure_xkb_dir", lambda: Path("/tmp/xkb"))
+    monkeypatch.setattr(desk_manager.xvnc_runtime, "ensure_ttf_dir", lambda: None)
     monkeypatch.setattr(
         desk_manager.xvnc_runtime,
         "xvnc_command",

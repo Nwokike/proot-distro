@@ -18,12 +18,44 @@ from screens.display_sheets.common import _set_setting
 def with_sandbox(cmd: str, enabled: bool) -> str:
     """The command to run, with --no-sandbox appended when the row asks for it.
 
-    The checkbox starts checked and belongs to each preset row: nothing is
-    injected silently, and unchecking it (for an app that rejects the flag)
-    removes it again."""
+    Nothing is injected silently, and unchecking it (for an app that rejects
+    the flag) removes it again."""
     if enabled and "--no-sandbox" not in cmd:
         return f"{cmd} --no-sandbox"
     return cmd
+
+
+# Chromium and Electron families are the ones that refuse to run as root
+# without --no-sandbox. GTK apps (Firefox, Nautilus, LibreOffice) reject an
+# unknown long option, so the checkbox must NOT start checked for them.
+_SANDBOX_FAMILIES = (
+    "chromium",
+    "chromium-browser",
+    "google-chrome",
+    "chrome",
+    "electron",
+    "brave",
+    "code",
+    "vscode",
+    "cursor",
+    "antigravity",
+    "zcode",
+    "opencode",
+)
+
+
+def _real_binary(cmd: str) -> str:
+    """The executable a command actually launches (skip `env VAR=…`)."""
+    tokens = (cmd or "").strip().split()
+    while tokens and (tokens[0] == "env" or "=" in tokens[0]):
+        tokens.pop(0)
+    return tokens[0].rsplit("/", 1)[-1].lower() if tokens else ""
+
+
+def sandbox_default(cmd: str) -> bool:
+    """True when the checkbox should START checked for this detected app."""
+    base = _real_binary(cmd)
+    return any(base.startswith(family) for family in _SANDBOX_FAMILIES)
 
 
 def settings_pill(
@@ -209,34 +241,43 @@ def preset_row(
             on_sandbox(bool(e.control.value))
 
     return ft.ListTile(
+        is_three_line=True,
         leading=ft.Icon(ft.Icons.BOOKMARK_ROUNDED, color=theme.primary()),
         title=ft.Text(
             str(preset.get("name", "")),
             size=tokens.FONT_SM,
             weight=ft.FontWeight.W_600,
         ),
-        subtitle=subtitle,
-        on_click=on_run,
-        trailing=ft.Row(
+        subtitle=ft.Column(
             controls=[
-                ft.Checkbox(
-                    label="no sandbox",
-                    value=sandbox_checked,
-                    scale=tokens.SWITCH_SCALE,
-                    tooltip="Add --no-sandbox for this app (Chromium and Electron need it)",
-                    on_change=_toggle,
-                ),
-                ft.IconButton(
-                    icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
-                    icon_size=tokens.ICON_SM,
-                    tooltip="Delete preset",
-                    on_click=on_delete,
+                subtitle,
+                # Checkbox and delete share a line UNDER the text, never the
+                # trailing edge (narrow-screen house rule).
+                ft.Row(
+                    controls=[
+                        ft.Checkbox(
+                            label="no sandbox",
+                            value=sandbox_checked,
+                            scale=tokens.SWITCH_SCALE,
+                            tooltip="Add --no-sandbox for this app (Chromium and Electron need it)",
+                            on_change=_toggle,
+                        ),
+                        ft.IconButton(
+                            icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
+                            icon_size=tokens.ICON_SM,
+                            tooltip="Delete preset",
+                            on_click=on_delete,
+                        ),
+                    ],
+                    spacing=tokens.SPACE_XXS,
+                    tight=True,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
             ],
             spacing=tokens.SPACE_XXS,
             tight=True,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
+        on_click=on_run,
     )
 
 

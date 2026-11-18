@@ -124,6 +124,37 @@ def guest_font_dirs(container: str) -> list[str]:
     return dirs
 
 
+def ensure_ttf_dir() -> Path | None:
+    """Stage the bundled DejaVu TrueType fonts for Xft/fontconfig apps.
+
+    The core PCF fonts above only serve X core font clients; Firefox, Electron
+    and GTK apps read scalable fonts through fontconfig. A minimal container
+    ships none, so every glyph rendered as garbage (device 2026-11-17). The
+    session hardening binds this directory to the guest's /root/.fonts."""
+    runtime = storage_paths.support_root() / "runtime"
+    dest = runtime / "ttf"
+    version = _xkb_version()
+    marker = dest / ".version"
+    if marker.is_file() and marker.read_text(encoding="utf-8").strip() == version:
+        return dest
+    try:
+        from importlib import resources
+
+        root = resources.files("flet_xvnc") / "data" / "fonts" / "ttf"
+        if not root.is_dir():
+            raise FileNotFoundError("flet_xvnc/data/fonts/ttf")
+    except Exception as exc:
+        logger.debug("bundled TTF fonts unavailable: %s", exc)
+        return None
+    if dest.exists():
+        shutil.rmtree(dest, ignore_errors=True)
+    dest.mkdir(parents=True, exist_ok=True)
+    _copy_tree(root, dest)
+    marker.write_text(version, encoding="utf-8")
+    logger.info("TTF fonts staged at %s (%s)", dest, version or "unknown version")
+    return dest
+
+
 # ── process commands ─────────────────────────────────────────────────────────
 
 

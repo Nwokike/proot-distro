@@ -56,34 +56,38 @@ class AudioMixin:
             int(mic_channels),
             str(resample_method),
         )
-        alive = self._pulse_process is not None and self._pulse_process.poll() is None
-        if alive:
-            if getattr(self, "_pulse_config", None) == config:
+        # Serialize start/stop/reconfigure: two displays starting at once could
+        # otherwise spawn two daemons and orphan one on port 4713. The liveness
+        # read happens INSIDE the lock so a waiter cannot act on a stale view.
+        with self._pulse_lock:
+            alive = self._pulse_process is not None and self._pulse_process.poll() is None
+            if alive:
+                if getattr(self, "_pulse_config", None) == config:
+                    return
+                logger.info("display: pulseaudio reconfiguring for %s", config)
+                self._stop_pulseaudio()
+            try:
+                pa_argv, pa_env = xvnc_runtime.pulseaudio_command(
+                    mic=mic,
+                    latency_ms=latency_ms,
+                    pm=pm,
+                    rate=rate,
+                    no_close_hack=no_close_hack,
+                    mic_rate=mic_rate,
+                    mic_format=mic_format,
+                    mic_channels=mic_channels,
+                    resample_method=resample_method,
+                )
+                self._pulse_process = xvnc_runtime.spawn(pa_argv, pa_env)
+                self._pulse_config = config
+            except Exception as exc:
+                logger.warning("display: pulseaudio could not start (audio disabled): %s", exc)
+                self._pulse_process = None
+                self._pulse_config = None
                 return
-            logger.info("display: pulseaudio reconfiguring for %s", config)
-            self._stop_pulseaudio()
-        try:
-            pa_argv, pa_env = xvnc_runtime.pulseaudio_command(
-                mic=mic,
-                latency_ms=latency_ms,
-                pm=pm,
-                rate=rate,
-                no_close_hack=no_close_hack,
-                mic_rate=mic_rate,
-                mic_format=mic_format,
-                mic_channels=mic_channels,
-                resample_method=resample_method,
-            )
-            self._pulse_process = xvnc_runtime.spawn(pa_argv, pa_env)
-            self._pulse_config = config
-        except Exception as exc:
-            logger.warning("display: pulseaudio could not start (audio disabled): %s", exc)
-            self._pulse_process = None
-            self._pulse_config = None
-            return
-        threading.Thread(
-            target=self._read_pulse_logs, args=(self._pulse_process,), daemon=True
-        ).start()
+            threading.Thread(
+                target=self._read_pulse_logs, args=(self._pulse_process,), daemon=True
+            ).start()
         for _ in range(10):
             if xvnc_runtime.probe_pulseaudio():
                 logger.info("display: pulseaudio up on 127.0.0.1:%d", xvnc_runtime.PULSE_TCP_PORT)
@@ -104,21 +108,22 @@ class AudioMixin:
         logger.info("pulseaudio: exited (code %s)", process.returncode)
 
     def _stop_pulseaudio(self) -> None:
-        process = self._pulse_process
-        if process is not None and process.poll() is None:
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-            except OSError:
-                pass
-            try:
-                process.wait(timeout=2.0)  # port must be free before a restart
-            except subprocess.TimeoutExpired:
+        with self._pulse_lock:
+            process = self._pulse_process
+            if process is not None and process.poll() is None:
                 try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                    process.wait(timeout=1.0)
+                    os.killpg(process.pid, signal.SIGTERM)
                 except OSError:
                     pass
+                try:
+                    process.wait(timeout=2.0)  # port must be free before a restart
                 except subprocess.TimeoutExpired:
-                    logger.warning("pulseaudio refused to die")
-        self._pulse_process = None
-        self._pulse_config = None
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                        process.wait(timeout=1.0)
+                    except OSError:
+                        pass
+                    except subprocess.TimeoutExpired:
+                        logger.warning("pulseaudio refused to die")
+            self._pulse_process = None
+            self._pulse_config = None

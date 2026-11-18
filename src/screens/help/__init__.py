@@ -419,6 +419,16 @@ def show_help_sheet(page: ft.Page, methods=None) -> None:
                         "matches the phone's architecture for browsers.",
                     ),
                 ),
+                (
+                    "fonts boxes gibberish unreadable squares text firefox",
+                    _row(
+                        ft.Icons.FONT_DOWNLOAD_ROUNDED,
+                        "Text shows boxes or garbage",
+                        "The app bundles DejaVu fonts and exposes them to every display "
+                        "as the guest's /root/.fonts. If one app still misses glyphs, "
+                        "install its font package in the container.",
+                    ),
+                ),
             ],
         ),
         (

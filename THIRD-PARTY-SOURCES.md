@@ -1,4 +1,4 @@
-# Third-Party Sources — proot-distro v1.2.0 (Build 4)
+# Third-Party Sources — proot-distro v1.2.1 (Build 5)
 
 This application incorporates third-party software components licensed under free and
 open-source software licenses, including the GNU General Public License (GPL).
@@ -8,7 +8,7 @@ open-source software licenses, including the GNU General Public License (GPL).
 The complete machine-readable Corresponding Source for the GPL-licensed components
 (PRoot, TigerVNC's Xvnc, PulseAudio, QEMU, talloc and friends) and for this application
 is available at:
-https://github.com/Nwokike/proot-distro/tree/v1.2.0/
+https://github.com/Nwokike/proot-distro/tree/v1.2.1/
 and via GitHub Releases at: https://github.com/Nwokike/proot-distro/releases/latest
 
 This offer is valid for at least three (3) years from the date of release to any third
@@ -53,6 +53,7 @@ closure, repackaged verbatim from the Termux repositories:
 | `libxkbfile` | 1.2.0 | MIT | [libxkbfile](https://packages.termux.com) | [pool/main/libx/libxkbfile/libxkbfile_1.2.0_aarch64.deb](https://packages.termux.dev/apt/termux-x11/pool/main/libx/libxkbfile/libxkbfile_1.2.0_aarch64.deb) | `2456caefcf93f5821f6c7c753eae50ea015864c948e678f3c8e2aec9c3c3dbd5` |
 | `xorg-fonts-misc` | 1.0.4 | X11 / MIT | [xorg-fonts-misc](https://gitlab.freedesktop.org/xorg/font/misc-misc) | [pool/main/x/xorg-fonts-misc/xorg-fonts-misc_1.0.4_all.deb](https://packages.termux.dev/apt/termux-x11/pool/main/x/xorg-fonts-misc/xorg-fonts-misc_1.0.4_all.deb) | `147796032e94f6dfbdfc71948a95fbaf791e62a5eff9eac8baf3b11d7af6fa0c` |
 | `xkeyboard-config` | 2.49 | MIT | [xkeyboard-config](https://gitlab.freedesktop.org/xkeyboard-config/xkeyboard-config) | [pool/main/x/xkeyboard-config/xkeyboard-config_2.49_all.deb](https://packages.termux.dev/apt/termux-x11/pool/main/x/xkeyboard-config/xkeyboard-config_2.49_all.deb) | `9523dbe04fd7fba2218451813041872957dca459d86dfed9c23a3b247e8fa371` |
+| `ttf-dejavu` | 2.37-8 | Open Source | [ttf-dejavu](https://packages.termux.com) | [pool/main/t/ttf-dejavu/ttf-dejavu_2.37-8_all.deb](https://packages.termux.dev/apt/termux-main/pool/main/t/ttf-dejavu/ttf-dejavu_2.37-8_all.deb) | `3fa9352d528cb19aebcdd2de5d1fb0cb67b201be3ae264207fc1a277d2cfd6da` |
 | `libx11` | 1.8.14 | MIT | [libx11](https://gitlab.freedesktop.org/xorg/lib/libx11) | [pool/main/libx/libx11/libx11_1.8.14_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libx/libx11/libx11_1.8.14_aarch64.deb) | `c5206ee9cc26a63985d110b57bc24f23c7c97505e6100c4d6a8547a1aeed5532` |
 | `libxcb` | 1.17.0-1 | MIT | [libxcb](https://gitlab.freedesktop.org/xorg/lib/libxcb) | [pool/main/libx/libxcb/libxcb_1.17.0-1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libx/libxcb/libxcb_1.17.0-1_aarch64.deb) | `191c3642b6a8c754bc75b69b94a81858ecb5f18766dc085aff55559b8087ad34` |
 | `libandroid-support` | 29-1 | Apache-2.0 | [libandroid-support](https://packages.termux.com) | [pool/main/liba/libandroid-support/libandroid-support_29-1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/liba/libandroid-support/libandroid-support_29-1_aarch64.deb) | `f2f145d6135ad4843ac9670153be3e3944dc1e6f1736d46d2306c28f2b86f517` |
@@ -61,7 +62,7 @@ closure, repackaged verbatim from the Termux repositories:
 | `libidn2` | 2.3.8-1 | GPL-2.0-or-later / LGPL-3.0-or-later | [libidn2](https://packages.termux.com) | [pool/main/libi/libidn2/libidn2_2.3.8-1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libi/libidn2/libidn2_2.3.8-1_aarch64.deb) | `a450a1ba25759ebf78738484a3efee316c51a1fe7bafb0b01a68e2c058a91020` |
 | `libunistring` | 1.5 | MIT OR LGPL-3.0-or-later | [libunistring](https://packages.termux.com) | [pool/main/libu/libunistring/libunistring_1.5_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libu/libunistring/libunistring_1.5_aarch64.deb) | `8853ca1421d6472046a0683d53084b26db1caa50a3aa2bf6422a1276c7dba69b` |
 | `libtasn1` | 4.21.0 | LGPL-2.1-or-later | [libtasn1](https://packages.termux.com) | [pool/main/libt/libtasn1/libtasn1_4.21.0_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libt/libtasn1/libtasn1_4.21.0_aarch64.deb) | `1d02de3a7e5ef4ff7d893597091176b8ddf135f1ddfacff951f76c18711a7342` |
-| `libffi` | 3.8.0 | MIT | [libffi](https://packages.termux.com) | [pool/main/libf/libffi/libffi_3.8.0_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libf/libffi/libffi_3.8.0_aarch64.deb) | `4f255badf74cd31f6a2801c17fa1444199c84c834b517b7c843e2fe9ebe91d77` |
+| `libffi` | 3.8.1 | MIT | [libffi](https://packages.termux.com) | [pool/main/libf/libffi/libffi_3.8.1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libf/libffi/libffi_3.8.1_aarch64.deb) | `9e13f3b5c40625c384101992bb669a278e07d9e2baa37d286d7ed164288fab1a` |
 | `libiconv` | 1.19.1 | LGPL-2.1-or-later | [libiconv](https://packages.termux.com) | [pool/main/libi/libiconv/libiconv_1.19.1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libi/libiconv/libiconv_1.19.1_aarch64.deb) | `a1c6323eff4f660e16ae6f5832356444b3269c19a4f61146355a49e7c4be5ed1` |
 | `libfontenc` | 1.1.9 | MIT | [libfontenc](https://packages.termux.com) | [pool/main/libf/libfontenc/libfontenc_1.1.9_aarch64.deb](https://packages.termux.dev/apt/termux-x11/pool/main/libf/libfontenc/libfontenc_1.1.9_aarch64.deb) | `2ce4c69bdfb7a81ea2ab1605e983a7a31302c4f0dcc4b7fab9885c34c2c3bb1c` |
 | `freetype` | 2.15.0 | FTL / GPL-2.0-or-later | [freetype](https://freetype.org) | [pool/main/f/freetype/freetype_2.15.0_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/f/freetype/freetype_2.15.0_aarch64.deb) | `fe217807b22aa40029874eb1d9e01b89a01b5f1e4f0556c4de9c8e83c4db4256` |
@@ -79,7 +80,7 @@ sink/source, native-protocol-tcp) and its runtime closure:
 |---|---|---|---|---|---|
 | `pulseaudio` | 17.0-5 | GPL-2.0-or-later | [pulseaudio](https://www.freedesktop.org/wiki/Software/PulseAudio) | [pool/main/p/pulseaudio/pulseaudio_17.0-5_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/p/pulseaudio/pulseaudio_17.0-5_aarch64.deb) | `4e110e32007fee5aaf67cfa2f35ae67c11ed53f45da857d0def426e2ca66f8c8` |
 | `libltdl` | 2.6.2 | LGPL-2.1-or-later | [libltdl](https://packages.termux.com) | [pool/main/libl/libltdl/libltdl_2.6.2_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libl/libltdl/libltdl_2.6.2_aarch64.deb) | `7b4643fe9d0ab42c0c3c8a1018640816bdb43d422f2268a5e4ea80675624f539` |
-| `dbus` | 1.16.2-3 | GPL-2.0-or-later / AFL-2.1 | [dbus](https://www.freedesktop.org/wiki/Software/dbus) | [pool/main/d/dbus/dbus_1.16.2-3_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/d/dbus/dbus_1.16.2-3_aarch64.deb) | `1b6d5e349708414acbbb1404210e32d4e3f390890d02e162639dec1016a8657b` |
+| `dbus` | 1.16.4 | GPL-2.0-or-later / AFL-2.1 | [dbus](https://www.freedesktop.org/wiki/Software/dbus) | [pool/main/d/dbus/dbus_1.16.4_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/d/dbus/dbus_1.16.4_aarch64.deb) | `fff79b58f1a4d5819140ccd5b5d72bc157351285ababf0361229293a4fd69b82` |
 | `libiconv` | 1.19.1 | LGPL-2.1-or-later | [libiconv](https://packages.termux.com) | [pool/main/libi/libiconv/libiconv_1.19.1_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libi/libiconv/libiconv_1.19.1_aarch64.deb) | `a1c6323eff4f660e16ae6f5832356444b3269c19a4f61146355a49e7c4be5ed1` |
 | `libandroid-execinfo` | 0.1-3 | BSD-2-Clause | [libandroid-execinfo](https://packages.termux.com) | [pool/main/liba/libandroid-execinfo/libandroid-execinfo_0.1-3_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/liba/libandroid-execinfo/libandroid-execinfo_0.1-3_aarch64.deb) | `725dd2c6da7fc96e860fcc928e18aa9fb0e85e0bdcaf4f8ce0f0654ca6860fc2` |
 | `libsndfile` | 1.2.2-3 | LGPL-2.1-or-later | [libsndfile](https://libsndfile.github.io/libsndfile) | [pool/main/libs/libsndfile/libsndfile_1.2.2-3_aarch64.deb](https://packages.termux.dev/apt/termux-main/pool/main/libs/libsndfile/libsndfile_1.2.2-3_aarch64.deb) | `1e1fb77b14ec26f3ff6ded069e9ec816ab7535ae5d074122c6727b0f59d8aff3` |

@@ -82,11 +82,17 @@ def test_share_opens_without_a_tunnel():
 
 
 def test_sandbox_flag_is_per_preset_with_sensible_defaults():
-    """Detected apps start checked, user-made presets start unchecked, and the
-    flag is never injected silently: unchecking removes it again (owner ruling
-    2026-11-17)."""
-    from screens.display_sheets.sheet_parts import with_sandbox
+    """Detected Chromium/Electron apps start checked, GTK apps and user-made
+    presets start unchecked, and the flag is never injected silently (owner
+    ruling 2026-11-17)."""
+    from screens.display_sheets.sheet_parts import sandbox_default, with_sandbox
 
+    assert sandbox_default("chromium --incognito")
+    assert sandbox_default("env ELECTRON_OZONE_PLATFORM_HINT=auto /opt/antigravity/antigravity")
+    assert sandbox_default("/usr/share/code/code --unity-launch")
+    assert not sandbox_default("firefox %u")
+    assert not sandbox_default("nautilus --new-window")
+    assert not sandbox_default("libreoffice --writer")
     assert with_sandbox("chromium", True).endswith(" --no-sandbox")
     assert with_sandbox("chromium --no-sandbox", True).count("--no-sandbox") == 1
     assert with_sandbox("xterm", False) == "xterm"
@@ -96,15 +102,16 @@ def test_sandbox_flag_is_per_preset_with_sensible_defaults():
     sheet = (ROOT / "src" / "screens" / "display_sheets" / "launcher_sheet.py").read_text(
         encoding="utf-8"
     )
-    assert "sandbox_checks.setdefault(cmd, True)" in sheet  # detected app
+    assert "sandbox_checks.setdefault(cmd, sandbox_default(cmd))" in sheet
     assert "sandbox_checks.setdefault(cmd, False)" in sheet  # saved preset
     view = (ROOT / "src" / "screens" / "display_view.py").read_text(encoding="utf-8")
-    assert "sandbox.get(cmd, True)" in view and "sandbox.get(cmd, False)" in view
+    assert "sandbox.get(cmd, sandbox_default(cmd))" in view
+    assert "sandbox.get(cmd, False)" in view
     parts = (ROOT / "src" / "screens" / "display_sheets" / "sheet_parts.py").read_text(
         encoding="utf-8"
     )
-    assert "sandbox_prone" not in parts
-    assert "sandbox_checked" in parts  # preset_row exposes the checkbox
+    assert "def sandbox_default(" in parts
+    assert "def preset_row(" in parts and "sandbox_checked" in parts
 
 
 def test_ads_between_display_sections_and_after_the_home_distro_list():
@@ -145,8 +152,6 @@ def test_android_window_helpers_are_guarded_off_device():
     """pyjnius is absent in dev: every call must be a silent no-op."""
     from core import android_ui
 
-    android_ui.set_keyboard_overlay(True)
-    android_ui.set_keyboard_overlay(False)
     android_ui.set_system_bars_hidden(True)
     android_ui.set_system_bars_hidden(False)
 
@@ -246,3 +251,104 @@ def test_binary_files_are_described_not_dumped():
     assert is_binary(b"\xff\xfe\x00\x00")  # invalid UTF-8
     assert not is_binary(b"#!/bin/sh\necho hi\n")
     assert not is_binary("Grüße".encode())
+
+
+def test_get_proot_cmd_lock_is_reentrant():
+    """The late-payload retry re-enters the guard from inside it; a plain Lock
+    deadlocked every later session open."""
+    src = (ROOT / "src" / "services" / "proot_service" / "_commands.py").read_text(encoding="utf-8")
+    assert "_GET_PROOT_CMD_LOCK = threading.RLock()" in src
+
+
+def test_run_task_handlers_are_always_coroutine_functions():
+    """Flet raises TypeError for a sync handler or a coroutine object."""
+    run_src = (ROOT / "src" / "screens" / "files" / "run_dialog.py").read_text(encoding="utf-8")
+    assert "async def _append_task(" in run_src
+    assert "page.run_task(_append_task" in run_src
+    cell = (ROOT / "src" / "components" / "command_cell.py").read_text(encoding="utf-8")
+    assert "_copy_output, page, controller.output_text()" in cell
+
+
+def test_display_lifecycle_races_are_guarded():
+    mgr = (ROOT / "src" / "services" / "desk_service" / "manager.py").read_text(encoding="utf-8")
+    assert "is not DeskStatus.STARTING" in mgr  # stop finished during spawn
+    assert "_pulse_lock" in mgr
+    spawn = (ROOT / "src" / "services" / "desk_service" / "spawn_mixin.py").read_text(
+        encoding="utf-8"
+    )
+    assert "in (DeskStatus.STARTING, DeskStatus.RUNNING)" in spawn
+
+
+def test_pulseaudio_readiness_is_honest_and_serialized():
+    mgr = (ROOT / "src" / "services" / "desk_service" / "manager.py").read_text(encoding="utf-8")
+    alive = mgr.split("def pulse_server_alive")[1][:400]
+    assert "probe_pulseaudio()" in alive
+    audio = (ROOT / "src" / "services" / "desk_service" / "audio_mixin.py").read_text(
+        encoding="utf-8"
+    )
+    ensure = audio.split("def _ensure_pulseaudio")[1].split("def _read_pulse_logs")[0]
+    # The liveness read must be INSIDE the lock, or a waiter acts on a stale view
+    # and spawns a second daemon onto an occupied port.
+    assert ensure.index("with self._pulse_lock:") < ensure.index("alive = self._pulse_process")
+
+
+def test_display_log_report_copies_before_opening_issues():
+    src = (ROOT / "src" / "controller_actions" / "display_logs.py").read_text(encoding="utf-8")
+    report = src.split("def _report")[1].split("async def show_display_logs")[0]
+    assert "clipboard.set(text)" in report
+    assert "GITHUB_ISSUES_URL" in report
+
+
+KEYBOARD_SENTENCE = (
+    "The keyboard opens through the noVNC panel; fullscreen hides the status and navigation bars"
+)
+
+
+def test_release_notes_do_not_promise_the_removed_keyboard_overlay():
+    import json
+
+    from core.changelog import CHANGELOG
+
+    assert "keyboard overlays" not in CHANGELOG["1.2.1"]
+    assert KEYBOARD_SENTENCE in CHANGELOG["1.2.1"]
+    feed = json.loads((ROOT / "version.json").read_text(encoding="utf-8"))
+    assert "keyboard overlays" not in feed["release_notes"]
+    assert KEYBOARD_SENTENCE in feed["release_notes"]
+
+
+def test_preset_rows_reserve_three_lines():
+    for rel in (
+        "src/screens/display_view.py",
+        "src/screens/display_sheets/launcher_sheet.py",
+        "src/screens/display_sheets/sheet_parts.py",
+    ):
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        assert "is_three_line=True" in text, rel
+
+
+def test_bundled_fonts_are_bound_into_the_guest(monkeypatch, tmp_path):
+    """Firefox/Xft apps need a scalable font; the app stages DejaVu and binds
+    it to the guest's ~/.fonts (device 2026-11-17: glyphs rendered as garbage)."""
+    from core import storage_paths
+    from services.session_service.argv import _harden_session
+
+    ttf = tmp_path / "runtime" / "ttf"
+    ttf.mkdir(parents=True)
+    (ttf / "DejaVuSans.ttf").write_bytes(b"x")
+    monkeypatch.setattr(storage_paths, "support_root", lambda: tmp_path)
+    # The convenience binds are Android-gated; this env var flips it on here.
+    monkeypatch.setenv("ANDROID_NATIVE_LIBRARY_DIR", str(tmp_path / "lib"))
+    rootfs = tmp_path / "rootfs"
+    (rootfs / "etc").mkdir(parents=True)
+    _env, argv = _harden_session({}, ["proot", f"--rootfs={rootfs}", "/bin/sh"], "demo")
+    assert any(a.endswith(":/root/.fonts") for a in argv)
+    assert (rootfs / "root" / ".fonts").is_dir()
+
+
+def test_xvnc_wheel_ships_only_the_needed_dejavu_faces():
+    src = (ROOT / "scripts" / "build_flet_xvnc_wheel.py").read_text(encoding="utf-8")
+    assert src.count("ttf-dejavu_2.37-8_all.deb") == 2
+    assert "data/fonts/ttf/" in src
+    assert "_TTF_ALLOWED" in src  # the 3-face allowlist keeps the APK small
+    for face in ("DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSansMono.ttf"):
+        assert face in src

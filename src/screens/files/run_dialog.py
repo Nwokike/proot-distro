@@ -28,6 +28,10 @@ def open_file_run_dialog(page: ft.Page, container: str, folder: str, command: st
         if ctrl is not None and text.strip():
             ctrl.append_output(text)
 
+    async def _append_task(text: str) -> None:
+        """run_task requires a coroutine function; the widget write stays sync."""
+        _append(text)
+
     def _run(ctrl) -> None:
         cmd = (ctrl.source() or "").strip()
         if not cmd:
@@ -38,7 +42,7 @@ def open_file_run_dialog(page: ft.Page, container: str, folder: str, command: st
         async def _job() -> None:
             def _on_chunk(data: bytes) -> None:
                 # Worker thread: the widget write goes through the page loop.
-                page.run_task(_append, data.decode("utf-8", "replace"))
+                page.run_task(_append_task, data.decode("utf-8", "replace"))
 
             def _on_start(session) -> None:
                 holder["session"] = session

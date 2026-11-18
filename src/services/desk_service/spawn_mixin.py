@@ -67,6 +67,8 @@ class SpawnMixin:
             # Core X fonts: the bundled set first (bare containers have none),
             # then whatever font dirs the container itself provides.
             staged_fonts = xvnc_runtime.ensure_font_dir()
+            # Scalable fonts for Xft/fontconfig apps (Firefox, Electron, GTK).
+            xvnc_runtime.ensure_ttf_dir()
             font_paths = (
                 [str(staged_fonts)] if staged_fonts is not None else []
             ) + xvnc_runtime.guest_font_dirs(session.container)
@@ -245,10 +247,14 @@ class SpawnMixin:
                 cb()
             except Exception:
                 pass
-        # Crash watcher: EOF while RUNNING means that side died — the guest
-        # session ended (single app closed) or the X server died. Both end the
-        # session; shut the stream server down on the session loop.
-        if session.status is DeskStatus.RUNNING and process.poll() is not None:
+        # Crash watcher: EOF while STARTING or RUNNING means that side died —
+        # the guest command failed to launch (command not found is a STARTING
+        # case) or the session ended. Both end the session; shut the stream
+        # server down on the session loop.
+        if (
+            session.status in (DeskStatus.STARTING, DeskStatus.RUNNING)
+            and process.poll() is not None
+        ):
             # A configured auto-close (MaxDisconnectionTime) makes Xvnc exit
             # with code 0 once the last viewer has been gone for N seconds —
             # that is the feature WORKING, not a crash: close the session

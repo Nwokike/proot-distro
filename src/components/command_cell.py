@@ -202,7 +202,7 @@ def build_command_cell(
                                     icon_size=tokens.ICON_SM,
                                     tooltip="Copy Output",
                                     on_click=lambda _e: page.run_task(
-                                        _copy_output(page, controller.output_text())
+                                        _copy_output, page, controller.output_text()
                                     ),
                                 ),
                                 ft.IconButton(

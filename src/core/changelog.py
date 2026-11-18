@@ -9,7 +9,7 @@ CHANGELOG: dict[str, str] = {
         "• Presets refresh on their own and have a refresh button, in the display sheet and on the Display tab\n"
         "• A container's sheet shows only its own presets; detected apps get a no-sandbox checkbox\n"
         "• Share works without a tunnel: the local and Wi-Fi URLs open a sign-in page where the access code is typed\n"
-        "• The keyboard overlays the display in fullscreen instead of shrinking it; fullscreen now hides the system bars\n"
+        "• The keyboard opens through the noVNC panel; fullscreen hides the status and navigation bars\n"
         "• Guest app notifications are forwarded as Android notifications (best effort)\n"
         "• Arch pacman works under proot (sandbox disabled, download user fixed)\n"
         "• Ads placed between Distros and Presets, every five presets, and after the Home install list\n"

@@ -34,7 +34,7 @@ oauthlib, tzdata, …) is a transitive of the above. The full resolved graph is
    uv run ruff check src tests scripts
    uv run ruff format --check src tests scripts
    uv run python -m pytest -q -m "not live"
-   uv run python tests/check_flet_api.py
+   for f in $(find src -name "*.py"); do uv run --no-sync python tests/check_flet_api.py "$f"; done
    ```
 5. `tests/test_imports_vs_deps.py` enforces that `src/` only imports declared
    dependencies; `tests/test_version_sync.py` enforces the app version identity.

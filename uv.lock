@@ -912,12 +912,12 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.14" },
-    { name = "flet", specifier = ">=1.1.2" },
-    { name = "flet-ads", specifier = ">=1.1.2" },
+    { name = "flet", specifier = "==1.1.2" },
+    { name = "flet-ads", specifier = "==1.1.2" },
     { name = "flet-audio-recorder", specifier = "==1.1.2" },
-    { name = "flet-notifications", specifier = ">=1.1.2" },
+    { name = "flet-notifications", specifier = "==1.1.2" },
     { name = "flet-terminal", specifier = ">=0.4.2" },
-    { name = "flet-webview", specifier = ">=1.1.2" },
+    { name = "flet-webview", specifier = "==1.1.2" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "proot-distro", specifier = ">=5.10.3" },
 ]
