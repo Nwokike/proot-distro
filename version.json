@@ -1,9 +1,9 @@
 {
-  "build_number": 4,
-  "version": "1.2.0",
+  "build_number": 5,
+  "version": "1.2.1",
   "type": "update",
-  "title": "Proot Distro X11 1.2.0",
-  "release_notes": "• Display engine rebuilt: TigerVNC's X server (Xvnc) runs INSIDE the app\n• Audio out and microphone for guest apps (PulseAudio, per-display bus)\n• The viewer is upstream noVNC, verbatim: the keyboard really opens\n• Saved presets: name any app command and start it in one tap\n• Any CPU architecture: QEMU user-mode bundled for foreign-arch images\n• Failures tell the truth (Failed rows, whole-tree Stop, orphan sweep)\n• Settings hub, Help screen, bundled license texts and docs",
+  "title": "Proot Distro X11 1.2.1",
+  "release_notes": "• Desktop installation removed: run any command on its own display\n• Microphone is off at start; the toolbar button is the only switch\n• Presets refresh on their own, with a refresh button in the sheet and on the Display tab\n• Each container's sheet shows only its own presets; detected apps get a no-sandbox checkbox\n• Share works without a tunnel: the URL opens a sign-in page for the access code\n• The keyboard opens through the noVNC panel; fullscreen hides the status and navigation bars\n• Guest app notifications are forwarded as Android notifications (best effort)\n• Arch pacman works under proot\n• Ads between Distros and Presets, every five presets, and after the Home install list\n• Terminal default theme follows the app mode: Dracula in dark, Colab Light in light\n• Play device support restored (microphone, touchscreen, leanback not required)",
   "mandatory": false,
   "github_url": "https://github.com/Nwokike/proot-distro/releases/latest",
   "playstore_url": "https://play.google.com/store/apps/details?id=ng.kiri.prootdistro"
